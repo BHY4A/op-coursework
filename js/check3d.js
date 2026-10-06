@@ -55,6 +55,17 @@
         });
         break;
       }
+      case 'bevel': {
+        // по профилю чертежа (ступица и диск; зубья — до окружности впадин, зацепление не проверяется)
+        if (!g.prof) break;
+        const P = g.prof, xs = P.map(q => q[0]), x0 = Math.min(...xs), x1 = Math.max(...xs), n = 24, cap = (g.dfe || g.de) / 2;
+        for (let i = 0; i < n; i++) {
+          const a = x0 + (x1 - x0) * i / n, b = x0 + (x1 - x0) * (i + 1) / n, xm = (a + b) / 2, ys = [];
+          for (let j = 0, k = P.length - 1; j < P.length; k = j++) { const A = P[j], B = P[k]; if ((A[0] - xm) * (B[0] - xm) < 0) ys.push(A[1] + (xm - A[0]) / (B[0] - A[0]) * (B[1] - A[1])); }
+          if (ys.length >= 2) ring(a, b, Math.min(...ys), Math.min(Math.max(...ys), cap));
+        }
+        break;
+      }
       case 'wheel': case 'wormwheel': {
         const df = g.df || g.d, h = (g.lst || g.b) / 2, rim = Math.max(2.5 * (g.m || 2), 0.05 * df);
         ring(-h, h, g.dbore / 2, g.dst / 2);
@@ -201,7 +212,9 @@
     ops.filter(o => !o.cut).forEach(o => {
       const n = NRM[o.base], c = CAN[o.base];
       const P = (u, v, t) => { const q = [0, 0, 0]; q[c[0]] = u; q[c[1]] = v; q[n] = t; return q; };
+      // кроме торцов — по обе стороны границ других операций вдоль той же оси (вырез мог срезать торец)
       const ts = [o.a + e, (o.a + o.b) / 2, o.b - e];
+      ops.forEach(q => { if (NRM[q.base] !== n) return; [q.a, q.b].forEach(t => [t - 2 * e, t + 2 * e].forEach(u => { if (u > o.a && u < o.b) ts.push(u); })); });
       o.loops.forEach(l => {
         const pts = [];
         if (l.c) for (let k = 0; k < 144; k++) { const a = 2 * Math.PI * k / 144; pts.push([l.c[0] + (l.c[2] - e) * Math.cos(a), l.c[1] + (l.c[2] - e) * Math.sin(a)]); }

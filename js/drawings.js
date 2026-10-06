@@ -300,10 +300,12 @@
     boxes.forEach(b => { gx1 = Math.min(gx1, b.x1); gy1 = Math.min(gy1, b.y1); gx2 = Math.max(gx2, b.x2); gy2 = Math.max(gy2, b.y2); });
     const f = sh.frame, occ = sh.occ || [];
     const cand = [];
-    for (let y = f.y2 - 3 - gy2; y + gy1 >= f.y1 + 3; y -= 4) { if (o.fixX !== undefined) { cand.push([o.fixX, y]); continue; } for (let x = f.x1 + 3 - gx1; x + gx2 <= f.x2 - 3; x += 4) cand.push([x, y]); }
+    if (o.fixY !== undefined) { for (let x = f.x1 + 3 - gx1; x + gx2 <= f.x2 - 3; x += 2) cand.push([x, o.fixY]); }
+    else for (let y = f.y2 - 3 - gy2; y + gy1 >= f.y1 + 3; y -= 4) { if (o.fixX !== undefined) { cand.push([o.fixX, y]); continue; } for (let x = f.x1 + 3 - gx1; x + gx2 <= f.x2 - 3; x += 4) cand.push([x, y]); }
     if (o.near) cand.sort((p, q) => Math.hypot(p[0] + (gx1 + gx2) / 2 - o.near[0], p[1] + (gy1 + gy2) / 2 - o.near[1]) - Math.hypot(q[0] + (gx1 + gx2) / 2 - o.near[0], q[1] + (gy1 + gy2) / 2 - o.near[1]));
     for (const [dx, dy] of cand) {
       const R = { x1: gx1 + dx, y1: gy1 + dy, x2: gx2 + dx, y2: gy2 + dy };
+      if (R.x1 < f.x1 + 1 || R.x2 > f.x2 - 1 || R.y1 < f.y1 + 1 || R.y2 > f.y2 - 1) continue;
       const near = occ.filter(z => overlaps(R, z));
       if (near.length && boxes.some(b => { const bb = { x1: b.x1 + dx, y1: b.y1 + dy, x2: b.x2 + dx, y2: b.y2 + dy }; return near.some(z => overlaps(bb, z)); })) continue;
       prims.forEach(q => sh.p.push(shiftPrim(q, dx, dy)));
@@ -623,6 +625,12 @@
         sh.line(q1[0], q1[1], q2[0], q2[1], 2); sh.arrow(q1[0], q1[1], 180 + a); sh.arrow(q2[0], q2[1], a);
         sh.text((q1[0] + q2[0]) / 2 + nx * 0.8, (q1[1] + q2[1]) / 2 + ny * 0.8, nf(g.b, 1), { h: 3.5, ang: a - 180 < -90 ? a : a - 180, anchor: 'cb' });
       }));
+      // угол конуса вершин δa — между образующей конуса вершин и осью (вершина угла — внешняя точка венца)
+      const aTip = Math.atan2(bv.Ti[1] - bv.Te[1], bv.Ti[0] - bv.Te[0]) / D2R, dA = Math.atan2(bv.Te[1] - bv.Ti[1], bv.Te[0] - bv.Ti[0]) / D2R;
+      const a1 = Math.min(180, (aTip + 360) % 360), a2 = Math.max(180, (aTip + 360) % 360);
+      sh.attempt([14, 20, 26].map(Rd => () => sh.dimAng(p2[0], p2[1], a1, a2, Rd, deg(dA))));
+      // базовое расстояние: от опорного торца ступицы до плоскости внешней делительной окружности
+      sh.attempt(rowsW.map(yy => () => sh.dimH(X(P.x1), Y(-rh), X(bv.Pe[0]), Y(-bv.Pe[1]), yy - 8, nf(Math.abs(P.x1 - bv.Pe[0]), 1))));
       // угол делительного конуса — от оси
       const Rr = Math.hypot(bv.Pi[0], bv.Pi[1]) * k * 0.6;
       const ap = [X(0), Y(0)];
@@ -671,6 +679,9 @@
     sh.line(-g.dst / 2 * k - 4, 0, g.dst / 2 * k + 4, 0, 3).line(0, -g.dst / 2 * k - 4, 0, g.dst / 2 * k + 4, 3);
     sh.dimH(-b / 2, rb + t2, b / 2, rb + t2, rb + t2 + 8, nf(kd.b, 0) + keyFit(task)[1]);
     sh.dimV(b / 2, -rb, b / 2, rb + t2, g.dst / 2 * k + 8, nf(g.dbore + kd.t2, 1) + '^+0,2');
+    // радиус закругления дна паза (ГОСТ 23360-78, r max: b ≤ 6 — 0,16; 8…10 — 0,25; 12…18 — 0,4; 20…28 — 0,6; 32…50 — 1,0)
+    const rMax = kd.b <= 6 ? '0,16' : kd.b <= 10 ? '0,25' : kd.b <= 18 ? '0,4' : kd.b <= 28 ? '0,6' : '1,0';
+    sh.attempt([[-16, 10], [-22, 4], [-12, 16]].map(([dx, dy]) => () => sh.leader(-b / 2, rb + t2, -b / 2 + dx, rb + t2 + dy, `R${rMax} max`, '', { side: 'l' })));
     sh.text(0, g.dst / 2 * k + 18, letter, { h: 7, anchor: 'cb' });
   }
 
@@ -727,7 +738,7 @@
     return [['Модуль', 'm', nf(m, 3)], ['Число зубьев', 'z', String(z)], ['Тип зуба', '—', 'прямой'], ['Нормальный исходный\nконтур', '—', 'ГОСТ 13755-2015'], ['Коэффициент смещения', 'x', '0'], ['Степень точности\nпо ГОСТ 1643-81', '—', `${deg || 8}-B`], ['Длина общей нормали', 'W', nf(W.W, 3)], ['Число зубьев в длине\nобщей нормали', 'zw', String(W.zw)], ['Делительный диаметр', 'd', nf(d, 3)], ['Обозначение чертежа\nсопряжённого колеса', '—', mate || '']];
   }
   function bevelTable(g, z, delta, dm, mate) {
-    return [['Внешний окружной\nмодуль', 'mte', nf(g.mte, 3)], ['Число зубьев', 'z', String(z)], ['Тип зуба', '—', 'прямой'], ['Исходный контур', '—', 'ГОСТ 13754-81'], ['Коэффициент смещения', 'xe', '0'], ['Угол делительного\nконуса', 'δ', deg(delta)], ['Степень точности\nпо ГОСТ 1758-81', '—', '8-B'], ['Межосевой угол\nпередачи', 'Σ', '90°'], ['Внешнее конусное\nрасстояние', 'Re', nf(g.Re, 2)], ['Средний делительный\nдиаметр', 'dm', nf(dm, 2)], ['Обозначение чертежа\nсопряжённого колеса', '—', mate || '']];
+    return [['Внешний окружной\nмодуль', 'mte', nf(g.mte, 3)], ['Число зубьев', 'z', String(z)], ['Тип зуба', '—', 'прямой'], ['Исходный контур', '—', 'ГОСТ 13754-81'], ['Коэффициент смещения', 'xe', '0'], ['Коэффициент изменения\nтолщины зуба', 'xτ', '0'], ['Угол делительного\nконуса', 'δ', deg(delta)], ['Степень точности\nпо ГОСТ 1758-81', '—', '8-B'], ['Межосевой угол\nпередачи', 'Σ', '90°'], ['Внешнее конусное\nрасстояние', 'Re', nf(g.Re, 2)], ['Средний делительный\nдиаметр', 'dm', nf(dm, 2)], ['Обозначение чертежа\nсопряжённого колеса', '—', mate || '']];
   }
   function partInfo(R, M, pd) {
     const t = R.task, code = id => (M.parts.find(p => p.id === id) || {}).code || '';

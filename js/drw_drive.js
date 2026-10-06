@@ -277,10 +277,9 @@
       sh.notes(sh.stamp.x1 + 2, y0, W - 4, req, { title: 'Технические требования' }); const rq = { x1: sh.stamp.x1, y1: y0 - 2, x2: f.x2 - 2, y2: y0 + hT(req) + 9 }; sh.occupy(rq, 2);
       y0 = rq.y2 + 8;
       sh.notes(sh.stamp.x1 + 2, y0, W - 4, tech, { title: 'Техническая характеристика' }); sh.occupy({ x1: sh.stamp.x1, y1: y0 - 2, x2: f.x2 - 2, y2: y0 + hT(tech) + 9 }, 2);
-      const fb = fr.bbox(0);
-      const p1 = DR.placeGroup(sh, fr.p, { near: [f.x1 + 15 + (fb.x2 - fb.x1) / 2, f.y2 - 15 - (fb.y2 - fb.y1) / 2] });
+      const fb = fr.bbox(0), tb = tp.bbox(0), sL = Math.max(0, fb.x1 - tb.x1);   // вид сверху шире слева — сдвинуть оба вправо
+      const p1 = DR.placeGroup(sh, fr.p, { near: [f.x1 + 15 + sL + (fb.x2 - fb.x1) / 2, f.y2 - 15 - (fb.y2 - fb.y1) / 2] });
       if (!p1) continue;
-      const tb = tp.bbox(0);
       const p2 = DR.placeGroup(sh, tp.p, { fixX: p1.dx, near: [0, p1.box.y1 - 12 - (tb.y2 - tb.y1) / 2] });
       if (!p2) continue;
       return { id: 'obshiy_vid', file: 'privod_VO.cdw', name: (root.DATA.TASKS[P.task] || {}).title || 'Привод', nameSub: 'Чертёж общего вида', scale: kt, fmt: 'A1', landscape: land, sh };

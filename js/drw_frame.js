@@ -181,7 +181,7 @@
         let hN = 0; notes.forEach(t => { hN += C.wrap(String(t), 176, 3.5).length; }); hN = hN * 3.5 * 1.65;
         sh.notes(sh.stamp.x1 + 2, sh.stamp.y2 + 6, 180, notes); sh.occupy({ x1: sh.stamp.x1, y1: sh.stamp.y2 + 4, x2: f.x2 - 2, y2: sh.stamp.y2 + 8 + hN }, 2);
         const fb = V.front.sh.bbox(0);
-        const p1 = DR.placeGroup(sh, V.front.sh.p, { near: [f.x1 + 15 + (fb.x2 - fb.x1) / 2, f.y2 - 15 - (fb.y2 - fb.y1) / 2] });
+        const sL = Math.max(0, fb.x1 - V.plan.sh.bbox(0).x1), p1 = DR.placeGroup(sh, V.front.sh.p, { near: [f.x1 + 15 + sL + (fb.x2 - fb.x1) / 2, f.y2 - 15 - (fb.y2 - fb.y1) / 2] });
         if (!p1) continue;
         const pb = V.plan.sh.bbox(0);
         const p2_ = DR.placeGroup(sh, V.plan.sh.p, { fixX: p1.dx, near: [0, p1.box.y1 - 10 - (pb.y2 - pb.y1) / 2] });

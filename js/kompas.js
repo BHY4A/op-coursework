@@ -95,6 +95,10 @@
       asm.forEach(it => { it.pos = rot(it.pos); it.axes = rot(it.axes.slice(0, 3)).concat(rot(it.axes.slice(3))); });
       dWheel(pC, [['Внешний окружной модуль', 'mte', fnum(gC.mte, 4)], ['Число зубьев', 'z', String(gC.z2)], ['Тип зуба', '—', 'прямой'], ['Исходный контур', '—', 'ГОСТ 13754-81'], ['Угол делительного конуса', 'δ', F.degTxt(gC.d2deg)], ['Внешнее конусное расстояние', 'Re', fnum(gC.Re, 4)], ['Средний делительный диаметр', 'd', fnum(gC.dm2, 4)], ['Степень точности', '—', '8-B ГОСТ 1758-81']]);
     }
+    // облегчающие отверстия в диске колеса — те же, что на чертеже колеса (DRAWINGS.wheelProfile)
+    // коническое колесо — по профилю рабочего чертежа (ступица, диск, венец); x — от торца венца (как в КОМПАС)
+    parts.forEach(pd => { if (pd.kind === 'bevel' && root.DRAWINGS && root.DRAWINGS.wheelProfile && pd.geom.Re) { try { const W = root.DRAWINGS.wheelProfile(pd.geom, 'bevel'), x0 = pd.geom.Re * Math.cos(pd.geom.delta * Math.PI / 180); pd.geom.prof = W.pieces[0].map(([x, y]) => [Math.round((x - x0) * 100) / 100, Math.round(y * 100) / 100]); pd.geom.hubx = [Math.round((W.x0 - x0) * 100) / 100, Math.round((W.x1 - x0) * 100) / 100]; } catch (e) { /* упрощённо */ } } });
+    parts.forEach(pd => { if ((pd.kind === 'wheel' || pd.kind === 'wormwheel') && root.DRAWINGS && root.DRAWINGS.wheelProfile) { try { const h = root.DRAWINGS.wheelProfile(pd.geom, pd.kind).holes; if (h) pd.geom.holes = { d: h.d, Dc: h.Dc, n: h.n }; } catch (e) { /* без отверстий */ } } });
     return { code, parts, asm: { file: 'reduktor.a3d', code: `${code} 01.00.00`, name: 'Редуктор', items: asm }, drawings };
   }
 
@@ -123,8 +127,10 @@
       const n = cart ? 1 : 2; if (seal) { nT++; nB += n - 1; } else nB += n;
       nSl += sg.filter(q => /втулк/.test(q.name)).length;
     }
+    let F0 = null; try { F0 = root.M3D && root.M3D.housing3d(R, P, T || {}).fasteners; } catch (e) { F0 = null; }
+    const mslName = F0 && F0.lanternAt && F0.lanternAt.kind === 'dip' ? 'Маслоуказатель жезловый' : 'Маслоуказатель фонарный';
     const extraParts = [{ fmt: (opt.formats || {}).kryshka_korpusa || 'А2', name: 'Крышка корпуса', qty: 1 }, { fmt: 'А4', name: 'Крышка подшипника глухая', qty: nB }, { fmt: 'А4', name: 'Крышка подшипника сквозная', qty: nT }]
-      .concat(nSl ? [{ fmt: 'А4', name: 'Втулка распорная', qty: nSl }] : [], [{ fmt: 'А4', name: 'Крышка смотрового люка', qty: 1 }, { fmt: 'А4', name: 'Маслоуказатель', qty: 1 }, { fmt: 'А4', name: 'Набор прокладок регулировочных', qty: nB + nT }]);
+      .concat(nSl ? [{ fmt: 'А4', name: 'Втулка распорная', qty: nSl }] : [], [{ fmt: 'А4', name: 'Крышка смотрового люка', qty: 1 }, { fmt: 'А4', name: mslName, qty: 1 }, { fmt: 'А4', name: 'Ручка-отдушина', qty: 1 }, { fmt: 'А4', name: 'Набор прокладок регулировочных', qty: nB + nT }]);
     // крепёж — по 3D-модели корпуса (число и длина болтов, винтов, штифтов); если модель не построена — по старым нормам
     function fastItems() {
       let F = null;
@@ -135,6 +141,7 @@
       BB.forEach(b => add(`Болт М${b.d}×${b.L} ГОСТ 7798-70`, b.n));
       if (F.screws.n) add(`Винт М${F.screws.d}×${F.screws.L} ГОСТ 7808-70`, F.screws.n);
       if (F.lid) add(`Винт М${F.lid.d}×${F.lid.L} ГОСТ 7808-70`, F.lid.n);
+      if (F.lantern) add(`Винт М${F.lantern.d}×${F.lantern.L} ГОСТ 7808-70`, F.lantern.n);
       BB.forEach(b => add(`Гайка М${b.d} ГОСТ 5915-70`, b.n));
       add(`Пробка М${F.plug || H.dpr || 16}×1,5`, 1);
       BB.forEach(b => add(`Шайба ${b.d} 65Г ГОСТ 6402-70`, b.n));
