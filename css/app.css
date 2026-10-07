@@ -2,18 +2,19 @@
 @font-face { font-family: 'GOST 2.304 A'; font-style: italic; font-weight: 400; src: url('../fonts/GOST2304_TypeA_italic.ttf') format('truetype'); font-display: swap; }
 @font-face { font-family: 'GOST 2.304 A'; font-style: normal; font-weight: 400; src: url('../fonts/GOST2304_TypeA.ttf') format('truetype'); font-display: swap; }
 /* Layout: инженерный журнал — липкая шапка с номером по списку, левая колонка-навигатор по разделам, справа «лист» с угловым штампом.
-   Палитра — графит на холодной бумаге, акцент — сине-зелёный (чертёжная тушь), оранжевый — для изменённых значений. */
+   Палитра — графит на зеленоватой бумаге, акцент — сине-зелёный (чертёжная тушь), оранжевый — для изменённых значений. */
 :root {
-  --bg: #e9edf1;
+  --bg: #e8eeed;
   --sheet: #fbfcfd;
-  --sheet-2: #f2f5f8;
+  --sheet-2: #f1f5f4;
   --fg: #1a222b;
   --muted: #5a6776;
-  --line: #ccd4dd;
-  --line-strong: #a9b4c0;
+  --line: #cbd6d3;
+  --line-strong: #a5b4b0;
   --accent: #0b6e62;
   --accent-ink: #ffffff;
   --accent-soft: #d8eeea;
+  --brand: #0b6e62; /* цвет утилиты на «бумаге» (превью Word, подложки) — не меняется в тёмной теме */
   --accent-2: #c9531a;
   --ok: #2b7a4b; --ok-soft: #dff0e5;
   --warn: #9a6512; --warn-soft: #f6ead2;
@@ -21,7 +22,7 @@
   --plot-bg: #ffffff; --grid: #d6dce3; --axis: #3a4653;
   --c1: #0072BD; --c2: #D95319; --c3: #C9971A; --c4: #7E2F8E; --c5: #5E9A2A;
   --zone: rgba(184, 53, 42, 0.10);
-  --calc-bg: #eff2f6;
+  --calc-bg: #eef3f2;
   --code-bg: #f4f6f8; --code-com: #228b22; --code-str: #a020f0; --code-kw: #0000ff; --code-num: #1a222b;
   --shadow: 0 1px 2px rgba(20, 35, 55, .06), 0 6px 24px rgba(20, 35, 55, .06);
   --f-disp: "Jura", "Bahnschrift", "DIN Alternate", "Arial Narrow", sans-serif;
@@ -32,26 +33,26 @@
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0e1318; --sheet: #141b22; --sheet-2: #19222b; --fg: #e1e8ef; --muted: #93a2b2; --line: #26313d; --line-strong: #3a4756;
+    --bg: #0d1413; --sheet: #131c1b; --sheet-2: #182321; --fg: #e1e8ef; --muted: #93a2b2; --line: #26313d; --line-strong: #3a4756;
     --accent: #4fc3ae; --accent-ink: #062019; --accent-soft: #11302b; --accent-2: #f0874a;
     --ok: #59c084; --ok-soft: #13291d; --warn: #e2b04f; --warn-soft: #2c2412; --bad: #f07a6e; --bad-soft: #301a18;
     --plot-bg: #10171e; --grid: #263240; --axis: #8796a6;
     --c1: #4ea7ee; --c2: #f0874a; --c3: #e5c04a; --c4: #c08ad2; --c5: #8fcf5a;
     --zone: rgba(240, 122, 110, 0.14);
-    --calc-bg: #0f151c;
+    --calc-bg: #0e1615;
     --code-bg: #10171e; --code-com: #6fc276; --code-str: #d29cf5; --code-kw: #79b8ff; --code-num: #e1e8ef;
     --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 6px 24px rgba(0, 0, 0, .25);
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #0e1318; --sheet: #141b22; --sheet-2: #19222b; --fg: #e1e8ef; --muted: #93a2b2; --line: #26313d; --line-strong: #3a4756;
+  --bg: #0d1413; --sheet: #131c1b; --sheet-2: #182321; --fg: #e1e8ef; --muted: #93a2b2; --line: #26313d; --line-strong: #3a4756;
   --accent: #4fc3ae; --accent-ink: #062019; --accent-soft: #11302b; --accent-2: #f0874a;
   --ok: #59c084; --ok-soft: #13291d; --warn: #e2b04f; --warn-soft: #2c2412; --bad: #f07a6e; --bad-soft: #301a18;
   --plot-bg: #10171e; --grid: #263240; --axis: #8796a6;
   --c1: #4ea7ee; --c2: #f0874a; --c3: #e5c04a; --c4: #c08ad2; --c5: #8fcf5a;
   --zone: rgba(240, 122, 110, 0.14);
-  --calc-bg: #0f151c;
+  --calc-bg: #0e1615;
   --code-bg: #10171e; --code-com: #6fc276; --code-str: #d29cf5; --code-kw: #79b8ff; --code-num: #e1e8ef;
   --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 6px 24px rgba(0, 0, 0, .25);
   color-scheme: dark;
@@ -347,12 +348,12 @@ details.adv > .in { padding: 0 14px 14px; border-top: 1px solid var(--line); }
 .ex-paper pre.serif { font-family: "Times New Roman", Times, serif; font-size: 13px; }
 .ex-paper.title { text-align: center; }
 .ex-paper.title p { text-indent: 0; text-align: center; font-size: 12px; }
-.ex-logo { display: inline-grid; place-items: center; width: 44px; height: 40px; margin-bottom: 4px; border-radius: 4px; background: #0a5aa8; color: #fff; font: 700 9px/1 var(--f-body); }
+.ex-logo { display: inline-grid; place-items: center; width: 44px; height: 40px; margin-bottom: 4px; border-radius: 4px; background: var(--brand); color: #fff; font: 700 9px/1 var(--f-body); }
 .ex-paper.fig { padding: 8px 10px; }
 .ex-paper.fig svg { display: block; width: 100%; height: 96px; }
 .ex-paper.fig p.cap { text-align: center; margin-top: 4px; }
-.ex-wm { position: absolute; left: 12%; right: 12%; top: 18px; background: #fff; border: 1px solid #c9d1da; border-left: 3px solid #0a5aa8; border-radius: 5px; box-shadow: 0 3px 10px rgba(0,0,0,.15); padding: 6px 9px; display: flex; flex-direction: column; gap: 1px; font-family: var(--f-body); }
-.ex-wm b { font-size: 12px; color: #0a5aa8; }
+.ex-wm { position: absolute; left: 12%; right: 12%; top: 18px; background: #fff; border: 1px solid #c9d1da; border-left: 3px solid var(--brand); border-radius: 5px; box-shadow: 0 3px 10px rgba(0,0,0,.15); padding: 6px 9px; display: flex; flex-direction: column; gap: 1px; font-family: var(--f-body); }
+.ex-wm b { font-size: 12px; color: var(--brand); }
 .ex-wm span { font-size: 11px; color: #5a6776; }
 .ex-brk { margin: 6px -14px; border-top: 2px dashed #9aa5b1; position: relative; height: 0; }
 .ex-brk span { position: absolute; right: 10px; top: -9px; background: #fff; padding: 0 5px; font: 10.5px/1.6 var(--f-body); color: #7d8996; }

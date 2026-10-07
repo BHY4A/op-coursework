@@ -1,15 +1,17 @@
 <!doctype html>
-<html lang="ru">
+<html lang="ru" data-app="op-coursework">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Основы проектирования: курсовой проект</title>
+<title>Основы проектирования · КП</title>
 <meta name="description" content="Расчёт привода по методичке КНИТУ (задания 1, 3, 6): двигатель, передачи, валы, подшипники, шпонки, муфта; пояснительная записка в Word и макросы для КОМПАС-3D.">
+<script src="js/suite.js?v=202610080100"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Jura:wght@500;600;700&display=swap">
 <link rel="stylesheet" href="vendor/katex/katex.min.css">
-<link rel="stylesheet" href="css/app.css?v=202610071">
+<link rel="stylesheet" href="css/app.css?v=202610080100">
+<link rel="stylesheet" href="css/suite.css?v=202610080100">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230b6e62'/%3E%3Ccircle cx='12' cy='17' r='6.5' fill='none' stroke='white' stroke-width='2.2'/%3E%3Ccircle cx='23' cy='11' r='4' fill='none' stroke='white' stroke-width='2.2'/%3E%3C/svg%3E">
 </head>
 <body>
@@ -17,7 +19,7 @@
   <div class="top-in">
     <div class="brand">
       <svg width="34" height="34" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="6" fill="var(--accent)"/><circle cx="12" cy="17" r="6.5" fill="none" stroke="var(--accent-ink)" stroke-width="2.2"/><circle cx="23" cy="11" r="4" fill="none" stroke="var(--accent-ink)" stroke-width="2.2"/><path d="M12 10.5v-2M12 25.5v-2M5.5 17h-2M20.5 17h-2" stroke="var(--accent-ink)" stroke-width="2"/></svg>
-      <div><b>Основы проектирования · КП</b><small>Расчёт привода, пояснительная записка и файлы для КОМПАС-3D</small></div>
+      <div><b>Основы проектирования · КП</b><small>Расчёт привода, пояснительная записка Word и файлы для КОМПАС-3D</small></div>
     </div>
     <div class="var-ctl">
       <label for="var-sel">№ по списку</label>
@@ -25,6 +27,7 @@
     </div>
     <button class="icon-btn" id="share" aria-label="Скопировать ссылку на этот расчёт" title="Поделиться: скопировать ссылку на этот расчёт"><svg width="17" height="17" viewBox="0 0 16 16" aria-hidden="true"><path d="M6.6 9.4a2.6 2.6 0 0 0 3.7 0l2.4-2.4a2.6 2.6 0 0 0-3.7-3.7l-.9.9M9.4 6.6a2.6 2.6 0 0 0-3.7 0L3.3 9a2.6 2.6 0 0 0 3.7 3.7l.9-.9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
     <button class="icon-btn" id="theme" aria-label="Переключить тему"><svg width="17" height="17" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5a6.5 6.5 0 1 0 0 13z" fill="currentColor"/><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.3"/></svg></button>
+    <button class="icon-btn" id="apps" aria-label="Другие утилиты" title="Другие утилиты"><svg width="17" height="17" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="1.5" width="5" height="5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="9.5" y="1.5" width="5" height="5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="1.5" y="9.5" width="5" height="5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="9.5" y="9.5" width="5" height="5" rx="1.2" fill="currentColor"/></svg></button>
   </div>
 </header>
 <div class="wrap">
@@ -34,32 +37,32 @@
 
 <script src="vendor/katex/katex.min.js"></script>
 <script src="vendor/jszip.min.js"></script>
-<script src="js/air.js?v=202610071"></script>
-<script src="js/data.js?v=202610071"></script>
-<script src="js/fmt.js?v=202610071"></script>
-<script src="js/calc_common.js?v=202610071"></script>
-<script src="js/calc_gear.js?v=202610071"></script>
-<script src="js/calc_worm.js?v=202610071"></script>
-<script src="js/tasks.js?v=202610071"></script>
-<script src="js/tasks16.js?v=202610071"></script>
-<script src="js/figs.js?v=202610071"></script>
-<script src="js/omml.js?v=202610071"></script>
-<script src="js/docx.js?v=202610071"></script>
-<script src="js/report.js?v=202610071"></script>
-<script src="js/font_gost.js?v=202610071"></script>
-<script src="js/drw_core.js?v=202610071"></script>
-<script src="js/drw_lint.js?v=202610071"></script>
-<script src="js/drawings.js?v=202610071"></script>
-<script src="js/drw_asm.js?v=202610071"></script>
-<script src="js/drw_frame.js?v=202610071"></script>
-<script src="js/m3d.js?v=202610071"></script>
-<script src="js/drw_vert.js?v=202610071"></script>
-<script src="js/drw_drive.js?v=202610071"></script>
-<script src="js/drw_drum.js?v=202610071"></script>
-<script src="js/check3d.js?v=202610071"></script>
-<script src="js/kompas_py.js?v=202610071"></script>
-<script src="js/kompas.js?v=202610071"></script>
-<script src="js/debug.js?v=202610071"></script>
-<script src="js/app.js?v=202610071"></script>
+<script src="js/air.js?v=202610080100"></script>
+<script src="js/data.js?v=202610080100"></script>
+<script src="js/fmt.js?v=202610080100"></script>
+<script src="js/calc_common.js?v=202610080100"></script>
+<script src="js/calc_gear.js?v=202610080100"></script>
+<script src="js/calc_worm.js?v=202610080100"></script>
+<script src="js/tasks.js?v=202610080100"></script>
+<script src="js/tasks16.js?v=202610080100"></script>
+<script src="js/figs.js?v=202610080100"></script>
+<script src="js/omml.js?v=202610080100"></script>
+<script src="js/docx.js?v=202610080100"></script>
+<script src="js/report.js?v=202610080100"></script>
+<script src="js/font_gost.js?v=202610080100"></script>
+<script src="js/drw_core.js?v=202610080100"></script>
+<script src="js/drw_lint.js?v=202610080100"></script>
+<script src="js/drawings.js?v=202610080100"></script>
+<script src="js/drw_asm.js?v=202610080100"></script>
+<script src="js/drw_frame.js?v=202610080100"></script>
+<script src="js/m3d.js?v=202610080100"></script>
+<script src="js/drw_vert.js?v=202610080100"></script>
+<script src="js/drw_drive.js?v=202610080100"></script>
+<script src="js/drw_drum.js?v=202610080100"></script>
+<script src="js/check3d.js?v=202610080100"></script>
+<script src="js/kompas_py.js?v=202610080100"></script>
+<script src="js/kompas.js?v=202610080100"></script>
+<script src="js/debug.js?v=202610080100"></script>
+<script src="js/app.js?v=202610080100"></script>
 </body>
 </html>

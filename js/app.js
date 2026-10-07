@@ -382,7 +382,7 @@
           <div class="fld"><label for="f-load"><span>График нагрузки: доли момента и времени (через «;», например «1 0,2; 0,8 0,3»)</span></label><input id="f-load" class="txt" value="${esc(P.load.map(([k, t]) => String(k).replace('.', ',') + ' ' + String(t).replace('.', ',')).join('; '))}" autocomplete="off"></div>
           <p class="dhint">Сейчас: ${loadTxt}. Сумма долей времени должна быть равна 1.</p>
           ${isT(6) ? fld('Db', 'D<sub>б</sub>', 'Диаметр приводного барабана', 'мм', O.Db || '', !!O.Db, 'По умолчанию 400 мм — как в примере привода ленточного конвейера [Ч, § 12.1, с. 252].', 'O') : ''}
-          <div class="dact"><button class="btn" id="reset-var">Сбросить к варианту ${P.v}</button><button class="btn" id="go-kin">К расчёту →</button></div>
+          <div class="dact"><button class="btn" id="reset-var">Сбросить к варианту ${P.v}</button><button class="btn" id="go-kin">Перейти к расчёту →</button></div>
           <details class="adv"><summary>Таблица вариантов задания ${P.task} (щелчок по строке выбирает вариант)</summary><div class="in"><div class="tbl var-table"><table><thead><tr><th class="num">Вариант</th><th class="num">P, кВт</th><th class="num">n, мин⁻¹</th></tr></thead><tbody>${vrows}</tbody></table></div><p class="dhint">Срок службы ${task.L} лет; K<sub>г</sub> = ${fnum(task.Kg, 0)}; K<sub>сут</sub> = ${fnum(task.Kc, 0)}.</p></div></details>
         </section>
         <section class="dsec">
@@ -474,7 +474,8 @@
           <h3>Скачать</h3>
           <div class="dl-grid"><button class="btn primary dl-all" data-docx="all">${dlIcon()} Пояснительная записка (.docx)</button>${[['kin', 'Раздел 1.1–1.2'], ['mat', 'Материалы'], ['gear', 'Передачи'], ['shaft', 'Валы и корпус'], ['check', 'Проверки'], ['other', 'Смазка, муфта']].map(([t, l]) => `<button class="btn" data-docx="${t}">${dlIcon()} ${l}</button>`).join('')}</div>
           <p class="dhint">Полная записка: титульный лист, задание, лист нормоконтролёра, содержание, введение, все разделы, заключение, список источников и приложения (спецификации). Отдельные части удобны, чтобы вставить их в свой документ.</p>
-          <div class="dact"><button class="btn" id="zip-all">${dlIcon()} Архив: записка по разделам + файлы КОМПАС (.zip)</button></div>
+          <div class="dact"><button class="btn" id="zip-all">${dlIcon()} Архив записки и файлов КОМПАС (.zip)</button></div>
+          <p class="dhint">Архив: записка целиком и по разделам (Word), файлы для КОМПАС-3D и рисунки SVG.</p>
         </section>
         <section class="dsec">
           <h2>5. Сохранения</h2>
@@ -1018,10 +1019,10 @@
     const r = document.documentElement;
     const cur = r.getAttribute('data-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
     const nx = cur === 'dark' ? 'light' : 'dark';
-    r.setAttribute('data-theme', nx); lsSet(KEY.theme, nx);
+    r.setAttribute('data-theme', nx); try { localStorage.setItem('suite-theme', nx); } catch (e) { /* ignore */ }
   }
   function init() {
-    const th = lsGet(KEY.theme); if (th) document.documentElement.setAttribute('data-theme', th);
+    try { const th = localStorage.getItem('suite-theme'); if (th) document.documentElement.setAttribute('data-theme', th); } catch (e) { /* ignore */ }
     $('#rail').innerHTML = TABS.map(m => `<a href="#" data-tab="${m.id}"><span class="no" data-short="${m.short}">${m.no}</span><span class="t">${m.t}</span><span class="s">${m.s}</span></a>`).join('') + '<div class="rail-foot" id="rail-foot"></div>';
     $$('nav.rail a').forEach(a => a.onclick = e => { e.preventDefault(); go(a.dataset.tab); });
     $('#var-sel').onchange = e => setList(+e.target.value);
