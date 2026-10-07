@@ -165,10 +165,12 @@
     let Kv = D.WORM_KV[deg][kvIdx]; if (Kv == null) { deg = deg === 9 ? 8 : 7; Kv = D.WORM_KV[deg][kvIdx]; }
     rep.p(`По [[ch|табл. 4.7]] при <i>v</i><sub>s</sub> = ${fnum(vs)} м/с назначаем ${deg}-ю степень точности передачи; коэффициент динамичности <i>K</i><sub>v</sub> = ${fnum(Kv, 0)}.`);
     const th = interp(D.WORM_THETA.q, D.WORM_THETA[g.z1], g.q);
-    const Kb = 1 + Math.pow(g.z2 / th, 3) * (1 - o.x);
-    rep.eq({ lhs: 'K_{\\beta}', f: '1+\\left(\\dfrac{z_{2}}{\\theta}\\right)^{3}(1-x)', s: `1+\\left(\\dfrac{${g.z2}}{${nx(th)}}\\right)^{3}(1-${n(o.x, 3)})`, v: Kb, sig: 3, d: `Коэффициент концентрации нагрузки; θ = ${fnum(th, 0)} — по табл. 4.6 [Ч] при z1 = ${g.z1}, q = ${fnum(g.q, 0)}; x — ${O.xLoad === 'load' ? 'по графику нагрузки, формула (4.27)' : 'принят для незначительных колебаний нагрузки'}.`, ref: ['ch', 'табл. 4.6'] });
+    const metK = O.wormSHcheck === 'met';
+    const Kb = metK ? g.K : 1 + Math.pow(g.z2 / th, 3) * (1 - o.x);
+    if (metK) rep.eq({ lhs: 'K_{H\\beta}', raw: nx(Kb), d: 'Коэффициент неравномерности распределения нагрузки — принятый в п. 1.4.2 (KHβ ≈ 1,1…1,4); при изгибе KFβ ≈ KHβ [М, п. 1.5].', ref: ['met', 'п. 1.4.2'] });
+    else rep.eq({ lhs: 'K_{\\beta}', f: '1+\\left(\\dfrac{z_{2}}{\\theta}\\right)^{3}(1-x)', s: `1+\\left(\\dfrac{${g.z2}}{${nx(th)}}\\right)^{3}(1-${n(o.x, 3)})`, v: Kb, sig: 3, d: `Коэффициент концентрации нагрузки; θ = ${fnum(th, 0)} — по табл. 4.6 [Ч] при z1 = ${g.z1}, q = ${fnum(g.q, 0)}; x — ${O.xLoad === 'load' ? 'по графику нагрузки, формула (4.27)' : 'принят для незначительных колебаний нагрузки'}.`, ref: ['ch', 'табл. 4.6'] });
     const K = Kb * Kv;
-    rep.eq({ lhs: 'K', f: 'K_{\\beta}\\cdot K_{v}', s: `${n(Kb, 3)}\\cdot ${nx(Kv)}`, v: K, sig: 3, d: 'Коэффициент нагрузки червячной передачи.' });
+    rep.eq({ lhs: 'K', f: metK ? 'K_{H\\beta}\\cdot K_{HV}' : 'K_{\\beta}\\cdot K_{v}', s: `${n(Kb, 3)}\\cdot ${nx(Kv)}`, v: K, sig: 3, d: 'Коэффициент нагрузки червячной передачи.' });
     let sigH;
     if (O.wormSHcheck === 'met') {
       const Zh = Math.sqrt(2 * Math.cos(g.gam * D2R) / Math.sin(40 * D2R));

@@ -251,13 +251,13 @@
       // размеры
       const fr = V.res.front.sh, tp = V.res.top.sh;
       {
-        const b = fr.bbox(0);
+        const b = fr.geoBox();
         fr.dimH(b.x1, b.y1, b.x2, b.y1, b.y1 - 14, nf((b.x2 - b.x1) / k) + '*');
         fr.dimV(b.x2, b.y1, b.x2, b.y2, b.x2 + 14, nf((b.y2 - b.y1) / k) + '*');
         fr.dimV(F.fx0 * k, -F.hc * k, F.fx0 * k, V.axZ * k, F.fx0 * k - 12, nf(V.axZ + F.hc));
       }
       {
-        const b = tp.bbox(0);
+        const b = tp.geoBox();
         tp.dimV(b.x1, b.y1, b.x1, b.y2, b.x1 - 14, nf((b.y2 - b.y1) / k) + '*');
         const fl = F.floor.slice().sort((p, q) => p.fx - q.fx || p.fy - q.fy);
         const xs = [...new Set(fl.map(h => Math.round(h.fx)))];

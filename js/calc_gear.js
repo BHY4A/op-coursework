@@ -81,7 +81,7 @@
     const d1 = m * z1, d2 = m * z2, da1 = d1 + 2 * m, da2 = d2 + 2 * m, df1 = d1 - 2.5 * m, df2 = d2 - 2.5 * m;
     const b2 = Math.round(psiba * aw), b1 = b2 + (O.bAdd || 5);
     // предварительная проверка контактных напряжений для выбора aw
-    const Tw = o.Tw, Ft = 2000 * Tw / d2, v = PI * d1 * o.n1 / 60000, deg = precisionCyl(v);
+    const Ft = o.ftPin ? 2000 * o.T / d1 : 2000 * o.Tw / d2, v = PI * d1 * o.n1 / 60000, deg = precisionCyl(v);
     const KHv = o.hard ? D.KHV.spur.hard : D.KHV.spur.soft, KH = KHb * KHv;
     const ea = 1.88 - 3.2 * (1 / z1 + 1 / z2), Ze = Math.sqrt((4 - ea) / 3);
     const sigH = 1.76 * 274 * Ze * Math.sqrt(KH * Ft * (uf + 1) / (b2 * uf * d1));
@@ -91,10 +91,11 @@
   /* силы и проверочный расчёт цилиндрической ступени */
   function cylForces(rep, g, o) {
     const i1 = o.st.p, i2 = o.st.w;
-    const Ft = 2000 * o.Tw / g.d2;
-    rep.eq({ lhs: `F_{t${i1}}=F_{t${i2}}`, f: `\\dfrac{2000\\cdot ${o.Twsym}}{d_{${i2}}}`, s: `\\dfrac{2000\\cdot ${n(o.Tw)}}{${n(g.d2)}}`, v: Ft, u: 'Н', d: 'Окружная сила в зацеплении.' });
+    const Ft = o.ftPin ? 2000 * o.T / g.d1 : 2000 * o.Tw / g.d2;
+    if (o.ftPin) rep.eq({ lhs: `F_{t${i2}}`, f: `\\dfrac{2\\cdot ${o.Tsym}\\cdot 10^{3}}{d_{${i1}}}`, s: `\\dfrac{2\\cdot ${n(o.T)}\\cdot 10^{3}}{${n(g.d1)}}`, v: Ft, u: 'Н', d: 'Окружная сила через крутящий момент на промежуточном валу (на шестерне) и делительный диаметр шестерни [М, п. 1.5.2].' });
+    else rep.eq({ lhs: `F_{t${i1}}=F_{t${i2}}`, f: `\\dfrac{2000\\cdot ${o.Twsym}}{d_{${i2}}}`, s: `\\dfrac{2000\\cdot ${n(o.Tw)}}{${n(g.d2)}}`, v: Ft, u: 'Н', d: 'Окружная сила в зацеплении.' });
     const Fr = Ft * TG20;
-    rep.eq({ lhs: `F_{r${i1}}=F_{r${i2}}`, f: `F_{t${i1}}\\cdot \\operatorname{tg}\\alpha`, s: `${n(Ft)}\\cdot \\operatorname{tg}20^{\\circ}`, v: Fr, u: 'Н', d: 'Радиальная сила (угол зацепления α = 20°); осевые силы в прямозубом зацеплении отсутствуют.' });
+    rep.eq({ lhs: o.ftPin ? `F_{r${i2}}` : `F_{r${i1}}=F_{r${i2}}`, f: `F_{t${o.ftPin ? i2 : i1}}\\cdot \\operatorname{tg}\\alpha`, s: `${n(Ft)}\\cdot \\operatorname{tg}20^{\\circ}`, v: Fr, u: 'Н', d: 'Радиальная сила (угол зацепления α = 20°); осевые силы в прямозубом зацеплении отсутствуют.' });
     return { Ft, Fr, Fa: 0 };
   }
   function cylCheck(rep, g, o, f) {
@@ -111,8 +112,8 @@
     KH = g.KHb * KHv;
     rep.eq({ lhs: 'K_{H}', f: 'K_{H\\beta}\\cdot K_{Hv}', s: `${n(g.KHb, 3)}\\cdot ${nx(KHv)}`, v: KH, sig: 3, d: `Коэффициент нагрузки; KHv = ${fnum(KHv, 0)} — для прямозубых колёс HB ${o.hard ? '>' : '≤'} 350 (табл. 3.6 [Ч]).`, ref: ['ch', 'табл. 3.6'] });
     sH = 1.76 * 274 * Ze * Math.sqrt(KH * f.Ft * (g.uf + 1) / (g.b2 * g.uf * g.d1));
-    if (o.pa) rep.eq({ lhs: '\\sigma_{H}', f: `Z_{H}\\cdot Z_{M}\\cdot Z_{\\varepsilon}\\cdot \\sqrt{\\dfrac{K_{H}\\cdot F_{t${i1}}\\cdot(${o.usym}+1)}{b_{${i2}}\\cdot ${o.usym}\\cdot d_{${i1}}\\cdot 10^{-6}}}`, s: `1{,}76\\cdot 274\\cdot 10^{3}\\cdot ${n(Ze, 3)}\\cdot \\sqrt{\\dfrac{${n(KH, 3)}\\cdot ${n(f.Ft)}\\cdot(${n(g.uf)}+1)}{${g.b2}\\cdot ${n(g.uf)}\\cdot ${n(g.d1)}\\cdot 10^{-6}}}`, v: sH * 1e6, u: 'Па', d: 'Расчётное контактное напряжение (ZH = 1,76 — прямые зубья без смещения, ZM = 274·10³ Па^½ — пара «сталь – сталь»).' });
-    else rep.eq({ lhs: '\\sigma_{H}', f: `Z_{H}\\cdot Z_{M}\\cdot Z_{\\varepsilon}\\cdot \\sqrt{\\dfrac{K_{H}\\cdot F_{t${i1}}\\cdot(${o.usym}+1)}{b_{${i2}}\\cdot ${o.usym}\\cdot d_{${i1}}}}\\cdot 10^{-3}`, s: `1{,}76\\cdot 274\\cdot 10^{3}\\cdot ${n(Ze, 3)}\\cdot \\sqrt{\\dfrac{${n(KH, 3)}\\cdot ${n(f.Ft)}\\cdot(${n(g.uf)}+1)}{${g.b2}\\cdot ${n(g.uf)}\\cdot ${n(g.d1)}}}\\cdot 10^{-3}`, v: sH, u: 'МПа', d: 'Расчётное контактное напряжение (ZH = 1,76 — прямые зубья без смещения, ZM = 274·10³ Па^½ — пара «сталь – сталь»).' });
+    if (o.pa) rep.eq({ lhs: '\\sigma_{H}', f: `Z_{H}\\cdot Z_{M}\\cdot Z_{\\varepsilon}\\cdot \\sqrt{\\dfrac{K_{H}\\cdot F_{t${o.ftPin ? i2 : i1}}\\cdot(${o.usym}+1)}{b_{${i2}}\\cdot ${o.usym}\\cdot d_{${i1}}\\cdot 10^{-6}}}`, s: `1{,}76\\cdot 274\\cdot 10^{3}\\cdot ${n(Ze, 3)}\\cdot \\sqrt{\\dfrac{${n(KH, 3)}\\cdot ${n(f.Ft)}\\cdot(${n(g.uf)}+1)}{${g.b2}\\cdot ${n(g.uf)}\\cdot ${n(g.d1)}\\cdot 10^{-6}}}`, v: sH * 1e6, u: 'Па', d: 'Расчётное контактное напряжение (ZH = 1,76 — прямые зубья без смещения, ZM = 274·10³ Па^½ — пара «сталь – сталь»).' });
+    else rep.eq({ lhs: '\\sigma_{H}', f: `Z_{H}\\cdot Z_{M}\\cdot Z_{\\varepsilon}\\cdot \\sqrt{\\dfrac{K_{H}\\cdot F_{t${o.ftPin ? i2 : i1}}\\cdot(${o.usym}+1)}{b_{${i2}}\\cdot ${o.usym}\\cdot d_{${i1}}}}\\cdot 10^{-3}`, s: `1{,}76\\cdot 274\\cdot 10^{3}\\cdot ${n(Ze, 3)}\\cdot \\sqrt{\\dfrac{${n(KH, 3)}\\cdot ${n(f.Ft)}\\cdot(${n(g.uf)}+1)}{${g.b2}\\cdot ${n(g.uf)}\\cdot ${n(g.d1)}}}\\cdot 10^{-3}`, v: sH, u: 'МПа', d: 'Расчётное контактное напряжение (ZH = 1,76 — прямые зубья без смещения, ZM = 274·10³ Па^½ — пара «сталь – сталь»).' });
     over = (sH / o.sH - 1) * 100;
     okH = over <= 5;
     rep.check(`\\sigma_{H}=${n(sH)}\\ \\text{МПа}\\ ${sH <= o.sH ? '\\le' : '>'}\\ ${o.sHsym}=${n(o.sH)}\\ \\text{МПа}`, okH, sH <= o.sH ? `Недогрузка ${fnum(-over, 3)} %${-over > 10 ? (g.narrowed ? ' — больше 10 %, но ширину венца дальше уменьшать нельзя по условию изгибной прочности (и ψba ≥ 0,2), поэтому недогрузка допускается' : ' — больше допустимых 10 %' + (o.underRef ? ' ' + o.underRef : '')) : ' — в допустимых пределах (до 10 %)'}.` : over <= 5 ? `Перегрузка ${fnum(over, 3)} % не превышает допустимых 5 %.` : `Перегрузка ${fnum(over, 3)} % — больше 5 %, требуется увеличить aw или ширину венца.`);
@@ -143,7 +144,7 @@
     const KFb = kfb(g.psibd, o.colF, o.hard), KFv = kfv(deg, v, o.hard), KF = KFb * KFv;
     rep.eq({ lhs: 'K_{F}', f: 'K_{F\\beta}\\cdot K_{Fv}', s: `${n(KFb, 3)}\\cdot ${nx(KFv)}`, v: KF, sig: 3, d: `KFβ — по ψbd = ${fnum(g.psibd, 3)} (табл. 3.7 [Ч]), KFv — по степени точности ${Math.min(8, deg)} и скорости (табл. 3.8 [Ч]).`, ref: ['ch', 'табл. 3.7, 3.8'] });
     const sF = lim.YF * KF * f.Ft / (g.b2 * g.m);
-    rep.eq({ lhs: '\\sigma_{F}', f: `\\dfrac{Y_{F${lim.i}}\\cdot K_{F}\\cdot F_{t${i1}}}{b_{${i2}}\\cdot m}`, s: `\\dfrac{${n(lim.YF, 3)}\\cdot ${n(KF, 3)}\\cdot ${n(f.Ft)}}{${g.b2}\\cdot ${nx(g.m)}}`, v: sF, u: 'МПа', d: 'Расчётное напряжение изгиба в зубьях лимитирующего элемента.' });
+    rep.eq({ lhs: '\\sigma_{F}', f: `\\dfrac{Y_{F${lim.i}}\\cdot K_{F}\\cdot F_{t${o.ftPin ? i2 : i1}}}{b_{${i2}}\\cdot m}`, s: `\\dfrac{${n(lim.YF, 3)}\\cdot ${n(KF, 3)}\\cdot ${n(f.Ft)}}{${g.b2}\\cdot ${nx(g.m)}}`, v: sF, u: 'МПа', d: 'Расчётное напряжение изгиба в зубьях лимитирующего элемента.' });
     rep.check(`\\sigma_{F}=${n(sF)}\\ \\text{МПа}\\ ${sF <= lim.sF ? '\\le' : '>'}\\ \\sigma_{FP${lim.i}}=${n(lim.sF)}\\ \\text{МПа}`, sF <= lim.sF, sF > lim.sF ? 'Изгибная прочность не обеспечена — требуется увеличить модуль.' : 'Изгибная прочность зубьев обеспечена.');
     Object.assign(R, { v, deg, ea, Ze, KHv, KH, sH, over, YF1, YF2, KFb, KFv, KF, sF, lim });
     return R;

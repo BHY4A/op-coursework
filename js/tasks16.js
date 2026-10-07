@@ -150,11 +150,13 @@
     rep = sec('s14', 'gear', 'Проектный расчёт ступеней редуктора');
     rep.h('1.4', 'Проектный и геометрический расчёт передач редуктора, определение сил в зацеплении');
     rep.h('1.4.1', 'Первая ступень (быстроходная цилиндрическая)', 3);
-    rep.p(`Межосевое расстояние определяется по моменту на шестерне ступени (<i>T</i><sub>I</sub>): эта запись равносильна формуле [[ch|формула (3.7)]] с моментом на колесе и квадратом передаточного числа, так как <i>T</i><sub>II</sub>/<i>u</i><sub>б</sub><sup>2</sup> ≈ <i>T</i><sub>I</sub>/<i>u</i><sub>б</sub>.`);
-    const oB = { st: { p: '1', w: '2' }, T: K.TI, Tsym: 'T_{I}', Tw: K.TII, Twsym: 'T_{II}', n1: nI, n1sym: 'n_{I}', u: ub, usym: 'u_{б}', sH: sHb, sHsym: '\\sigma_{H.б}', psiba: O.psibaB, col: 'II', colF: 'II', hard: false, sF1: a1.sF, sF2: a2.sF, label: '.б', title: 'быстроходной ступени' };
+    const awW = O.awT6 === 'met';
+    rep.p(awW ? 'Межосевое расстояние определяется по формуле методички с крутящим моментом на валу колеса ступени (<i>T</i><sub>II</sub> — для быстроходной, <i>T</i><sub>III</sub> — для тихоходной) [[met|п. 1.4.1, 1.4.2]]; момент подставляется в Н·м, допускаемое напряжение — в Па, результат переводится из метров в миллиметры.'
+      : `В формулу межосевого расстояния [[met|п. 1.4.1]] (<i>K</i><sub>a</sub> = 4950, момент в Н·м, напряжение в Па, результат в метрах) подставляется момент на шестерне ступени — так же, как в методических указаниях к заданию 1 (момент <i>T</i><sub>1Т</sub> на шестерне тихоходной ступени). При моменте на колесе формула с <i>u</i> (а не <i>u</i><sup>2</sup>) завышает <i>a</i><sub>w</sub> в ∛<i>u</i> раз; запись с моментом шестерни равносильна формуле (3.7) [[ch|с. 27]] с моментом на колесе и <i>u</i><sup>2</sup>. Вариант с моментом колеса можно включить в настройках «Методика расчёта».`);
+    const oB = { st: { p: '1', w: '2' }, T: awW ? K.TII : K.TI, Tsym: awW ? 'T_{II}' : 'T_{I}', Tw: K.TII, Twsym: 'T_{II}', n1: nI, n1sym: 'n_{I}', u: ub, usym: 'u_{б}', sH: sHb, sHsym: '\\sigma_{H.б}', psiba: O.psibaB, col: 'II', colF: 'II', hard: false, sF1: a1.sF, sF2: a2.sF, label: '.б', title: 'быстроходной ступени' };
     const gB = G.cylStage(rep, oB, O);
     rep.h('1.4.2', 'Вторая ступень (тихоходная цилиндрическая)', 3);
-    const oT = { st: { p: '3', w: '4' }, T: K.TII, Tsym: 'T_{II}', Tw: K.TIII, Twsym: 'T_{III}', n1: nII, n1sym: 'n_{II}', u: ut, usym: 'u_{т}', sH: sHt, sHsym: '\\sigma_{H.т}', psiba: O.psibaT, col: 'II', colF: 'II', hard: false, sF1: a3.sF, sF2: a4.sF, label: '.т', title: 'тихоходной ступени' };
+    const oT = { st: { p: '3', w: '4' }, T: awW ? K.TIII : K.TII, Tsym: awW ? 'T_{III}' : 'T_{II}', Tw: K.TIII, Twsym: 'T_{III}', n1: nII, n1sym: 'n_{II}', u: ut, usym: 'u_{т}', sH: sHt, sHsym: '\\sigma_{H.т}', psiba: O.psibaT, col: 'II', colF: 'II', hard: false, sF1: a3.sF, sF2: a4.sF, label: '.т', title: 'тихоходной ступени' };
     const gT = G.cylStage(rep, oT, O);
     rep.h('1.4.3', 'Проверка фактических передаточных чисел и частот вращения', 3);
     const nIIf = nI / gB.uf, nIIIf = nIIf / gT.uf;
@@ -256,11 +258,9 @@
     // 1.10 проверка валов
     rep = sec('s110', 'check', 'Проверка прочности валов');
     rep.h('1.10', 'Проверка прочности валов');
-    const Fm = O.FmMode === 'met' && O.D0 > 0 ? O.FmK * 2 * Tc * 1e3 / O.D0 : TC.FmGost(K.TI, false); R.Fm = Fm;
     const sb = M.steelSb('45', 90).sb;
     rep.h('1.10.1', 'Быстроходный вал (вал-шестерня)', 3);
-    if (O.FmMode === 'met' && O.D0 > 0) rep.eq({ lhs: 'F_{м}', f: `${nx(O.FmK)}\\cdot \\dfrac{2\\cdot T_{расч}\\cdot 10^{3}}{D_{0}}`, s: `${nx(O.FmK)}\\cdot \\dfrac{2\\cdot ${n(Tc)}\\cdot 10^{3}}{${nx(O.D0)}}`, v: Fm, u: 'Н', d: 'Консольная сила от муфты.' });
-    else rep.eq({ lhs: 'F_{м}', f: K.TI <= 25 ? '50\\sqrt{T_{I}}' : '80\\sqrt{T_{I}}', s: `${K.TI <= 25 ? 50 : 80}\\sqrt{${n(K.TI)}}`, v: Fm, u: 'Н', d: 'Консольная сила от муфты по ГОСТ 16162 ([Ч], с. 141); направление принимается наиболее неблагоприятным.', ref: ['ch', 'с. 141'] });
+    const Fm = TC.FmCalc(rep, O, Tc, K.TI, 'T_{I}', M.couplingPick(Tc, mo.d1, dv1, nI).c); R.Fm = Fm;
     const sh1 = shaftBlock(rep, { l: lI, lsym: 'l_{1}', T: K.TI, sb, O, fig: 'shaft1', figTitle: 'Расчётная схема и эпюры моментов быстроходного вала',
       intro: `Вал рассматривается как двухопорная балка (пролёт <i>l</i><sub>1</sub> = ${fnum(lI)} мм) с шестернёй z1 на расстоянии <i>a</i><sub>1</sub> = ${fnum(L.a1)} мм от опоры A и консольной силой от муфты на расстоянии <i>c</i><sub>1</sub> = ${fnum(c1)} мм за опорой B. Нагрузки: <i>F</i><sub>t1</sub> = ${fnum(fB.Ft)} Н, <i>F</i><sub>r1</sub> = ${fnum(fB.Fr)} Н, <i>F</i><sub>м</sub> = ${fnum(Fm)} Н.`,
       loads: [{ id: 'C', x: L.a1, Fx: -fB.Ft, Fy: -fB.Fr }, { id: 'D', x: lI + c1, Fx: -Fm }],
@@ -354,7 +354,8 @@
     rep.h('1.15', 'Расчёт вала конвейера с барабаном');
     rep.h('1.15.1', 'Исходные данные и расчётная схема', 3);
     const Db = O.Db || 400;
-    if (!O.Db) rep.note('Диаметр барабана в задании не указан — принято Dб = 400 мм. Уточните его у руководителя и задайте во вкладке «Данные».', 'warn');
+    const vL = PI * Db * nIV / 60000;
+    rep.p(`В задании рабочий орган задан мощностью и частотой вращения вала; диаметр приводного барабана ${O.Db ? 'принят' : 'принимается'} <i>D</i><sub>б</sub> = ${Db} мм — как в примере расчёта привода ленточного конвейера с цепной передачей после редуктора [[ch|§ 12.1, с. 252]] (такая же схема, как в задании). Скорость ленты <i>v</i><sub>л</sub> = π<i>D</i><sub>б</sub><i>n</i><sub>IV</sub>/60000 = ${fnum(vL)} м/с, тяговое усилие на ленте <i>F</i> = 2000<i>T</i><sub>IV</sub>/<i>D</i><sub>б</sub> (п. 1.15.2).`);
     const dvr = M.torsionD(new Report('tmp'), { lhs: 'd', T: K.TIV, Tsym: 'T_{IV}', tau: O.tauIV || 25, mode: '16pi' });
     let dv = M.shaftStd(dvr); for (let i = 0; i < (A.dv4Up || 0); i++) dv = M.shaftStd(dv + 0.5);
     const dp = M.std5(dv + 5), dbar = M.shaftStd(dp + 5);
@@ -406,9 +407,10 @@
     rep = sec('s12', 'kin', 'Электродвигатель и кинематический расчёт');
     rep.h('1.2', 'Выбор электродвигателя и кинематический расчёт');
     rep.p('Обозначения валов: быстроходный вал (вал коническойшестерни) — 1Б, промежуточный вал — 2Б (1Т), тихоходный вертикальный вал со звёздочкой конвейера — 2Т.'.replace('коническойшестерни', 'конической шестерни'));
-    rep.p(`Принимаем КПД [[met|п. 1.2]], [[ch|табл. 1.1]]: конической зубчатой передачи с учётом потерь в подшипниках η<sub>к</sub> = ${fnum(O.etaCon, 0)}, цилиндрической η<sub>ц</sub> = ${fnum(O.etaCyl, 0)}, соединительной муфты η<sub>м</sub> = ${fnum(O.etaM, 0)} (в приводе одна муфта; в табл. 1.1 [Ч] КПД муфт не приводится — принято для упругой втулочно-пальцевой муфты).`);
+    rep.p(`Принимаем КПД [[met|п. 1.2]], [[ch|табл. 1.1]]: конической зубчатой передачи с учётом потерь в подшипниках η<sub>к</sub> = ${fnum(O.etaCon, 0)}, цилиндрической η<sub>ц</sub> = ${fnum(O.etaCyl, 0)}, соединительной муфты η<sub>м</sub> = ${fnum(O.etaM, 0)} (в приводе одна муфта; значение η<sub>м</sub> ≈ 0,98 рекомендуется методическими указаниями кафедры, в табл. 1.1 [Ч] КПД муфт не приводится).`);
+    const met1 = O.t1Coup === 'met';
     const eta = O.etaCon * O.etaCyl * O.etaM, Preq = P.Pout / eta;
-    rep.eq({ lhs: '\\eta_{общ}', f: '\\eta_{к}\\cdot \\eta_{ц}\\cdot \\eta_{м}', s: `${nx(O.etaCon)}\\cdot ${nx(O.etaCyl)}\\cdot ${nx(O.etaM)}`, v: eta, sig: 4, d: 'Общий КПД привода.' });
+    rep.eq({ lhs: '\\eta_{общ}', f: '\\eta_{к}\\cdot \\eta_{ц}\\cdot \\eta_{м}', s: `${nx(O.etaCon)}\\cdot ${nx(O.etaCyl)}\\cdot ${nx(O.etaM)}`, v: eta, sig: 4, d: 'Общий КПД привода; в приводе одна муфта (поз. 4 — между двигателем и редуктором), поэтому КПД муфты входит в первой степени (во второй — только при двух муфтах) [М, п. 1.2].' });
     rep.eq({ lhs: 'P_{эд}', f: '\\dfrac{P_{в}}{\\eta_{общ}}', s: `\\dfrac{${nx(P.Pout)}}{${n(eta, 4)}}`, v: Preq, u: 'кВт', d: 'Требуемая мощность электродвигателя.' });
     rep.eq({ lhs: "n_{эд}'", f: 'n_{в}\\cdot u_{т}\\cdot u_{б}', s: `${nx(P.nout)}\\cdot(8\\ldots 15)`, raw: `${n(8 * P.nout)}\\ldots ${n(15 * P.nout)}`, u: 'мин⁻¹', d: 'Ориентировочная частота вращения вала двигателя; для коническо-цилиндрических редукторов наиболее употребительны передаточные числа u = uт·uб = 8…15, наибольшее — 22 [Ч, с. 15].', ref: ['ch', 'с. 15'] });
     // при 1500 мин⁻¹ передаточное число редуктора превысило бы наибольшее для коническо-цилиндрических (22 [Ч, с. 15]) — 1000 мин⁻¹
@@ -423,14 +425,14 @@
     rep.eq({ lhs: 'n_{1Б}', f: 'n_{эд}', v: n1B, u: 'мин⁻¹', d: 'Частоты вращения валов.' });
     rep.eq({ lhs: 'n_{1Т}=n_{2Б}', f: '\\dfrac{n_{1Б}}{u_{б}}', s: `\\dfrac{${n(n1B)}}{${n(ub)}}`, v: n1T, u: 'мин⁻¹' });
     rep.eq({ lhs: 'n_{2Т}', f: '\\dfrac{n_{1Т}}{u_{т}}', s: `\\dfrac{${n(n1T)}}{${n(ut)}}`, v: n2T, u: 'мин⁻¹' });
-    const Tv = 9550 * P.Pout / P.nout, T2T = O.t1Coup === 'met' ? Tv / O.etaM : Tv, T1T = T2T / (O.etaCyl * ut), T1B = T1T / (O.etaCon * ub);
+    const Tv = 9550 * P.Pout / P.nout, T2T = met1 ? Tv / O.etaM : Tv, T1T = T2T / (O.etaCyl * ut), T1B = T1T / (O.etaCon * ub);
     rep.eq({ lhs: 'T_{в}', f: '9550\\cdot \\dfrac{P_{в}}{n_{в}}', s: `9550\\cdot \\dfrac{${nx(P.Pout)}}{${nx(P.nout)}}`, v: Tv, u: 'Н·м', d: 'Крутящий момент на звёздочке конвейера.' });
-    if (O.t1Coup === 'met') rep.eq({ lhs: 'T_{2Т}', f: '\\dfrac{T_{в}}{\\eta_{м}}', s: `\\dfrac{${n(Tv)}}{${nx(O.etaM)}}`, v: T2T, u: 'Н·м', d: 'Крутящий момент на тихоходном валу.' });
+    if (met1) rep.eq({ lhs: 'T_{2Т}', f: '\\dfrac{T_{в}}{\\eta_{м}}', s: `\\dfrac{${n(Tv)}}{${nx(O.etaM)}}`, v: T2T, u: 'Н·м', d: 'Крутящий момент на тихоходном валу.' });
     else rep.eq({ lhs: 'T_{2Т}', f: 'T_{в}', v: T2T, u: 'Н·м', d: 'Звёздочка конвейера установлена непосредственно на тихоходном валу редуктора.' });
     rep.eq({ lhs: 'T_{1Т}=T_{2Б}', f: '\\dfrac{T_{2Т}}{\\eta_{ц}\\cdot u_{т}}', s: `\\dfrac{${n(T2T)}}{${nx(O.etaCyl)}\\cdot ${n(ut)}}`, v: T1T, u: 'Н·м' });
     rep.eq({ lhs: 'T_{1Б}', f: '\\dfrac{T_{1Т}}{\\eta_{к}\\cdot u_{б}}', s: `\\dfrac{${n(T1T)}}{${nx(O.etaCon)}\\cdot ${n(ub)}}`, v: T1B, u: 'Н·м' });
     const P1B = T1B * n1B / 9550, P1T = T1T * n1T / 9550;
-    TC.shaftsTable(rep, [{ name: '1Б (быстроходный)', n: n1B, w: PI * n1B / 30, P: P1B, T: T1B }, { name: '1Т = 2Б (промежуточный)', n: n1T, w: PI * n1T / 30, P: P1T, T: T1T }, { name: '2Т (тихоходный)', n: n2T, w: PI * n2T / 30, P: P.Pout / (O.t1Coup === 'met' ? O.etaM : 1), T: T2T }]);
+    TC.shaftsTable(rep, [{ name: '1Б (быстроходный)', n: n1B, w: PI * n1B / 30, P: P1B, T: T1B }, { name: '1Т = 2Б (промежуточный)', n: n1T, w: PI * n1T / 30, P: P1T, T: T1T }, { name: '2Т (тихоходный)', n: n2T, w: PI * n2T / 30, P: P.Pout / (met1 ? O.etaM : 1), T: T2T }]);
     const K = { n1B, n1T, n2T, T1B, T1T, T2T, Tv, P1B };
     Object.assign(R, { K, ured, ut, ub, eta, Preq });
     // 1.3
@@ -453,7 +455,7 @@
     const gC = G.conical(rep, oC, O);
     rep.h('1.4.2', 'Вторая ступень (тихоходная цилиндрическая)', 3);
     const ub2 = gC.uf, n1Tf = n1B / ub2;
-    const oT = { st: { p: '1', w: '2' }, T: T1T, Tsym: 'T_{1Т}', Tw: T2T, Twsym: 'T_{2Т}', n1: n1Tf, n1sym: 'n_{1Т}', u: ut, usym: 'u_{т}', sH: sHII, sHsym: "\\sigma_{HPII}'", psiba: O.psiba1, col: 'II', colF: 'II', hard: false, sF1: q3.sF, sF2: q4.sF, label: '', title: 'тихоходной ступени', pa: true, underRef: '[[met|п. 1.6.2]]' };
+    const oT = { st: { p: '1', w: '2' }, T: T1T, Tsym: 'T_{1Т}', Tw: T2T, Twsym: 'T_{2Т}', n1: n1Tf, n1sym: 'n_{1Т}', u: ut, usym: 'u_{т}', sH: sHII, sHsym: "\\sigma_{HPII}'", psiba: O.psiba1, col: 'II', colF: 'II', hard: false, sF1: q3.sF, sF2: q4.sF, label: '', title: 'тихоходной ступени', pa: true, ftPin: true, kriMul: true, underRef: '[[met|п. 1.6.2]]' };
     const gT = G.cylStage(rep, oT, O);
     rep = sec('s15', 'gear', 'Окружные скорости и силы');
     rep.h('1.5', 'Вычисление окружной скорости и сил, действующих в зацеплении');

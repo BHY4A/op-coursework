@@ -229,9 +229,11 @@
   /* ---------- файлы ---------- */
   /* листы чертежей (рабочие + сборочный), с кешем на объект результата расчёта */
   const SHEETS = new WeakMap();
-  function sheets(R, P, T) {
+  /* построение листов по этапам: генератор отдаёт название следующего этапа — синхронно (sheets) или с паузами для отрисовки (sheetsAsync) */
+  function* sheetsGen(R, P, T) {
     const key = JSON.stringify({ c: codeOf(P, T || {}), s: (T || {}).student, t: (T || {}).teacher });
     const c = SHEETS.get(R); if (c && c.key === key) return c.v;
+    yield 'Рабочие чертежи деталей';
     const out = [];
     if (root.DRAWINGS && root.DRWASM) {
       let det = [];
@@ -239,11 +241,23 @@
       const formats = {}; det.forEach(d => { formats[d.id] = d.fmt.replace('A', 'А'); });
       let sp = null;
       try { sp = specs(R, P, T || {}, { formats })[0]; } catch (e) { console.error(e); }
+      yield 'Сборочный чертёж редуктора';
       try {
         const a = sp && root.DRWASM.asmSheet(R, P, T || {}, sp);
         if (a) out.push({ id: 'reduktor_sb', file: 'reduktor_SB.cdw', code: sp.code + ' СБ', name: 'Редуктор\nСборочный чертёж', material: '', mass: '', scale: a.scale, fmt: a.fmt, landscape: true, sh: a.sh });
       } catch (e) { console.error(e); }
-      try { if (sp) root.DRWASM.housingSheets(R, P, T || {}, sp).forEach(d => { out.push(d); formats[d.id] = d.fmt.replace('A', 'А'); }); } catch (e) { console.error(e); }
+      yield 'Чертежи корпуса';
+      try {
+        if (sp) {
+          // по 3D-модели — по одному листу за этап; иначе — общим вызовом
+          const b = root.DRWASM.housingSheets(R, P, T || {}, sp, { part: 'base' });
+          let hs = null;
+          if (b) { yield 'Чертёж крышки корпуса'; const c2 = root.DRWASM.housingSheets(R, P, T || {}, sp, { part: 'cover' }); if (c2) hs = b.concat(c2); }
+          if (!hs) hs = root.DRWASM.housingSheets(R, P, T || {}, sp);
+          hs.forEach(d => { out.push(d); formats[d.id] = d.fmt.replace('A', 'А'); });
+        }
+      } catch (e) { console.error(e); }
+      yield 'Рама и общий вид';
       try {
         const fs = root.DRWFRAME && specs(R, P, T || {}, { formats })[2];
         const fr = fs && root.DRWFRAME.frameSheet(R, P, T || {}, codeOf(P, T || {}), fs);
@@ -264,7 +278,13 @@
     }
     return { list: out, formats: {} };
   }
+  function sheets(R, P, T) { const g = sheetsGen(R, P, T); let r; do r = g.next(); while (!r.done); return r.value; }
+  async function sheetsAsync(R, P, T, onStep) {
+    const g = sheetsGen(R, P, T); let r;
+    for (;;) { r = g.next(); if (r.done) return r.value; if (onStep) onStep(r.value); await new Promise(res => requestAnimationFrame(() => setTimeout(res, 0))); }
+  }
   function sheetData(d) {
+    if (d.sh.finalize) d.sh.finalize();
     const r2 = x => Math.round(x * 100) / 100;
     const P = [];
     for (const q of d.sh.p) {
@@ -427,7 +447,7 @@
     else if (!/drawings/.test(run)) { d = Object.assign({}, d); delete d.sheets; }
     return `# -*- coding: utf-8 -*-\n# ${d.code}: макрос КОМПАС-3D v25 (Python, API5/API7). Создан утилитой «Основы проектирования».\n` + K.common + '\n\nDATA = json.loads(r"""' + JSON.stringify(d, null, 1) + '""")\n\n' + body + '\n\nif __name__ == "__main__":\n    log("=== ' + run.replace(/"/g, '') + ' ===")\n    ' + run + '\n';
   }
-  function files(R, P, T) {
+  function files(R, P, T, opt) {
     if (!R) return [];
     const K = root.KPY || {};
     let d;
@@ -449,6 +469,7 @@
     }
     sheets(R, P, T).list.forEach(sd => out.push({ path: 'Чертежи_предпросмотр/' + sd.file.replace('.cdw', '.svg'), desc: `${sd.code} — ${sd.name.replace(/\n(.)/, (m, c) => ', ' + c.toLowerCase())} (${sd.fmt.replace('A', 'А')}, ${sd.scale})`, gen: () => sheetSVG(sd, T, { px: 3000 }) }));
     out.push({ path: 'README.txt', desc: 'Как пользоваться файлами', gen: () => readme(d, R) });
+    if (opt && opt.debug) out.push({ path: 'sheets.json', desc: 'Листы чертежей так, как их рассчитала утилита (для сверки с построенными в КОМПАС)', gen: () => JSON.stringify(d.sheets) });
     // порядок в списке — как в инструкции: сначала bat-файлы запуска, затем макросы, данные, DXF и предпросмотр
     const rank = f => /^README/.test(f.path) ? 0 : /\.bat$/.test(f.path) ? 1 : /\.py$/.test(f.path) ? 2 : /\.json$/.test(f.path) ? 3 : /^DXF\//.test(f.path) ? 4 : 5;
     return out.map((f, i) => [f, i]).sort((a, b) => rank(a[0]) - rank(b[0]) || (rank(a[0]) === 1 ? a[0].path.localeCompare(b[0].path) : a[1] - b[1])).map(x => x[0]);
@@ -497,5 +518,5 @@
     return h;
   }
 
-  root.KOMPAS = { modelCheck, partBox, catalog, offSet, model3d, sheets, sheetSVG, sheetData, files, hints, specs, model, data, Dxf };
+  root.KOMPAS = { modelCheck, partBox, catalog, offSet, model3d, sheets, sheetsAsync, sheetSVG, sheetData, files, hints, specs, model, data, Dxf };
 })(typeof window !== 'undefined' ? window : globalThis);

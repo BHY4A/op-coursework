@@ -142,6 +142,28 @@
     const used = [...dLet.values()];
     const letters = ['А', 'Б', 'В', 'Г', 'Д', 'Е', 'Ж', 'И', 'К'].filter(l => !used.includes(l));
     keys.forEach((q, i) => { q.L = letters[i]; sh.cutV(X(q.xc), Y(-q.s.r), Y(q.s.r), q.L, 'l'); });
+    // ---------- длины снизу (раньше диаметров: размерные числа диаметров обходят выносные линии): цепочка без замыкающего звена, потом габарит
+    let ylow = Math.min(sh.bbox(0).y1, Y(-rmax));
+    const yb = Y(-rmax);
+    const x0 = bi ? bi.xs : 0;
+    const skip = (() => { let best = -1, bl = -1; segs.forEach((s, i) => { const sc = (/участок|распорн|бурт/.test(s.name) ? 1000 : 0) + s.l; if (sc > bl) { bl = sc; best = i; } }); return best; })();
+    const rows = [0, 1, 2, 3, 4].map(i => yb - 14 - 8 * i);
+    let lowest = rows[0];
+    segs.forEach((s, i) => {
+      if (i === skip) return;
+      const t = nf(s.l, 2), y0 = isBev(s) ? -bi.Rai : -s.r;
+      const opts = [];
+      rows.forEach(yy => { opts.push(() => { sh.dimH(X(s.x0), Y(y0), X(s.x1), Y(-s.r), yy, t, { gap: 0 }); s._ry = yy; }); opts.push(() => { sh.dimH(X(s.x0), Y(y0), X(s.x1), Y(-s.r), yy, t, { gap: 0, side: 'left' }); s._ry = yy; }); });
+      sh.attempt(opts);
+      lowest = Math.min(lowest, s._ry);
+    });
+    const yo = lowest - 9;
+    sh.attempt([0, 8, 16].map(d => () => sh.dimH(X(x0), Y(-(bi ? bi.Rai : segs[0].r)), X(L), Y(-last.r), yo - d, nf(L - x0, 1))));
+    // ---------- шероховатость посадочных поверхностей
+    segs.forEach(s => {
+      const ra = raOf(s.role); if (!ra || isBev(s)) return;
+      sh.attempt([0.2, 0.5, 0.8, 0.1, 0.35, 0.65].map(t => () => sh.rough(X(s.x0 + s.l * t), Y(s.r), 'Ra ' + ra)));
+    });
     // ---------- диаметры
     segs.forEach(s => {
       if (isBev(s)) return;
@@ -153,7 +175,7 @@
       const opts = [];
       for (const x of xs) {
         if (key && Math.abs(x - key.xc) < key.kd.l / 2) { opts.push(() => { sh.dimV(X(x), Y(-s.r), X(x), Y(s.r), X(x), txt, { textY: Y(key.kd.b / 2) + 1.2 }); s.xd = x; }); }
-        else opts.push(() => { sh.dimV(X(x), Y(-s.r), X(x), Y(s.r), X(x), txt); s.xd = x; });
+        else opts.push(() => { sh.dimV(X(x), Y(-s.r), X(x), Y(s.r), X(x), txt, { side: 'below' }); s.xd = x; });   // сверху — знаки шероховатости и допуски
       }
       const xm = xs[0];
       opts.push(() => { sh.dimV(X(xm), Y(-s.r), X(xm), Y(s.r), X(xm), txt, { out: 'below' }); s.xd = xm; s.outB = true; });
@@ -176,34 +198,12 @@
     }
     // ---------- базы
     for (const [s, letter] of dLet) sh.attempt([2, 9, 16, 23].map(len => () => sh.datum(X(s.xd), Y(-s.r), 270, letter, { len })));
-    // ---------- длины снизу: цепочка без замыкающего звена, потом габарит
-    let ylow = Math.min(sh.bbox(0).y1, Y(-rmax));
-    const yb = Y(-rmax);
-    const x0 = bi ? bi.xs : 0;
-    const skip = (() => { let best = -1, bl = -1; segs.forEach((s, i) => { const sc = (/участок|распорн|бурт/.test(s.name) ? 1000 : 0) + s.l; if (sc > bl) { bl = sc; best = i; } }); return best; })();
-    const rows = [0, 1, 2, 3, 4].map(i => yb - 14 - 8 * i);
-    let lowest = rows[0];
-    segs.forEach((s, i) => {
-      if (i === skip) return;
-      const t = nf(s.l, 2), y0 = isBev(s) ? -bi.Rai : -s.r;
-      const opts = [];
-      rows.forEach(yy => { opts.push(() => { sh.dimH(X(s.x0), Y(y0), X(s.x1), Y(-s.r), yy, t, { gap: 0 }); s._ry = yy; }); opts.push(() => { sh.dimH(X(s.x0), Y(y0), X(s.x1), Y(-s.r), yy, t, { gap: 0, side: 'left' }); s._ry = yy; }); });
-      sh.attempt(opts);
-      lowest = Math.min(lowest, s._ry);
-    });
-    const yo = lowest - 9;
-    sh.attempt([0, 8, 16].map(d => () => sh.dimH(X(x0), Y(-(bi ? bi.Rai : segs[0].r)), X(L), Y(-last.r), yo - d, nf(L - x0, 1))));
     // ---------- пазы: длина и привязка сверху
     const yt = Y(rmax);
     keys.forEach(q => {
       sh.attempt([12, 20, 28].map(dy => () => sh.dimH(X(q.a), Y(q.kd.b / 2), X(q.b), Y(q.kd.b / 2), yt + dy, nf(q.kd.l, 1))));
       const off = q.a - q.s.x0;
       sh.attempt([20, 28, 12, 36].map(dy => () => sh.dimH(X(q.s.x0), Y(q.s.r), X(q.a), Y(q.kd.b / 2), yt + dy, nf(off, 1), { side: 'left' })));
-    });
-    // ---------- шероховатость посадочных поверхностей
-    segs.forEach(s => {
-      const ra = raOf(s.role); if (!ra || isBev(s)) return;
-      sh.attempt([0.2, 0.5, 0.8, 0.1, 0.35, 0.65].map(t => () => sh.rough(X(s.x0 + s.l * t), Y(s.r), 'Ra ' + ra)));
     });
     // ---------- допуски формы и расположения
     const frames = [];
@@ -251,7 +251,7 @@
         const px = s === last ? X(L - c / 2) : X(c / 2), py = Y(s.r - c / 2);
         const two = segs[0].cL && last.cR && Math.abs(segs[0].cL - last.cR) < 1e-6;
         const sd = s === last ? 1 : -1;
-        sh.attempt([[7, 7], [10, 14], [5, 20], [14, 4]].map(([dx, dy]) => () => sh.leader(px, py, px + sd * dx, Y(s.r) + dy, `${nf(c, 1)}×45°`, two ? '2 фаски' : '', { side: sd > 0 ? 'r' : 'l' })));
+        sh.attempt([[10, 5], [5, 12], [14, 4], [6, 18]].map(([dx, dy]) => () => sh.leader(px, py, px + sd * dx, Y(s.r) + dy, `${nf(c, 1)}×45°`, two ? '2 фаски' : '', { side: sd > 0 ? 'r' : 'l' })));
       }
     }
     // ---------- обозначения выносных элементов: канавка у заплечика, профиль витков червяка
@@ -289,6 +289,7 @@
     const c = Object.assign({}, q);
     if (q.t === 'L') c.a = [q.a[0] + dx, q.a[1] + dy, q.a[2] + dx, q.a[3] + dy];
     else if (q.t === 'C' || q.t === 'A' || q.t === 'T') { c.a = q.a.slice(); c.a[0] += dx; c.a[1] += dy; }
+    else if (q.t === 'K') { c.pts = q.pts.map(p => [p[0] + dx, p[1] + dy]); }
     else if (q.t === 'H') { c.l = q.l.map((v, i) => v + (i % 2 ? dy : dx)); c.rings = q.rings.map(r => r.map(p => [p[0] + dx, p[1] + dy])); }
     return c;
   }
@@ -377,13 +378,13 @@
     sh.line(P(-Ls, 0)[0], P(-Ls, 0)[1], wave[0][0], wave[0][1], 2); sh.line(P(4, H)[0], P(4, H)[1], wave[16][0], wave[16][1], 2);
     // размеры
     const a = P(-g.b, 0), b = P(0, 0);
-    sh.dimH(Math.min(a[0], b[0]), a[1], Math.max(a[0], b[0]), b[1], a[1] + 9, nf(g.b, 1));
+    { const yH = P(0, H)[1], sg = Math.sign(yH - P(0, -g.h)[1]) || 1; sh.dimH(Math.min(a[0], b[0]), a[1], Math.max(a[0], b[0]), b[1], yH + sg * 7, nf(g.b, 1)); }
     const c = P(-g.b / 2, -g.h), d = P(-g.b / 2, 0);
     sh.dimV(c[0], c[1], d[0], d[1], Math.min(a[0], b[0]) - 6, nf(g.h, 2), { noExt1: false });
     const q = P(-rr, -g.h + rr * 0.3);
     sh.leader(q[0], q[1], q[0] + dir * 10, q[1] - 9, `R${nf(R * 0.5 >= 0.5 ? Math.min(R * 0.5, g.b * 0.4) : 0.5, 1)}`, '', { side: dir > 0 ? 'r' : 'l' });
     const t = P(0, H - 0.5);
-    sh.leader(t[0], t[1], t[0] + dir * 10, t[1] + 7, `R${nf(R, 1)} max`, '', { side: dir > 0 ? 'r' : 'l' });
+    sh.leader(t[0], t[1], t[0] + dir * 5, t[1] + 12, `R${nf(R, 1)} max`, '', { side: dir > 0 ? 'r' : 'l' });
     const bb = sh.bbox(0);
     sh.text((bb.x1 + bb.x2) / 2, bb.y2 + 4, `${L1} (${ks}:1)`, { h: 7, anchor: 'cb' });
     void K; void k;
@@ -526,7 +527,7 @@
     // отверстия в диске
     let holes = null;
     const Do = 2 * rr;
-    if (kind !== 'sprocket' && !g.noHoles && Do - g.dst > 60 && he * 2 < b - 4) {
+    if (kind !== 'sprocket' && g.holes === true && Do - g.dst > 60 && he * 2 < b - 4) {   // облегчающие отверстия в диске — только по явному выбору: в [М] колёса без отверстий
       const d = Math.round((Do - g.dst) / 4 / 2) * 2, Dc = Math.round((Do + g.dst) / 2);
       if (d >= 12) holes = { d, Dc, n: Do > 300 ? 6 : 4 };
     }
@@ -574,7 +575,7 @@
     const xr = P.x1, xl = P.x0;
     // ⌀ отверстия H7 — внутри, у левого торца ступицы; база А — на продолжении
     const xd = xl + Math.min(P.hl * 0.35, 10 / k);
-    sh.dimV(X(xd), Y(-rb), X(xd), Y(rb + 0), X(xd), `⌀${nf(g.dbore, 2)}H7`, { textY: Y(-rb) + 2 });
+    sh.dimHalfV(X(xd), Y(-rb), Y(0) + Math.max(8, 0.35 * (Y(rb) - Y(0))), `⌀${nf(g.dbore, 2)}H7`);
     sh.attempt([2, 8, 14].map(len => () => sh.datum(X(xd), Y(-rb), 270, base, { len }) ));
     // ⌀ ступицы
     const yHubDim = Y(0);
@@ -643,7 +644,7 @@
       sh.attempt([[-12, 14], [12, 14], [-20, 10]].map(([dx, dy]) => () => sh.leader(pA[0], pA[1], pA[0] + dx, pA[1] + dy, `R${nf(R, 1)}`, '', { side: dx > 0 ? 'r' : 'l' })));
     }
     // фаски
-    sh.attempt([[-9, -8], [-14, -14], [9, -8]].map(([dx, dy]) => () => { const px = X(xl + P.cb / 2), py = Y(-rb - P.cb / 2); sh.leader(px, py, px + dx, py + dy, `${nf(P.cb, 1)}×45°`, '2 фаски', { side: dx > 0 ? 'r' : 'l' }); }));
+    sh.attempt([[-12, -5], [-5, -12], [12, -5], [-16, -7]].map(([dx, dy]) => () => { const px = X(xl + P.cb / 2), py = Y(-rb - P.cb / 2); sh.leader(px, py, px + dx, py + dy, `${nf(P.cb, 1)}×45°`, '2 фаски', { side: dx > 0 ? 'r' : 'l' }); }));
     // отверстия в диске
     if (P.holes) {
       const hy = (P.holes.Dc / 2 + P.holes.d / 2);
@@ -652,12 +653,17 @@
     }
     if (P.holes) for (const sg of [1, -1]) v.line(-P.he - 3 / k, sg * P.holes.Dc / 2, P.he + 3 / k, sg * P.holes.Dc / 2, 3);
     // шероховатость: отверстие (на полке выноски), зубья, торцы ступицы
-    sh.attempt([[0.55, 10, -14], [0.3, -10, -14], [0.7, 14, -20], [0.5, -16, -22]].map(([t, dx, dy]) => () => { const px = X(xl + (xr - xl) * t), py = Y(-rb); sh.roughLeader(px, py - 0.2, px + dx, Y(-rh) + dy, 'Ra 1,6'); }));
-    if (kind !== 'bevel') sh.attempt([[0, 1], [-0.5, 1]].map(([t]) => () => sh.rough(X(t * P.hb) + 2, Y(P.rmax), 'Ra ' + (kind === 'sprocket' ? '3,2' : '1,6'))));
+    { // отверстие: стрелка выноски на линии отверстия со стороны отверстия (не через материал ступицы), знак на полке
+      const room = Y(0) - Y(-rb);
+      sh.attempt([[0.55, 10, 0.35], [0.7, 12, 0.35], [0.4, -10, 0.35], [0.8, 14, 0.5], [0.3, -14, 0.5]].map(([t, dx, f]) => () => { const px = X(xl + (xr - xl) * t), py = Y(-rb); sh.roughLeader(px, py, px + dx, py + Math.max(4, Math.min(room * f, room - 11)), 'Ra 1,6'); }));
+    }
+    // середина плоского участка вершин венца (у червячного колеса посередине — впадина по дуге)
+    const xFlat = (() => { const xs = P.pieces.flat().filter(([, y]) => Math.abs(y - P.rmax) < 1e-6).map(p => p[0]).filter(x => x > 0); return kind === 'wormwheel' && xs.length >= 2 ? (Math.min(...xs) + Math.max(...xs)) / 2 : null; })();
+    if (kind !== 'bevel') sh.attempt((xFlat !== null ? [-xFlat, xFlat] : [0, -0.5 * P.hb]).map(x0 => () => sh.rough(X(x0) + 2, Y(P.rmax), 'Ra ' + (kind === 'sprocket' ? '3,2' : '1,6'))));
     else { const bv = P.bevel; sh.attempt([0.4, 0.6].map(t => () => sh.rough(X(bv.Ti[0] + (bv.Te[0] - bv.Ti[0]) * t), Y(bv.Ti[1] + (bv.Te[1] - bv.Ti[1]) * t) + 0.2, 'Ra 1,6', { rot: bv.dl / D2R - 90 > -90 ? 0 : 0 }))); }
     sh.attempt([0.5, 0.3, 0.7].map(t => () => sh.rough(X(xr), Y(rh - (rh - rb - P.kb) * t), 'Ra 3,2', { rot: 270 + 180 })).concat([() => sh.rough(X(xl), Y(rh * 0.6 + rb * 0.4), 'Ra 3,2', { rot: 90 })]));
     // допуски: радиальное биение вершин, торцовое биение венца/ступицы относительно А
-    const rT = kind === 'bevel' ? P.bevel.Te : [P.hb * 0.4, P.rmax];
+    const rT = kind === 'bevel' ? P.bevel.Te : [xFlat !== null ? xFlat : P.hb * 0.4, P.rmax];
     const fy0 = Y(rTip) + 10;
     const tRun = nf(tolRun(tipD, kind === 'wormwheel' ? 2.5 : 2), 3), tFace = nf(tolPerp(g.dst) * 1.25, 3);
     sh.attempt([0, 8, 16].flatMap(dy => [0, -20, 20].map(dx => () => { const tx = X(rT[0]), ty = Y(rT[1]); const x1 = tx - 12 + dx; sh.tol(x1, fy0 + dy, ['rrun', tRun, base], { from: 'b', fx: Math.min(Math.max(tx - x1, 3), 20), via: dx ? [[x1 + Math.min(Math.max(tx - x1, 3), 20), fy0 + dy - 4], [tx, fy0 + dy - 4]] : [], to: [tx, ty + 0.2] }); })));
@@ -713,7 +719,7 @@
             hubView(t2, g, ks, 'А' + (ks !== k ? ` (${scaleText(ks)})` : ''), info.task);
             const ax = pl.box.x1 + 2, ay = pl.dy;
             if (!placeGroup(sh2, t2.p, { near: [pl.box.x2 + 60, pl.dy] })) continue;
-            sh2.viewArrow(pl.dx + (wheelProfile(g, kind).x0) * k - 4, ay + g.dst / 2 * k * 0.0 + 8, 0, 'А');
+            { const xa = pl.dx + (wheelProfile(g, kind).x0) * k - 4; sh2.attempt([8, 14, -8, 20, -14, 26].flatMap(dy => [0, -6].map(dx => () => sh2.viewArrow(xa + dx, ay + dy, 0, 'А')))); }
             void ax;
           }
           return { sh: sh2, scale: scaleText(k), k, fmt };

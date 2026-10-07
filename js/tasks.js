@@ -9,7 +9,7 @@
   const OPT_DEF = {
     sync: 1500, motor: 'auto',
     // червячная передача
-    etaWpre: 0.75, wormMat: 'auto', wormCast: 'П', wormSH: 'met', wormSF: 'met', wormAw: 'ch', wormAwRound: 'std', wormMUp: false, wormSHcheck: 'ch', wormSFcheck: 'met',
+    etaWpre: 0.75, wormMat: 'auto', wormCast: 'П', wormSH: 'met', wormSF: 'met', wormAw: 'ch', wormAwRound: 'std', wormMUp: false, wormSHcheck: 'met', wormSFcheck: 'met',
     wormGround: true, wormNe: 'simple', xLoad: 'load', wormDeg: 'auto', Cv: 0.85, sH0: 250, kSF: 0.25, fNonTin: 1.5, ZE: Math.sqrt(1.32e5 / (PI * (1 - 0.09))), Kpre: 1.2, z1: 0, q: 0,
     wormStiff: 'met', l1Mode: 'daM2',
     // зубчатые
@@ -25,7 +25,7 @@
     // шпонки
     keyExact: false, sCmSteel: 110, sCmRev: 90, sCmCI: 75,
     // муфта
-    Kcoup: 1.5, FmMode: 'gost', D0: 0, zp: 0, dp: 0, lvt: 0, Cm: 0, FmK: 0.3, sCmRub: 1.8, sIzgPin: 120,
+    Kcoup: 1.5, FmMode: 'met', D0: 0, zp: 0, dp: 0, lvt: 0, Cm: 0, FmK: 0.3, sCmRub: 1.8, sIzgPin: 120,
     // смазка
     oilMode: 'met',
     // задание 6
@@ -41,6 +41,10 @@
     O.Kn = O.chainAngle > 60 ? 1.25 : 1;          // наклон линии центров более 60° [Ч, с. 130]
     O.Kcoup = task === 3 ? 1.5 : task === 6 ? 1.4 : 1.5;
     if (task !== 1) { O.sCmCI = 60; O.wKey = 'net'; }
+    // задание 1: звёздочка стоит прямо на тихоходном валу, муфта одна — T2Т = Tв ('met' — делить на ηм, как записано в [М])
+    if (task === 1) O.t1Coup = 'scheme';
+    // задание 6: момент в формуле aw — 'pin' (момент шестерни, как в [М] задания 1; равносильно (3.7) [Ч]) или 'met' (момент колеса, как записано в [М] задания 6)
+    if (task === 6) O.awT6 = 'pin';
     return { listNo, task, v, Pout: T.P[v - 1], nout: T.n[v - 1], L: T.L, Kg: T.Kg, Kc: T.Kc, load: T.load.map(x => x.slice()), O, dec: -1 };
   }
 
@@ -64,7 +68,7 @@
     return tS;
   }
   /* номера пунктов методички различаются по заданиям (у каждого задания своя методичка) */
-  const MREF = { 1: { fits: 'п. 1.13', two: 'п. 1.11', kreg: 'разд. 2', fm: 'п. 1.10.1' }, 3: { fits: 'п. 1.14', two: 'п. 1.12.2', kreg: 'п. 2.2', fm: 'п. 1.11.1' }, 6: { fits: 'п. 1.13', two: 'п. 1.11.2', kreg: 'п. 2.2', fm: 'п. 1.10.1' } };
+  const MREF = { 1: { fits: 'п. 1.13', two: 'п. 1.11', kreg: 'разд. 2', fm: 'п. 1.10.1', fm2: 'разд. 2', chk: 'разд. 2' }, 3: { fits: 'п. 1.14', two: 'п. 1.12.2', kreg: 'п. 2.2', fm: 'п. 1.11.1', fm2: 'п. 2.5', chk: 'п. 2.4' }, 6: { fits: 'п. 1.13', two: 'п. 1.11.2', kreg: 'п. 2.2', fm: 'п. 1.10.1', fm2: 'п. 1.10.1, 2.5', chk: 'п. 2.4' } };
   const mref = k => (MREF[root.MREF_TASK] || MREF[1])[k];
   function motorSection(rep, P, Preq, nPreview, sync, why) {
     const O = P.O;
@@ -87,6 +91,24 @@
     const s = M.seal(Math.max(dv + 2, sealMin || 0));
     let dp = M.std5(s.d + 1); if (dp <= s.d) dp += 5;
     return { dupl: s.d, seal: s, dpodsh: dp };
+  }
+  /* размеры пальцев и втулок МУВП: заданные вручную в «Константах» или по таблице [МУВП] для выбранного типоразмера */
+  function cpDims(O, c) {
+    const p = (c && c.pins) || {};
+    const man = O.D0 > 0 && O.zp > 0 && O.dp > 0 && O.lvt > 0;
+    return man ? { D0: +O.D0, z: +O.zp, dp: +O.dp, lvt: +O.lvt, C: +O.Cm || p.C || 4, manual: true } : (p.D0 ? Object.assign({ manual: false }, p) : null);
+  }
+  /* консольная сила от муфты: [М] Fм = (0,2…0,5)·2Tрасч/D0 или ГОСТ 16162 */
+  function FmCalc(rep, O, Tc, T, Tsym, c) {
+    const cd = cpDims(O, c);
+    if (O.FmMode === 'met' && cd) {
+      const Fm = O.FmK * 2 * Tc * 1e3 / cd.D0;
+      rep.eq({ lhs: 'F_{м}', f: `(0{,}2\\ldots 0{,}5)\\cdot \\dfrac{2\\cdot T_{расч}\\cdot 10^{3}}{D_{0}}`, s: `${nx(O.FmK)}\\cdot \\dfrac{2\\cdot ${n(Tc)}\\cdot 10^{3}}{${nx(cd.D0)}}`, v: Fm, u: 'Н', d: `Консольная сила от муфты; Tрасч и D0 = ${fnum(cd.D0, 0)} мм — из раздела 2; коэффициент принят ${fnum(O.FmK, 0)} из интервала 0,2…0,5. Направление силы принимается наиболее неблагоприятным.`, ref: ['met', mref('fm2')] });
+      return Fm;
+    }
+    const Fm = FmGost(T, false);
+    rep.eq({ lhs: 'F_{м}', f: T <= 25 ? '50\\sqrt{' + Tsym + '}' : '80\\sqrt{' + Tsym + '}', s: `${T <= 25 ? 50 : 80}\\sqrt{${n(T)}}`, v: Fm, u: 'Н', d: 'Консольная нагрузка от муфты по ГОСТ 16162 ([Ч], с. 141).', ref: ['ch', 'с. 141'] });
+    return Fm;
   }
   function FmGost(T, slow) { return slow ? 125 * Math.sqrt(T) : T <= 25 ? 50 * Math.sqrt(T) : 80 * Math.sqrt(T); }
 
@@ -333,12 +355,10 @@
     // 1.11 проверка валов
     rep = sec('s111', 'check', 'Проверка прочности и жёсткости валов');
     rep.h('1.11', 'Проверка прочности и жёсткости валов');
-    const Fm = O.FmMode === 'met' && O.D0 > 0 ? O.FmK * 2 * Tc * 1e3 / O.D0 : FmGost(K2.TI, false);
-    R.Fm = Fm;
     rep.h('1.11.1', 'Быстроходный вал (вал-червяк)', 3);
     rep.p(`Вал изготавливается из стали 45 (улучшение, для заготовки диаметром до 90 мм σ<sub>в</sub> = ${M.steelSb('45', 90).sb} МПа [[ch|табл. 3.3]]); витки червяка закаливаются до HRC ≥ 45. Нагрузки на вал: силы в зацеплении <i>F</i><sub>t1</sub> = ${fnum(Ft1)} Н, <i>F</i><sub>r</sub> = ${fnum(Fr)} Н, <i>F</i><sub>a1</sub> = ${fnum(Ft2)} Н, крутящий момент <i>T</i><sub>I</sub> = ${fnum(K2.TI)} Н·м и консольная сила от муфты.`);
-    if (O.FmMode === 'met' && O.D0 > 0) rep.eq({ lhs: 'F_{м}', f: `${nx(O.FmK)}\\cdot \\dfrac{2\\cdot T_{расч}\\cdot 10^{3}}{D_{0}}`, s: `${nx(O.FmK)}\\cdot \\dfrac{2\\cdot ${n(Tc)}\\cdot 10^{3}}{${nx(O.D0)}}`, v: Fm, u: 'Н', d: 'Консольная сила от муфты (раздел 2).' });
-    else rep.eq({ lhs: 'F_{м}', f: K2.TI <= 25 ? '50\\sqrt{T_{I}}' : '80\\sqrt{T_{I}}', s: `${K2.TI <= 25 ? 50 : 80}\\sqrt{${n(K2.TI)}}`, v: Fm, u: 'Н', d: 'Консольная нагрузка от муфты, приложенная в середине посадочной части выходного конца, по ГОСТ 16162 ([Ч], с. 141).', ref: ['ch', 'с. 141'] });
+    const Fm = FmCalc(rep, O, Tc, K2.TI, 'T_{I}', cp.c);
+    R.Fm = Fm;
     const sb1 = M.steelSb('45', 90).sb;
     const B1 = M.beam(L.l1, [
       { id: 'C', x: L.a1, Fx: -Ft1, Fy: -Fr, Cy: Ft2 * g.d1 / 2 },
@@ -516,34 +536,92 @@
   function couplingSection(rep, o) {
     const O = o.O, Tc = o.K * o.T;
     rep.h('2.1', 'Исходные данные и расчётный момент');
-    rep.p(`Передаваемый момент <i>${o.Tsym === 'T_{I}' ? 'T' : 'T'}</i><sub>I</sub> = ${fnum(o.T)} Н·м, частота вращения <i>n</i><sub>I</sub> = ${fnum(o.n)} мин<sup>−1</sup>, диаметр вала электродвигателя <i>d</i><sub>эд</sub> = ${o.dm} мм, диаметр быстроходного вала редуктора <i>d</i><sub>в1</sub> = ${o.dv} мм. Коэффициент режима работы принимаем <i>K</i><sub>р</sub> = ${fnum(o.K, 0)} (${o.kText}) [[met|${mref('kreg')}]].`);
+    rep.p(`Передаваемый момент <i>${o.Tsym === 'T_{I}' ? 'T' : 'T'}</i><sub>I</sub> = ${fnum(o.T)} Н·м, частота вращения <i>n</i><sub>I</sub> = ${fnum(o.n)} мин<sup>−1</sup>, диаметр вала электродвигателя <i>d</i><sub>эд</sub> = ${o.dm} мм, диаметр быстроходного вала редуктора <i>d</i><sub>в1</sub> = ${o.dv} мм. Коэффициент режима работы принимаем <i>K</i><sub>р</sub> = ${fnum(o.K, 0)} (${o.kText}) [[met|${mref('kreg')}]]; расчётный момент — по формуле (11.1) [[ch|с. 232]], значения коэффициента — также [[ch|табл. 11.3]].`);
     rep.eq({ lhs: 'T_{расч}', f: `K_{р}\\cdot ${o.Tsym}`, s: `${nx(o.K)}\\cdot ${n(o.T)}`, v: Tc, u: 'Н·м', d: 'Расчётный момент муфты с учётом режима работы привода.' });
     const c = o.cp.c;
     const bores = c.d.concat(c.d2nd).sort((a, b) => a - b);
     rep.h('2.2', 'Выбор муфты по ГОСТ 21424-93');
-    rep.p(`По ГОСТ 21424-93 [[gost21424|табл. 1]] выбираем муфту с номинальным крутящим моментом [<i>T</i>] = ${fnum(c.T, 0)} Н·м ≥ <i>T</i><sub>расч</sub> = ${fnum(Tc)} Н·м; диаметры посадочных отверстий полумуфт этого типоразмера — ${bores.join(', ')} мм; ${o.cp.exact ? `обе полумуфты выполняются по диаметрам соединяемых валов (${o.dm} и ${o.dv} мм)` : `разница диаметров валов превышает возможности одного типоразмера, поэтому муфта подобрана по большему диаметру, полумуфта с меньшим отверстием растачивается`}. Наружный диаметр <i>D</i> = ${c.D} мм, длина полумуфты (исполнение 1) <i>l</i> = ${c.l1} мм, общая длина <i>L</i> = ${c.L1} мм, допускаемая частота вращения ${fnum(c.n, 0)} мин<sup>−1</sup>, допускаемые смещения валов: радиальное ${fnum(c.dr, 0)} мм, угловое ${c.da}.`);
+    rep.p(`По ГОСТ 21424-93 [[gost21424|табл. 1]], [[ch|табл. 11.5, с. 242]] выбираем муфту с номинальным крутящим моментом [<i>T</i>] = ${fnum(c.T, 0)} Н·м ≥ <i>T</i><sub>расч</sub> = ${fnum(Tc)} Н·м; диаметры посадочных отверстий полумуфт этого типоразмера — ${bores.join(', ')} мм; ${o.cp.exact ? `обе полумуфты выполняются по диаметрам соединяемых валов (${o.dm} и ${o.dv} мм)` : `разница диаметров валов превышает возможности одного типоразмера, поэтому муфта подобрана по большему диаметру, полумуфта с меньшим отверстием растачивается`}. Наружный диаметр <i>D</i> = ${c.D} мм, длина полумуфты (исполнение 1) <i>l</i> = ${c.l1} мм, общая длина <i>L</i> = ${c.L1} мм, допускаемая частота вращения ${fnum(c.n, 0)} мин<sup>−1</sup>, допускаемые смещения валов: радиальное ${fnum(c.dr, 0)} мм, угловое ${c.da}.`);
     rep.check(`n_{доп}=${fnum(c.n, 0)}\\ \\text{мин}^{-1}\\ \\ge\\ n_{I}=${n(o.n)}\\ \\text{мин}^{-1}`, c.n >= o.n, '');
     const code = `Муфта упругая втулочно-пальцевая ${String(c.T).replace('.', ',')}-${o.dv}-1${o.dm !== o.dv ? '-' + o.dm + '-1' : ''} У3 ГОСТ 21424-93`;
     rep.p(`Условное обозначение: ${code}.`);
     const R = { c, code, Tc };
     rep.h('2.3', 'Проверочный расчёт элементов муфты');
-    if (O.D0 > 0 && O.zp > 0 && O.dp > 0 && O.lvt > 0) {
-      const scm = 2000 * Tc / (O.zp * O.D0 * O.dp * O.lvt);
-      rep.p(`Размеры пальцев и втулок выбранной муфты: <i>D</i><sub>0</sub> = ${O.D0} мм, <i>z</i> = ${O.zp}, <i>d</i><sub>п</sub> = ${O.dp} мм, <i>l</i><sub>вт</sub> = ${O.lvt} мм, <i>C</i> = ${O.Cm} мм.`);
-      rep.eq({ lhs: '\\sigma_{см}', f: '\\dfrac{2000\\cdot T_{расч}}{z\\cdot D_{0}\\cdot d_{п}\\cdot l_{вт}}', s: `\\dfrac{2000\\cdot ${n(Tc)}}{${O.zp}\\cdot ${O.D0}\\cdot ${O.dp}\\cdot ${O.lvt}}`, v: scm, u: 'МПа', d: 'Напряжение смятия упругих резиновых втулок.' });
-      rep.check(`\\sigma_{см}=${n(scm)}\\ \\text{МПа}\\ \\le\\ [\\sigma]_{см}=${nx(O.sCmRub)}\\ \\text{МПа}`, scm <= O.sCmRub, '');
-      const siz = 2000 * Tc * (0.5 * O.lvt + O.Cm) / (O.zp * O.D0 * 0.1 * Math.pow(O.dp, 3));
-      rep.eq({ lhs: '\\sigma_{изг}', f: '\\dfrac{2000\\cdot T_{расч}\\cdot(0{,}5\\cdot l_{вт}+C)}{z\\cdot D_{0}\\cdot 0{,}1\\cdot d_{п}^{3}}', s: `\\dfrac{2000\\cdot ${n(Tc)}\\cdot(0{,}5\\cdot ${O.lvt}+${O.Cm})}{${O.zp}\\cdot ${O.D0}\\cdot 0{,}1\\cdot ${O.dp}^{3}}`, v: siz, u: 'МПа', d: 'Напряжение изгиба стальных пальцев в опасном сечении (на стыке полумуфт).' });
-      rep.check(`\\sigma_{изг}=${n(siz)}\\ \\text{МПа}\\ \\le\\ [\\sigma]_{изг}=${nx(O.sIzgPin)}\\ \\text{МПа}`, siz <= O.sIzgPin, '');
-      R.scm = scm; R.siz = siz;
+    const cd = cpDims(O, c);
+    if (cd) {
+      const scm = 2000 * Tc / (cd.z * cd.D0 * cd.dp * cd.lvt);
+      rep.p(`Размеры упругих элементов муфты [<i>T</i>] = ${fnum(c.T, 0)} Н·м ${cd.manual ? '(заданы вручную)' : '(по ГОСТ 21424 [[muvp|табл. 4]])'}: диаметр окружности центров пальцев <i>D</i><sub>0</sub> = ${cd.D0} мм, число пальцев <i>z</i> = ${cd.z}, диаметр пальца <i>d</i><sub>п</sub> = ${cd.dp} мм, длина упругой втулки <i>l</i><sub>вт</sub> = ${cd.lvt} мм, зазор между полумуфтами <i>C</i> = ${cd.C} мм. Проверка выполняется по [[met|${mref('chk')}]] (те же зависимости — [[ch|гл. XI]]).`);
+      rep.eq({ lhs: '\\sigma_{см}', f: '\\dfrac{2000\\cdot T_{расч}}{z\\cdot D_{0}\\cdot d_{п}\\cdot l_{вт}}', s: `\\dfrac{2000\\cdot ${n(Tc)}}{${cd.z}\\cdot ${cd.D0}\\cdot ${cd.dp}\\cdot ${cd.lvt}}`, v: scm, u: 'МПа', d: 'Напряжение смятия упругих резиновых втулок.' });
+      rep.check(`\\sigma_{см}=${n(scm)}\\ \\text{МПа}\\ ${scm <= O.sCmRub ? '\\le' : '>'}\\ [\\sigma]_{см}=${nx(O.sCmRub)}\\ \\text{МПа}`, scm <= O.sCmRub, scm <= O.sCmRub ? 'Прочность резиновых втулок обеспечена ([σ]см = 1,8…2,0 МПа).' : 'Условие не выполняется — следует взять муфту следующего типоразмера.');
+      const siz = 2000 * Tc * (0.5 * cd.lvt + cd.C) / (cd.z * cd.D0 * 0.1 * Math.pow(cd.dp, 3));
+      rep.eq({ lhs: '\\sigma_{изг}', f: '\\dfrac{2000\\cdot T_{расч}\\cdot(0{,}5\\cdot l_{вт}+C)}{z\\cdot D_{0}\\cdot 0{,}1\\cdot d_{п}^{3}}', s: `\\dfrac{2000\\cdot ${n(Tc)}\\cdot(0{,}5\\cdot ${cd.lvt}+${cd.C})}{${cd.z}\\cdot ${cd.D0}\\cdot 0{,}1\\cdot ${cd.dp}^{3}}`, v: siz, u: 'МПа', d: 'Напряжение изгиба стальных пальцев в опасном сечении (на стыке полумуфт).' });
+      rep.check(`\\sigma_{изг}=${n(siz)}\\ \\text{МПа}\\ ${siz <= O.sIzgPin ? '\\le' : '>'}\\ [\\sigma]_{изг}=${nx(O.sIzgPin)}\\ \\text{МПа}`, siz <= O.sIzgPin, siz <= O.sIzgPin ? 'Прочность пальцев обеспечена ([σ]изг = 120…140 МПа для стали 45). Подбор муфты окончательный.' : 'Условие не выполняется — следует взять муфту следующего типоразмера.');
+      Object.assign(R, { scm, siz, dims: cd, ok: scm <= O.sCmRub && siz <= O.sIzgPin });
     } else {
-      rep.note('Для проверки упругих втулок на смятие и пальцев на изгиб нужны D0, z, dп, lвт и C выбранной муфты — в ГОСТ 21424-93 и в [Ч] они не приводятся. Задайте их во вкладке «Данные» → «Константы методики» (муфта), и проверка появится здесь.', 'warn');
-      rep.p('Муфта выбрана по ГОСТ 21424-93 по расчётному моменту, диаметрам соединяемых валов и допускаемой частоте вращения; размеры упругих элементов стандартной муфты обеспечивают передачу номинального крутящего момента.').rep = true;
+      rep.note('Для выбранного типоразмера нет размеров пальцев и втулок — задайте D0, z, dп, lвт и C во вкладке «Данные» → «Константы методики».', 'warn');
     }
     rep.h('2.4', 'Компенсирующая способность и нагрузки на валы');
     rep.p(`Муфта МУВП допускает радиальное смещение валов до ${fnum(c.dr, 0)} мм и угловое до ${c.da} [[gost21424|табл. 1]]. ${o.fmUsed === false ? 'Консольная сила от муфты в расчёте быстроходного вала не учитывается (расчётная схема методички).' : 'Консольная сила от муфты учтена при расчёте быстроходного вала (' + mref('fm') + ').'}`);
     return R;
   }
 
-  root.TASKS_CALC = { mref, defaults, OPT_DEF, task3, solve, attachKeys, couplingSection, reactRep, shiftsK, secInput, motorSection, shaftsTable, fitsSection, stepDiams, FmGost };
+  /* ---------- последствия выбора двигателя: где и что не сойдётся ----------
+   * P, R — текущий расчёт; R0 — расчёт с рекомендуемым двигателем (автовыбор, 1500 мин⁻¹). Возвращает { custom, items: [{ lvl: 'bad'|'warn'|'info', where, text }] } */
+  function texTxt(t) {
+    return String(t).replace(/\\text\{([^}]*)\}/g, '$1').replace(/\\(le|leq)\b/g, '≤').replace(/\\(ge|geq)\b/g, '≥').replace(/\\Delta/g, 'Δ').replace(/\\sigma/g, 'σ').replace(/\\tau/g, 'τ')
+      .replace(/\{,\}/g, ',').replace(/_\{([^}]*)\}/g, '<sub>$1</sub>').replace(/\^\{([^}]*)\}/g, '<sup>$1</sup>').replace(/\\dfrac\{([^}]*)\}\{([^}]*)\}/g, '($1)/($2)')
+      .replace(/\\[a-zA-Z]+/g, '').replace(/\\[ ,;!]/g, ' ').replace(/[{}]/g, '').replace(/\s+/g, ' ').trim();
+  }
+  function motorAudit(P, R, R0) {
+    const O = P.O, mo = R.motor, items = [];
+    const add = (lvl, where, text) => items.push({ lvl, where, text });
+    const custom = (O.motor && O.motor !== 'auto') || +O.sync !== 1500;   // показывать, если двигатель выбран вручную или изменена синхронная частота
+    if (!mo) return { custom, items };
+    const pct = (a, b) => (a / b - 1) * 100, f1 = x => fnum(x, 0);
+    // 1.2 мощность
+    const Pr = R.eta0 && R.eta0.Preq ? R.eta0.Preq : R.Preq;   // в задании 3 двигатель выбирается по P расч с предварительным ηч (п. 1.2.2)
+    if (mo.P < Pr - 1e-9) add('bad', 'п. 1.2.2 — выбор двигателя', `P<sub>ном</sub> = ${f1(mo.P)} кВт меньше требуемой P<sub>расч</sub> = ${fnum(Pr)} кВт (недостаёт ${fnum(pct(Pr, mo.P), 2)} %): условие P<sub>ном</sub> ≥ P<sub>расч</sub> методички не выполняется${R.Preq < mo.P && R.Preq < Pr ? `; после уточнения КПД (п. 1.5.1) P<sub>расч</sub>′ = ${fnum(R.Preq)} кВт — формально проходит, но на этапе выбора двигателя условие нарушено` : ', двигатель будет перегружен'}.`);
+    else if (mo.P > 1.6 * Pr) add('warn', 'п. 1.2.2 — выбор двигателя', `Двигатель недогружен: P<sub>расч</sub>/P<sub>ном</sub> = ${fnum(Pr / mo.P, 2)}. Методичка требует ближайший по мощности двигатель с P<sub>ном</sub> ≥ P<sub>расч</sub>; завышенная мощность увеличивает момент муфты, массу и размеры рамы, а при недогрузке падают КПД и cos φ двигателя.`);
+    if (mo.sync === 3000) add('warn', 'п. 1.2 — кинематика', 'Синхронная частота 3000 мин⁻¹: общее передаточное число получается большим, ступени редуктора выходят за рекомендуемые интервалы, быстроходная ступень работает с высокой окружной скоростью (Чернавский, с. 7).');
+    if (mo.sync === 750) add('warn', 'п. 1.2 — кинематика', 'Синхронная частота 750 мин⁻¹: двигатель тяжёлый и крупный при той же мощности (Чернавский, с. 7); быстроходный вал и муфта получаются больше.');
+    // кинематика по заданиям
+    if (R.task === 1) {
+      if (R.ured > 22) add('bad', 'п. 1.2 — разбивка u', `u<sub>ред</sub> = ${fnum(R.ured)} больше наибольшего для коническо-цилиндрических редукторов (22, Чернавский с. 15): коническая ступень получается с большим u<sub>б</sub>, растут d<sub>e2</sub> и габарит редуктора.`);
+      else if (R.ured > 15 || R.ured < 8) add('warn', 'п. 1.2 — разбивка u', `u<sub>ред</sub> = ${fnum(R.ured)} вне наиболее употребительного интервала 8…15 (Чернавский, с. 15).`);
+    }
+    if (R.task === 3) {
+      if (R.uc < 1.5 || R.uc > 3.5) add('bad', 'п. 1.2.3 — разбивка u', `Уточнённое u<sub>цеп</sub>′ = ${fnum(R.uc)} вне интервала 1,5…3,5: после округления u<sub>ч</sub> до стандартного цепная передача не согласуется — в п. 1.6 изменятся z<sub>зв1</sub>, z<sub>зв2</sub> и шаг цепи.`);
+      if (R.g && (R.g.z2 < 28 || R.g.z2 > 80)) add('bad', 'п. 1.4.1 — числа зубьев', `z<sub>2</sub> = ${R.g.z2} вне 28…80.`);
+    }
+    if (R.task === 6 && (R.uc < 1.5 || R.uc > 3.5)) add('bad', 'п. 1.2.3 — разбивка u', `Уточнённое u<sub>цеп</sub>′ = ${fnum(R.uc)} вне интервала 1,5…3,5 — цепная передача (п. 1.6) не согласуется со ступенями редуктора.`);
+    if (R.nOut && Math.abs(R.nOut - P.nout) / P.nout > 0.05) add('bad', 'п. 1.2.3 / 1.6 — частота на выходе', `Фактическая частота рабочего органа ${fnum(R.nOut)} мин⁻¹ отличается от заданной ${fnum(P.nout, 0)} мин⁻¹ более чем на 5 %.`);
+    // муфта: диаметры валов двигателя и редуктора
+    const dv = R.dims && (R.dims.dv1 || R.dims.dB1);
+    if (dv && mo.d1) {
+      const r = Math.abs(mo.d1 - dv) / Math.max(mo.d1, dv) * 100;
+      if (r > 20) add('warn', 'разд. 2 — муфта', `Вал двигателя ⌀${mo.d1} мм и быстроходный вал редуктора ⌀${dv} мм различаются на ${fnum(r, 2)} % (> 20…25 %): муфту подбирают по большему диаметру, полумуфту растачивают — муфта и выходной конец вала получаются крупнее нужного по расчёту.`);
+    }
+    // проверки, которые не прошли
+    for (const sc of R.sections || []) {
+      let h = sc.title || '';
+      for (const it of sc.items) {
+        if (it.k === 'h') h = (it.no ? it.no + ' ' : '') + it.t;
+        if (it.k === 'check' && it.ok === false && !/P_\{ном\}/.test(it.tex)) add('bad', 'п. ' + h, `Не выполняется условие: ${texTxt(it.tex)}${it.t ? ' — ' + it.t : ''}`);
+      }
+    }
+    // что выросло по сравнению с рекомендуемым двигателем
+    if (R0 && R0.motor && R0.motor.type !== mo.type) {
+      const cmp = [];
+      const pair = (name, a, b, u) => { if (a != null && b != null && Math.abs(a - b) > 1e-6) cmp.push(`${name}: ${fnum(b)} → ${fnum(a)}${u || ''}`); };
+      if (R.task === 3) { pair('u<sub>ч</sub>', R.g.uf, R0.g.uf); pair('a<sub>w</sub>', R.g.aw, R0.g.aw, ' мм'); pair('m', R.g.m, R0.g.m, ' мм'); pair('t<sub>м</sub>', R.th.t, R0.th.t, ' °C'); }
+      if (R.task === 6) { pair('a<sub>w.б</sub>', R.gB.aw, R0.gB.aw, ' мм'); pair('a<sub>w.т</sub>', R.gT.aw, R0.gT.aw, ' мм'); pair('u<sub>цеп</sub>', R.uc, R0.uc); }
+      if (R.task === 1) { pair('d<sub>e1</sub>', R.gC.de1, R0.gC.de1, ' мм'); pair('a<sub>w</sub>', R.gT.aw, R0.gT.aw, ' мм'); pair('u<sub>ред</sub>', R.ured, R0.ured); }
+      if (R.cp && R0.cp && R.cp.c.T !== R0.cp.c.T) cmp.push(`муфта: [T] ${fnum(R0.cp.c.T, 0)} → ${fnum(R.cp.c.T, 0)} Н·м`);
+      cmp.push(`масса двигателя: ${fnum(R0.motor.m, 0)} → ${fnum(mo.m, 0)} кг`);
+      add('info', 'Сравнение с рекомендуемым двигателем ' + R0.motor.type, cmp.join('; ') + '.');
+    }
+    return { custom, items };
+  }
+
+  root.TASKS_CALC = { mref, defaults, OPT_DEF, task3, solve, attachKeys, couplingSection, reactRep, shiftsK, secInput, motorSection, shaftsTable, fitsSection, stepDiams, FmGost, FmCalc, cpDims, motorAudit };
 })(typeof window !== 'undefined' ? window : globalThis);

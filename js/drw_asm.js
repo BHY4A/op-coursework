@@ -620,7 +620,7 @@
     if (best[1]) items.push({ kind: 'housing', pt: [best[1].p[0] * k, best[1].p[1] * k] });
     if (best[2]) items.push({ kind: 'lid', pt: [best[2].p[0] * k, best[2].p[1] * k] });
     // размеры: габариты*, высота оси (разъёма) над опорой
-    const b = dv.box, bb = sh.bbox(0), yF = MV.feetBottom * k;
+    const b = dv.box, bb = sh.geoBox(), yF = MV.feetBottom * k;
     sh.dimH(bb.x1, yF, bb.x2, yF, bb.y1 - 12, nf((bb.x2 - bb.x1) / k, 0) + '*');
     void b;
     return { sh, items };
@@ -727,7 +727,7 @@
   const FA = aw => aw <= 120 ? 0.035 : aw <= 180 ? 0.04 : aw <= 250 ? 0.045 : aw <= 315 ? 0.05 : 0.055;
   function sectionDims(S, R, task, k) {
     const sh = S.sh, inPlane = S.inPlane;
-    const bb0 = sh.bbox(0);
+    const bb0 = sh.geoBox ? sh.geoBox() : sh.bbox(0);
     // межосевые расстояния между параллельными валами
     const par = inPlane.filter(s => !s.cartridge);
     const groups = {};
@@ -746,21 +746,26 @@
     });
     // посадки: подшипники (наружное кольцо — H7, внутреннее — k6), колёса, выходные концы
     inPlane.forEach(s => {
-      const across = (x, r, txt) => {
-        const p1 = s.P(x, -r), p2 = s.P(x, r);
-        const opts = s.horiz ? [() => sh.dimV(p1[0], p1[1], p2[0], p2[1], p1[0], txt), () => sh.dimV(p1[0], p1[1], p2[0], p2[1], p1[0], txt, { out: 'above' }), () => sh.dimV(p1[0], p1[1], p2[0], p2[1], p1[0], txt, { out: 'below' })]
-          : [() => sh.dimH(p1[0], p1[1], p2[0], p2[1], p1[1], txt), () => sh.dimH(p1[0], p1[1], p2[0], p2[1], p1[1], txt, { side: 'left' })];
+      // размер поперёк вала в сечении x; xa…xb — участок, в пределах которого размер можно сдвинуть
+      const across = (x, r, txt, xa, xb) => {
+        const xs = [x]; if (xa !== undefined) [0.3, 0.7, 0.15, 0.85].forEach(f => xs.push(xa + (xb - xa) * f));
+        const opts = [];
+        for (const xx of xs) {
+          const p1 = s.P(xx, -r), p2 = s.P(xx, r);
+          if (s.horiz) opts.push(() => sh.dimV(p1[0], p1[1], p2[0], p2[1], p1[0], txt), () => sh.dimV(p1[0], p1[1], p2[0], p2[1], p1[0], txt, { out: 'above' }), () => sh.dimV(p1[0], p1[1], p2[0], p2[1], p1[0], txt, { out: 'below' }));
+          else opts.push(() => sh.dimH(p1[0], p1[1], p2[0], p2[1], p1[1], txt), () => sh.dimH(p1[0], p1[1], p2[0], p2[1], p1[1], txt, { out: 'left' }), () => sh.dimH(p1[0], p1[1], p2[0], p2[1], p1[1], txt, { out: 'right' }));
+        }
         sh.attempt(opts);
       };
       s.places.forEach(pl => {
         const b = s.b || {};
-        across((pl.a + pl.b) / 2, pl.seg.r, `⌀${nf(pl.seg.d, 0)}k6`);
+        across((pl.a + pl.b) / 2, pl.seg.r, `⌀${nf(pl.seg.d, 0)}k6`, pl.a, pl.b);
         const xo = pl.left ? pl.a - 3 : pl.b + 3;
         if (b.D) across(xo, b.D / 2, `⌀${nf(b.D, 0)}H7`);
       });
       s.segs.forEach(g => {
-        if (g.role === 'hub') across((g.x0 + g.x1) / 2, g.r, `⌀${nf(g.d, 0)}H7/${task === 1 ? 'p6' : 'k6'}`);
-        if (g.role === 'out') across(g.x0 + g.l * 0.6, g.r, `⌀${nf(g.d, 0)}${task === 1 ? 'k6' : 'm6'}`);
+        if (g.role === 'hub') across((g.x0 + g.x1) / 2, g.r, `⌀${nf(g.d, 0)}H7/${task === 1 ? 'p6' : 'k6'}`, g.x0, g.x1);
+        if (g.role === 'out') across(g.x0 + g.l * 0.6, g.r, `⌀${nf(g.d, 0)}${task === 1 ? 'k6' : 'm6'}`, g.x0, g.x1);
       });
     });
     // габаритные размеры разреза
@@ -1133,8 +1138,8 @@
     call(G.holes2, G.dh2, 'отв.'); call(G.holes3, G.dh3, 'отв.');
     if (G.pins.length) { const p = G.pins[0]; sh.attempt([[14, 14], [-14, 14], [14, -14], [-14, -14]].map(([dx, dy]) => () => sh.leader(p[0] + Math.sign(dx) * 2.8 * k, p[1] + Math.sign(dy) * 2.8 * k, p[0] + dx, p[1] + dy, '⌀8H7', `${G.pins.length} отв.`, { side: dx > 0 ? 'r' : 'l' }))); }
     // шероховатость плоскости разъёма, плоскостность
-    const pt = G.holes3[0] || [fb.x1 + G.Kf / 2, fb.y1 + G.Kf / 2];
-    sh.attempt([[6, 4], [-14, 4], [6, -12]].map(([dx, dy]) => () => sh.rough(pt[0] + dx, pt[1] + dy, 'Ra 1,6')));
+    // знак на полке линии-выноски, стрелка — на контур плоскости разъёма (ГОСТ 2.309, п. 2.4)
+    sh.attempt([0.3, 0.55, 0.75, 0.2].flatMap(fx => [[fx, 1], [fx, -1]]).map(([fx, sg]) => () => { const x = fb.x1 + (fb.x2 - fb.x1) * fx, y = sg > 0 ? fb.y2 : fb.y1; sh.roughLeader(x, y, x + 8, y + sg * 12, 'Ra 1,6'); }));
     return { sh };
   }
 
@@ -1201,7 +1206,7 @@
       const xr = hx2 + K1;
       sh.dimV(xr, yb, (bores[0] || par[0] || { h: hx2 }).h, 0, xr + 12, nf(-yb / k, 0) + '±0,2');
       sh.dimV(xr, yb, xr, yb + pF, xr + 22, nf(pF / k, 0));
-      sh.dimV(hx1 - K, -tf, hx1 - K, 0, hx1 - K - 12, nf(tf / k, 0));
+      sh.dimV(hx1 - K, -tf, hx1 - K, 0, Math.min(hx1 - K, sh.geoBox().x1) - 12, nf(tf / k, 0));
       sh.dimH(hx1 - K1, yb, hx2 + K1, yb, yb - 12, nf((hx2 - hx1 + 2 * K1) / k, 0));
       sh.dimH(hx1 - K1 / 2, yb, hx2 + K1 / 2, yb, yb - 21, nf((hx2 - hx1 + K1) / k, 0));
       sh.leader(hx1 - K1 / 2 + d1 / 2 * k, yb + pF * 0.6, hx1 - K1 / 2 - 14, yb + pF + 14, `⌀${d1}`, '4 отв.', { side: 'l' });
@@ -1221,7 +1226,7 @@
       // размеры
       const yTop = Math.max(...top.map(p => p[1]));
       sh.dimV(hx2 + K, 0, (hx1 + hx2) / 2, yTop, hx2 + K + 14, nf(yTop / k, 0));
-      sh.dimV(hx1 - K, 0, hx1 - K, tf, hx1 - K - 12, nf(tf / k, 0));
+      sh.dimV(hx1 - K, 0, hx1 - K, tf, Math.min(hx1 - K, sh.geoBox().x1) - 12, nf(tf / k, 0));
       sh.dimH(hx1 - K, 0, hx2 + K, 0, -14, nf((hx2 - hx1 + 2 * K) / k, 0));
     }
     // расточки: диаметры, межосевые, база и допуски
@@ -1295,6 +1300,8 @@
           const s = dot(h.c, U), t = dot(h.c, V), din = rv.depth(s, t), dout = Math.max(rv.depth(s + h.r + 1.2, t), rv.depth(s - h.r - 1.2, t), rv.depth(s, t + h.r + 1.2), rv.depth(s, t - h.r - 1.2));
           if (dout < -1e8 || !(din < dout - 0.8)) return;
           const txt = holeText(h.op.n, h.r), key = txt + '|' + h.op.n.replace(/\s\d+$/, '');
+          // видимое отверстие должно быть изображено окружностью — иначе выноске не на что указывать
+          if (!sh.p.some(q => (q.t === 'C' || q.t === 'A') && q.g === undefined && Math.hypot(q.a[0] - X(h.c), q.a[1] - Y(h.c)) < 0.3 && Math.abs(q.a[2] - h.r * k) < Math.max(0.3, 0.1 * h.r * k))) sh.circle(X(h.c), Y(h.c), h.r * k, 1);
           if (/резьбов/.test(h.op.n) || /пробк/.test(h.op.n)) sh.arc(X(h.c), Y(h.c), (/пробк/.test(h.op.n) ? h.r * 1.08 : h.r / 0.84) * k, 0, 270, 2);
           if (!groups.has(key)) groups.set(key, { txt, list: [] });
           const g = groups.get(key); if (!g.list.some(q => Math.hypot(dot(q.c, U) - s, dot(q.c, V) - t) < 0.5)) g.list.push(h);
@@ -1379,7 +1386,8 @@
         const del = H.del || 8, xm = (bxA.x1 + bxA.x2) / 2;
         const inside = (x, y) => { let c = false; SL.forEach(P2 => { for (let i = 0, j = P2.length - 1; i < P2.length; j = i++) { const a = P2[i], b = P2[j]; if ((a[1] > y) !== (b[1] > y) && x < (b[0] - a[0]) * (y - a[1]) / (b[1] - a[1]) + a[0]) c = !c; } }); return c; };
         const yW = part === 'base' ? (() => { for (let y = bxA.y1 + 0.2; y < bxA.y2; y += 0.25) if (!inside(xm, y)) return y; return null; })() : (() => { for (let y = bxA.y2 - 0.2; y > bxA.y1; y -= 0.25) if (!inside(xm, y)) return y; return null; })();
-        if (yW !== null) { const yo = part === 'base' ? bxA.y1 : bxA.y2; if (Math.abs(Math.abs(yW - yo) / k - del) < 3) sA.attempt([10, 20].map(d => () => sA.dimV(xm, yo, xm, yW, xm + d, nf(Math.abs(yW - yo) / k, 0)))); }
+        // толщина стенки — размерная линия поперёк стенки, без выносных линий
+        if (yW !== null) { const yo = part === 'base' ? bxA.y1 : bxA.y2; if (Math.abs(Math.abs(yW - yo) / k - del) < 3) sA.attempt([0, 0.2, -0.2, 0.35].map(f => () => { const x = xm + f * (bxA.x2 - bxA.x1); sA.dimV(x, yo, x, yW, x, nf(Math.abs(yW - yo) / k, 0)); })); }
       }
       callHoles(sA, { depth: () => 0 }, Us, Vs, crs(Us, Vs), true);
       { const bb = sA.bbox(0); sA.text((bb.x1 + bb.x2) / 2, bb.y2 + 5, 'А–А', { h: 7, anchor: 'cb' }); }
@@ -1416,8 +1424,18 @@
     return null;
   }
 
-  function housingSheets(R, P, T, spec) {
-    if (R.task === 1 && root.DRWVERT) return root.DRWVERT.housingSheets(R, P, T, spec);
+  /* o.part ('base' | 'cover') — только один лист по 3D-модели (для поэтапного построения); null — нужен общий путь */
+  function housingSheets(R, P, T, spec, o) {
+    if (R.task === 1 && root.DRWVERT) return o && o.part ? null : root.DRWVERT.housingSheets(R, P, T, spec);
+    if (o && o.part) {
+      if (!(root.M3D && root.M3D.rayView)) return null;
+      try {
+        const H3 = root.M3D.housing3d(R, P, T || {});
+        const codeOf = name => { let c = ''; spec.sections.forEach(sc => sc.items.forEach(it => { if (it.name === name) c = it.code; })); return c; };
+        const d = housingPartSheet(R, P, T, H3, o.part, codeOf(o.part === 'base' ? 'Корпус' : 'Крышка корпуса'));
+        return d ? [d] : null;
+      } catch (e) { console.error(e); return null; }
+    }
     if (root.M3D && root.M3D.rayView) {
       try {
         const H3 = root.M3D.housing3d(R, P, T || {});

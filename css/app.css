@@ -1,3 +1,6 @@
+/* шрифт чертежей — ГОСТ 2.304-81 тип А (как в КОМПАС-3D) */
+@font-face { font-family: 'GOST 2.304 A'; font-style: italic; font-weight: 400; src: url('../fonts/GOST2304_TypeA_italic.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: 'GOST 2.304 A'; font-style: normal; font-weight: 400; src: url('../fonts/GOST2304_TypeA.ttf') format('truetype'); font-display: swap; }
 /* Layout: инженерный журнал — липкая шапка с номером по списку, левая колонка-навигатор по разделам, справа «лист» с угловым штампом.
    Палитра — графит на холодной бумаге, акцент — сине-зелёный (чертёжная тушь), оранжевый — для изменённых значений. */
 :root {
@@ -150,7 +153,7 @@ figure.fig .plot { width: 100%; min-height: 300px; }
 figure.fig figcaption { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; padding: 8px 12px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); background: var(--sheet-2); }
 figure.fig figcaption b { color: var(--fg); font-weight: 600; }
 .plot-wait { display: grid; place-items: center; height: 300px; color: var(--muted); font-size: 13px; }
-.spinner { width: 18px; height: 18px; border: 2px solid var(--line-strong); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; display: inline-block; vertical-align: -4px; margin-right: 8px; }
+.spinner { will-change: transform; width: 18px; height: 18px; border: 2px solid var(--line-strong); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; display: inline-block; vertical-align: -4px; margin-right: 8px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.4s; } }
 .diagram { overflow-x: auto; padding: 12px; border: 1px solid var(--line); border-radius: var(--r); margin: 14px 0; background: var(--plot-bg); }
@@ -560,3 +563,31 @@ svg.fg g[data-tip]:hover .bx2, svg.fg g[data-tip]:hover .bx, svg.fg rect[data-ti
 .file-row > span b { word-break: normal; overflow-wrap: anywhere; }
 .icon-btn:hover { border-color: var(--accent); color: var(--accent); }
 .kcat-i:hover { color: var(--accent); }
+
+/* скрытое меню отладки */
+.dbg-g { margin: 10px 0; }
+.dbg-g > div { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 6px; }
+.dbg-c { display: inline-flex; align-items: center; gap: 5px; font-size: 14px; white-space: nowrap; }
+.motor-audit ul { margin: 8px 0 4px; padding-left: 20px; }
+.motor-audit li { margin: 4px 0; }
+.motor-audit li.ma-info { color: var(--muted, #555); }
+
+/* вкладка КОМПАС: подготовка */
+.k-load { display: flex; align-items: center; gap: 6px; margin: 28px 0 22px; padding: 16px 18px; border: 1px solid var(--line-strong); border-left: 3px solid var(--accent); border-radius: var(--r); background: var(--sheet); }
+.k-load .spinner { width: 26px; height: 26px; border-width: 3px; margin-right: 10px; }
+.k-load b { display: block; }
+.k-load small { color: var(--muted); }
+.k-skel { display: grid; gap: 10px; margin: 0 0 22px; }
+.k-skel i { display: block; height: 14px; border-radius: 4px; background: linear-gradient(90deg, var(--line) 25%, var(--line-strong) 50%, var(--line) 75%); background-size: 300% 100%; animation: kshim 1.4s ease-in-out infinite; }
+.k-skel i.w60 { width: 60%; }
+.k-skel.cards { grid-template-columns: repeat(3, 1fr); }
+.k-skel.cards i { height: 150px; }
+@keyframes kshim { from { background-position: 100% 0; } to { background-position: 0 0; } }
+#main.k-busy { position: relative; }
+#main.k-busy > * { opacity: .55; transition: opacity .15s; pointer-events: none; }
+#main.k-busy::after { content: ''; position: fixed; left: 50%; top: 50%; width: 34px; height: 34px; margin: -17px; border: 3px solid var(--line-strong); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; will-change: transform; z-index: 50; }
+@media (prefers-reduced-motion: reduce) { .k-skel i { animation: none; } }
+@media (max-width: 640px) { .k-skel.cards { grid-template-columns: 1fr 1fr; } }
+.k-load-t { flex: 1; min-width: 0; }
+.k-bar { display: block; height: 4px; margin-top: 8px; border-radius: 2px; background: var(--line); overflow: hidden; max-width: 420px; }
+.k-bar i { display: block; height: 100%; background: var(--accent); transition: width .35s ease; }

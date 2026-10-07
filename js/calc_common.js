@@ -158,8 +158,9 @@
         KsD = k.ks / (k.eps * o.beta);
         rep.eq({ lhs: 'K_{\\sigma D}', f: '\\dfrac{k_{\\sigma}}{\\varepsilon_{\\sigma}\\cdot \\beta_{ш}}', s: `\\dfrac{${n(k.ks, 3)}}{${n(k.eps, 3)}\\cdot ${nx(o.beta)}}`, v: KsD, sig: 3, d: 'Суммарный коэффициент концентрации напряжений у шпоночного паза: kσ — табл. 8.5, масштабный фактор εσ — табл. 8.8 [Ч].', ref: ['ch', k.txt] });
       }
-      const allow = s1 / (o.n * KsD * o.Kri);
-      rep.eq({ lhs: '[\\sigma_{и-1}]', f: '\\dfrac{\\sigma_{-1}}{n_{з}\\cdot K_{\\sigma D}\\cdot K_{ри}}', s: `\\dfrac{${n(s1)}}{${nx(o.n)}\\cdot ${n(KsD, 3)}\\cdot ${nx(o.Kri)}}`, v: allow, u: 'МПа', d: 'Допускаемое напряжение изгиба при симметричном цикле с учётом запаса, концентрации напряжений и режима нагрузки.' });
+      const mul = root.MREF_TASK === 1;   // [М] задания 1: [σи]−1 = σ−1/([n]·KσD)·Kри; заданий 3, 6: σ−1/(n·KσD·Kри)
+      const allow = mul ? s1 / (o.n * KsD) * o.Kri : s1 / (o.n * KsD * o.Kri);
+      rep.eq({ lhs: '[\\sigma_{и-1}]', f: mul ? '\\dfrac{\\sigma_{-1}}{[n]\\cdot K_{\\sigma D}}\\cdot K_{ри}' : '\\dfrac{\\sigma_{-1}}{n_{з}\\cdot K_{\\sigma D}\\cdot K_{ри}}', s: mul ? `\\dfrac{${n(s1)}}{${nx(o.n)}\\cdot ${n(KsD, 3)}}\\cdot ${nx(o.Kri)}` : `\\dfrac{${n(s1)}}{${nx(o.n)}\\cdot ${n(KsD, 3)}\\cdot ${nx(o.Kri)}}`, v: allow, u: 'МПа', d: 'Допускаемое напряжение изгиба при симметричном цикле с учётом запаса, концентрации напряжений и режима нагрузки.' });
       const met09 = sc.kind === 'key' && o.wMode !== 'net';
       const W = met09 ? Wnet(0.9 * sc.d, null) : Wnet(sc.d, sc.kind === 'key' ? sc.key : null);
       const sub = sc.id;
@@ -328,7 +329,7 @@
     rep.eq({ lhs: 'F_{t.цеп}', f: `\\dfrac{2000\\cdot ${o.Tsym}}{d_{д1}}`, s: `\\dfrac{2000\\cdot ${n(o.T)}}{${n(dd1)}}`, v: Ft, u: 'Н', d: 'Окружная сила, передаваемая цепью.' });
     const pp = Ft * Ke / ch.A;
     rep.eq({ lhs: 'p', f: '\\dfrac{F_{t.цеп}\\cdot K_{э}}{A_{оп}}', s: `\\dfrac{${n(Ft)}\\cdot ${n(Ke, 3)}}{${nx(ch.A)}}`, v: pp, u: 'МПа', d: 'Расчётное давление в шарнирах цепи.' });
-    rep.check(`p=${n(pp)}\\ \\text{МПа}\\ \\le\\ [p]=${n(pick.pAllow)}\\ \\text{МПа}`, pp <= pick.pAllow * 1.0001, pp <= pick.pAllow ? 'Износостойкость шарниров обеспечена.' : 'Давление в шарнирах превышает допускаемое.');
+    rep.check(`p=${n(pp)}\\ \\text{МПа}\\ ${pp <= pick.pAllow * 1.0001 ? '\\le' : '>'}\\ [p]=${n(pick.pAllow)}\\ \\text{МПа}`, pp <= pick.pAllow * 1.0001, pp <= pick.pAllow ? 'Износостойкость шарниров обеспечена.' : 'Давление в шарнирах превышает допускаемое.');
     const v = z1 * ch.t * o.n1 / 60e3, Fv = ch.q * v * v, kf = o.angle >= 70 ? 1 : o.angle >= 40 ? 1.5 : 6, Ff = 9.81 * kf * ch.q * am / 1000;
     const s = ch.Q * 1e3 / (Ft * o.Kd + Fv + Ff), sAllow = interp(D.CHAIN_S.n, D.CHAIN_S[ch.t], o.n1);
     rep.eq({ lhs: 's', f: '\\dfrac{Q}{F_{t.цеп}\\,K_{д}+F_{v}+F_{f}}', s: `\\dfrac{${n(ch.Q * 1e3)}}{${n(Ft)}\\cdot ${nx(o.Kd)}+${n(Fv, 3)}+${n(Ff, 3)}}`, v: s, d: `Коэффициент запаса прочности цепи (формула 7.40 [Ч]): скорость цепи v = ${fnum(v, 3)} м/с, центробежная сила Fv = q·v², сила от провисания Ff = 9,81·kf·q·a (kf = ${kf}).` });
@@ -343,7 +344,7 @@
   function couplingPick(T, d1, d2, n) {
     const dmax = Math.max(d1, d2);
     for (const c of D.MUVP) {
-      if (c.T < T || c.n < n) continue;
+      if (c.T < T || c.n < n || !c.pins) continue;   // только типоразмеры с известными размерами пальцев и втулок (проверка по [М] разд. 2)
       const bores = c.d.concat(c.d2nd);
       const fits = dd => D.MUVP.some(x => x.T === c.T && x.d.concat(x.d2nd).includes(dd));
       if (fits(d1) && fits(d2)) return { c, bore1: d1, bore2: d2, exact: true };

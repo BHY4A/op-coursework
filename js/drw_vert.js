@@ -121,7 +121,12 @@
     sh.datum(bx1 * k + 10, g.ys * k, part === 'base' ? 90 : 270, 'А', { len: 10 });
     vb.forEach(b => sh.attempt([[14, 10], [14, -14], [-34, 10]].map(([dx, dy]) => () => sh.tol((b.ax + b.D) * k + dx, b.face * k + dy, ['perp', '0,03', 'А'], { from: dx > 0 ? 'l' : 'r', to: [(b.ax + b.D) * k, b.face * k] }))));
     sh.attempt([[-30, 12], [-30, -18]].map(([dx, dy]) => () => sh.tol(bx1 * k + dx, g.ys * k + dy, ['flat', '0,05'], { from: 'r', to: [bx1 * k + 4, g.ys * k] })));
-    sh.attempt([0.5, -0.5].map(q => () => sh.rough(bx1 * k + 22, g.ys * k + (part === 'base' ? 0 : 0), 'Ra 1,6', { rot: 0 })));
+    { // шероховатость плоскости разъёма — знак на линии разъёма (ГОСТ 2.309)
+      const yj = g.ys * k, segs = sh.p.filter(q => q.t === 'L' && q.g === undefined && q.s === 1 && Math.abs(q.a[1] - yj) < 0.05 && Math.abs(q.a[3] - yj) < 0.05 && Math.abs(q.a[2] - q.a[0]) > 14);
+      const xs = segs.flatMap(q => [0.3, 0.6].map(f => q.a[0] + (q.a[2] - q.a[0]) * f));
+      if (!xs.length) xs.push(bx1 * k + 22);
+      sh.attempt(xs.map(x => () => part === 'base' ? sh.rough(x, yj, 'Ra 1,6') : sh.roughLeader(x, yj, x + 8, yj - 12, 'Ra 1,6')));
+    }
     // сливное отверстие
     if (part === 'base' && R.H) {
       const dp = R.H.dpr || 16, x = g.xW1 + g.del + dp * 1.5, cav = g.S.cavs.filter(c => c.x1 <= x && c.x2 >= x).sort((a, b) => a.y1 - b.y1)[0];
@@ -161,7 +166,10 @@
     for (let i = 0; i + 1 < hz.length; i++) sh.attempt([0, 8].map(d => () => sh.dimH(X(hz[i][0]), Zs(hz[i][1]), X(hz[i + 1][0]), Zs(hz[i][1]), Zs(f.z1) + 12 + d, nf(hz[i + 1][0] - hz[i][0]))));
     if (g.holes.length) { const h = g.holes[0]; sh.attempt([[14, 12], [-14, 12], [14, -12]].map(([dx, dy]) => () => sh.leader(X(h[0]) + Math.sign(dx) * g.dh / 2 * k * 0.7, Zs(h[1]) + Math.sign(dy) * g.dh / 2 * k * 0.7, X(h[0]) + dx, Zs(h[1]) + dy, `⌀${nf(g.dh)}`, `${g.holes.length} отв.`, { side: dx > 0 ? 'r' : 'l' }))); }
     if (g.pinC.length) { const h = g.pinC[0]; sh.attempt([[14, -12], [-14, -12], [14, 12]].map(([dx, dy]) => () => sh.leader(X(h[0]) + Math.sign(dx) * 2.8 * k, Zs(h[1]) + Math.sign(dy) * 2.8 * k, X(h[0]) + dx, Zs(h[1]) + dy, '⌀8H7', `${g.pinC.length} отв.`, { side: dx > 0 ? 'r' : 'l' }))); }
-    sh.attempt([[0.3, 0.3], [0.6, 0.5]].map(([a, b]) => () => sh.rough(X(f.x1 + (f.x2 - f.x1) * a), Zs(f.z1 + g.K * b), 'Ra 1,6', { rot: 0 })));
+    { // плоскость разъёма в плане — знак на полке линии-выноски со стрелкой на контуре фланца
+      const yT = Math.max(Zs(f.z1), Zs(f.z2)), yB = Math.min(Zs(f.z1), Zs(f.z2));
+      sh.attempt([0.3, 0.55, 0.75, 0.2].flatMap(fx => [[fx, 1], [fx, -1]]).map(([fx, sg]) => () => { const x = X(f.x1 + (f.x2 - f.x1) * fx), y = sg > 0 ? yT : yB; sh.roughLeader(x, y, x + 8, y + sg * 12, 'Ra 1,6'); }));
+    }
     return { sh };
   }
 

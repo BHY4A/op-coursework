@@ -93,7 +93,7 @@
     return s;
   }
   /* ссылки на источники [[key|место]] */
-  const REF_SHORT = { met: 'М', ch: 'Ч', air: 'АИР', gost21424: 'ГОСТ 21424', oform: 'КНИТУ' };
+  const REF_SHORT = { met: 'М', ch: 'Ч', air: 'АИР', gost21424: 'ГОСТ 21424', muvp: 'МУВП', oform: 'КНИТУ' };
   const refsWeb = t => String(t).replace(/\[\[(\w+)\|([^\]]*)\]\]/g, (m, k, w) => `<span class="ref" title="${esc(D.REFS[k] || '')}">[${REF_SHORT[k] || k}, ${w}]</span>`);
   const figRefs = (t, nums) => String(t).replace(/\{fig:(\w+)\}/g, (m, id) => nums[id] || '?');
 
@@ -239,6 +239,8 @@
     wKey: { vals: [['met', 'd<sub>расч</sub> = 0,9d'], ['net', 'W с учётом паза']], show: R => { const c = (R.ch2 || R.ch1).secs.find(s => s.si !== undefined) || (R.ch2 || R.ch1).secs[0]; return [`вал II: σ<sub>экв</sub> = ${fnum(c.se)} / [σ] = ${fnum(c.allow)} МПа`]; } },
     keyExact: { vals: [[false, '4,4T/(d·h·l<sub>р</sub>)'], [true, '2T/(d(h−t₁)l<sub>р</sub>)']], show: R => R.keys.slice(0, 3).map(k => `${esc(k.title.split('—')[1] || k.title)}: σ<sub>см</sub> = ${fnum(k.s)} МПа`) },
     FmMode: { vals: [['gost', 'ГОСТ 16162'], ['met', '(0,2…0,5)·2T/D₀']], show: R => [`F<sub>м</sub> = ${fnum(R.Fm || 0)} Н`] },
+    awT6: { vals: [['pin', 'Момент шестерни'], ['met', 'Момент колеса']], show: R => [`aw.б = ${fnum(R.gB.aw)} мм, aw.т = ${fnum(R.gT.aw)} мм`, `σH.т = ${fnum(R.cT.sH)} МПа`] },
+    wormSHcheck: { vals: [['met', 'Методичка'], ['ch', 'Чернавский (4.23)']], show: R => [`σH = ${fnum(R.st.sigH)} / [σH] = ${fnum(R.ck.sH)} МПа`, `aw = ${fnum(R.g.aw)} мм`] },
     t1Coup: { vals: [['scheme', 'T<sub>2Т</sub> = T<sub>в</sub>'], ['met', 'T<sub>2Т</sub> = T<sub>в</sub>/η<sub>м</sub>']], show: R => [`T<sub>2Т</sub> = ${fnum(R.K.T2T)} Н·м, T<sub>1Б</sub> = ${fnum(R.K.T1B)} Н·м`] },
     Fm1: { vals: [[false, 'Нет'], [true, 'Да']], show: R => { const c = R.ch1.secs[0]; return [`R<sub>A</sub> = ${fnum(R.B1.RA)} Н, R<sub>B</sub> = ${fnum(R.B1.RB)} Н`, `σ<sub>экв</sub> = ${fnum(c.se)} МПа`]; } }
   };
@@ -338,6 +340,19 @@
   }
 
   function codeDefault() { const p2 = x => String(x).padStart(2, '0'); return 'ОП КП ' + p2(S.P.task) + '-' + p2(S.P.v); }
+  /* последствия выбора двигателя (ручной выбор или нерекомендуемая синхронная частота) */
+  function motorAuditHtml() {
+    if (!S.R || !TC.motorAudit) return '';
+    const R0 = altR({ motor: 'auto', sync: 1500 });
+    const a = TC.motorAudit(S.P, S.R, R0);
+    if (!a.custom) return '';
+    const bad = a.items.filter(x => x.lvl === 'bad'), warn = a.items.filter(x => x.lvl === 'warn'), info = a.items.filter(x => x.lvl === 'info');
+    const head = bad.length ? `<b>Выбранный двигатель ${esc(S.R.motor.type)}: несостыковок в расчёте — ${bad.length}${warn.length ? `, замечаний — ${warn.length}` : ''}.</b>`
+      : warn.length ? `<b>Двигатель ${esc(S.R.motor.type)} не рекомендуется: замечаний — ${warn.length}.</b> Все проверки расчёта выполняются${S.P.O.autoFix !== false ? ' — с учётом размеров, которые утилита при необходимости увеличила сама (см. сравнение ниже)' : ''}.`
+        : `<b>Двигатель ${esc(S.R.motor.type)}: все проверки расчёта выполняются.</b>`;
+    const li = x => `<li class="ma-${x.lvl}"><b>${x.where}:</b> ${x.text}</li>`;
+    return `<div class="note ${bad.length ? 'bad' : warn.length ? 'warn' : ''} motor-audit" id="motor-audit">${head}${a.items.length ? `<ul>${bad.concat(warn, info).map(li).join('')}</ul>` : ''}<p class="hint">Рекомендуемый вариант — «Автоматически» при синхронной частоте 1500 мин⁻¹${R0 && R0.motor ? ` (${esc(R0.motor.type)})` : ''}.</p></div>`;
+  }
   function renderData(main) {
     const P = S.P, R = S.R, O = P.O, V = defP(P), task = D.TASKS[P.task];
     const mcands = D.MOTORS.filter(m => m.P >= R.Preq * 0.999).sort((a, b) => a.P - b.P || b.sync - a.sync).filter((m, i, a) => a.findIndex(x => x.sync === m.sync && x.P === m.P) === i).slice(0, 16);
@@ -366,7 +381,7 @@
           </div>
           <div class="fld"><label for="f-load"><span>График нагрузки: доли момента и времени (через «;», например «1 0,2; 0,8 0,3»)</span></label><input id="f-load" class="txt" value="${esc(P.load.map(([k, t]) => String(k).replace('.', ',') + ' ' + String(t).replace('.', ',')).join('; '))}" autocomplete="off"></div>
           <p class="dhint">Сейчас: ${loadTxt}. Сумма долей времени должна быть равна 1.</p>
-          ${isT(6) ? fld('Db', 'D<sub>б</sub>', 'Диаметр барабана конвейера (в задании не указан)', 'мм', O.Db || '', !!O.Db, 'Если не задан — принимается 400 мм. Уточните у руководителя.', 'O') : ''}
+          ${isT(6) ? fld('Db', 'D<sub>б</sub>', 'Диаметр приводного барабана', 'мм', O.Db || '', !!O.Db, 'По умолчанию 400 мм — как в примере привода ленточного конвейера [Ч, § 12.1, с. 252].', 'O') : ''}
           <div class="dact"><button class="btn" id="reset-var">Сбросить к варианту ${P.v}</button><button class="btn" id="go-kin">К расчёту →</button></div>
           <details class="adv"><summary>Таблица вариантов задания ${P.task} (щелчок по строке выбирает вариант)</summary><div class="in"><div class="tbl var-table"><table><thead><tr><th class="num">Вариант</th><th class="num">P, кВт</th><th class="num">n, мин⁻¹</th></tr></thead><tbody>${vrows}</tbody></table></div><p class="dhint">Срок службы ${task.L} лет; K<sub>г</sub> = ${fnum(task.Kg, 0)}; K<sub>сут</sub> = ${fnum(task.Kc, 0)}.</p></div></details>
         </section>
@@ -382,6 +397,7 @@
             ${isT(6) ? fld('psibaB', 'ψ<sub>ba.б</sub>', 'Ширина быстроходной ступени', '', O.psibaB, +O.psibaB !== +V.O.psibaB, '0,25…0,40', 'O') + fld('psibaT', 'ψ<sub>ba.т</sub>', 'Ширина тихоходной ступени', '', O.psibaT, +O.psibaT !== +V.O.psibaT, '0,30…0,50', 'O') : ''}
             ${fld('Kcoup', 'K<sub>р</sub>', 'Коэффициент режима муфты', '', O.Kcoup, +O.Kcoup !== +V.O.Kcoup, '', 'O')}
           </div>
+          ${motorAuditHtml()}
           <div class="opts">
             ${optRow('Синхронная частота двигателя', 'Чернавский рекомендует 1500 или 1000 мин⁻¹: при 3000 мин⁻¹ трудно получить большое передаточное число, двигатели 750 мин⁻¹ тяжелы и громоздки.', seg('O', 'sync', O.sync, [[1500, '1500'], [1000, '1000'], [3000, '3000']], 'num'), 'sync')}
             ${isT(1) ? '' : optRow('Передаточное отношение цепи', 'Назначается из интервала 1,5…3,5; от него зависят передаточное число редуктора и размеры передач.', seg('O', 'uChain', O.uChain, [[2, '2'], [2.5, '2,5'], [3, '3']], 'num'), 'uChain')}
@@ -401,11 +417,13 @@
             ${isT(3) ? optRow('Число циклов нагружения', 'Эквивалентное число циклов по графику нагрузки (показатели 4 и 9, Чернавский с. 60) или без учёта графика.', seg('O', 'wormNe', O.wormNe, [['simple', 'Без графика'], ['load', 'По графику']], 'str'), 'wormNe') : ''}
             ${isT(1) || isT(6) ? optRow('Ряд межосевых расстояний ГОСТ 2185-66', '1-й ряд предпочтителен; при «оба ряда» берётся ближайшее большее из обоих.', seg('O', 'awRow', O.awRow, [[0, 'Оба ряда'], [1, '1-й ряд']], 'num'), 'awRow') : ''}
             ${isT(1) || isT(6) ? optRow('Числа зубьев цилиндрических колёс', 'По методичке: z₁ = 2a<sub>w</sub>/(m(u+1)), z₂ = u·z₁. Вариант через суммарное число зубьев сохраняет стандартное a<sub>w</sub>.', seg('O', 'zMode', O.zMode, [['met', 'Методичка'], ['sum', 'Через zΣ']], 'str'), 'zMode') : ''}
-            ${isT(1) ? optRow('Момент на тихоходном валу', 'Методичка делит T<sub>в</sub> на η<sub>м</sub>, хотя звёздочка стоит прямо на тихоходном валу (муфта в приводе одна — у двигателя).', seg('O', 't1Coup', O.t1Coup || 'scheme', [['scheme', 'По схеме'], ['met', 'Как в методичке']], 'str'), 't1Coup') : ''}
+            ${isT(1) ? optRow('Момент на тихоходном валу', 'В методичке T<sub>2Т</sub> = T<sub>в</sub>/η<sub>м</sub>, хотя по схеме звёздочка стоит прямо на тихоходном валу и муфта в приводе одна (у двигателя). По умолчанию — по схеме: T<sub>2Т</sub> = T<sub>в</sub>. КПД муфты в η<sub>общ</sub> в обоих случаях — в первой степени.', seg('O', 't1Coup', O.t1Coup || 'scheme', [['scheme', 'По схеме'], ['met', 'Как в методичке']], 'str'), 't1Coup') : ''}
             ${isT(1) ? optRow('Сила от муфты на быстроходном валу', 'В методичке задания 1 при расчёте быстроходного вала консольная сила от муфты не учитывается.', seg('O', 'Fm1', !!O.Fm1, [[false, 'Не учитывать'], [true, 'Учитывать']], 'bool'), 'Fm1') : ''}
             ${optRow('Сечение со шпоночным пазом', isT(1) ? 'Методичка задания 1: расчётный диаметр уменьшают на 10 %.' : 'Методичка заданий 3 и 6: моменты сопротивления с учётом паза W = πd³/32 − bt₁(d − t₁)²/(2d).', seg('O', 'wKey', O.wKey, [['met', 'd<sub>расч</sub> = 0,9d'], ['net', 'W с учётом паза']], 'str'), 'wKey')}
             ${optRow('Расчёт шпонок на смятие', 'Приближённая формула (глубина врезания 0,45h) или уточнённая с t₁.', seg('O', 'keyExact', !!O.keyExact, [[false, 'Приближённо'], [true, 'Уточнённо']], 'bool'), 'keyExact')}
-            ${isT(1) ? '' : optRow('Консольная сила от муфты', 'По ГОСТ 16162 (Чернавский с. 141): 50√T или 80√T. Формула методички (0,2…0,5)·2T/D₀ требует размера D₀ муфты (задайте в константах).', seg('O', 'FmMode', O.FmMode, [['gost', 'ГОСТ 16162'], ['met', 'По D₀ муфты']], 'str'), 'FmMode')}
+            ${isT(1) ? '' : optRow('Консольная сила от муфты', 'Методичка: F<sub>м</sub> = (0,2…0,5)·2T<sub>расч</sub>/D<sub>0</sub>, D<sub>0</sub> — у выбранной муфты (раздел 2). Альтернатива — ГОСТ 16162 (Чернавский с. 141): 50√T или 80√T.', seg('O', 'FmMode', O.FmMode, [['met', 'Методичка'], ['gost', 'ГОСТ 16162']], 'str'), 'FmMode')}
+            ${isT(6) ? optRow('Момент в формуле межосевого расстояния', 'В методичке задания 6 в формулу a<sub>w</sub> (с u, а не u²) подставлен момент на колесе — это завышает a<sub>w</sub> в ∛u раз. По умолчанию — момент на шестерне, как в методичке задания 1 (равносильно формуле (3.7) Чернавского).', seg('O', 'awT6', O.awT6 || 'pin', [['pin', 'Момент шестерни'], ['met', 'Момент колеса']], 'str'), 'awT6') : ''}
+            ${isT(3) ? optRow('Проверка червячной передачи на контактную выносливость', 'Методичка: σ<sub>H</sub> = Z<sub>E</sub>Z<sub>h</sub>√(F<sub>t2</sub>K<sub>HV</sub>K<sub>Hβ</sub>/(d<sub>2</sub>b<sub>2</sub>cos γ)), K<sub>Hβ</sub> — из п. 1.4.2. Альтернатива — формула (4.23) Чернавского с K<sub>β</sub> по табл. 4.6.', seg('O', 'wormSHcheck', O.wormSHcheck || 'met', [['met', 'Методичка'], ['ch', 'Чернавский']], 'str'), 'wormSHcheck') : ''}
           </div>
           <details class="adv"><summary>Константы методики</summary><div class="in">
             <div class="form-grid">
@@ -430,7 +448,7 @@
               ${fld('lvt', 'l<sub>вт</sub>', 'Муфта: длина упругой втулки', 'мм', O.lvt || '', !!O.lvt, '', 'O')}
               ${fld('Cm', 'C', 'Муфта: зазор между полумуфтами', 'мм', O.Cm || '', !!O.Cm, '', 'O')}
             </div>
-            <p class="dhint">Размеры пальцев и втулок МУВП (D<sub>0</sub>, z, d<sub>п</sub>, l<sub>вт</sub>, C) нужны для проверки муфты по формулам методички; в ГОСТ 21424-93 и у Чернавского их нет. Если они не заданы, муфта подбирается по моменту, диаметрам и частоте вращения без проверки упругих элементов.</p>
+            <p class="dhint">Размеры пальцев и втулок МУВП (D<sub>0</sub>, z, d<sub>п</sub>, l<sub>вт</sub>, C) берутся автоматически для выбранного типоразмера по ГОСТ 21424 (в табл. 11.5 Чернавского и табл. 1 ГОСТ 21424-93 их нет — источник указан в записке). Поля выше нужны, только если руководитель даёт другие значения.</p>
           </div></details>
         </section>
         <section class="dsec">
@@ -589,7 +607,7 @@
     for (const s of [1500, 1000, 3000]) if (s !== O.sync) out.push({ t: `взять двигатель с синхронной частотой ${s} мин⁻¹`, p: { sync: s }, mo: true });
     const opts = [['wormAw', 'ch', 'met', 'считать aw по формуле Чернавского', 'считать aw по формуле методички (Ka = 610)'], ['wormSH', 'met', 'ch', 'брать допускаемые напряжения по формулам методички', 'брать допускаемые напряжения по таблицам Чернавского'],
       ['KHLmode', 'met', 'ch', 'принять KHL = 1', 'считать KHL по формуле Чернавского'], ['awRow', 0, 1, 'брать aw из обоих рядов ГОСТ 2185', 'брать aw только из 1-го ряда'], ['zMode', 'met', 'sum', 'считать z₂ = u·z₁', 'считать числа зубьев через zΣ'],
-      ['wKey', 'met', 'net', 'уменьшать диаметр на 10 % из-за шпоночного паза', 'считать W с учётом шпоночного паза'], ['keyExact', false, true, 'считать шпонку по формуле 4,4T/(dhlр)', 'считать шпонку по уточнённой формуле'], ['t1Coup', 'scheme', 'met', 'не делить Tв на ηм', 'делить Tв на ηм, как в методичке'], ['Fm1', false, true, 'не учитывать силу от муфты', 'учитывать силу от муфты']];
+      ['wKey', 'met', 'net', 'уменьшать диаметр на 10 % из-за шпоночного паза', 'считать W с учётом шпоночного паза'], ['keyExact', false, true, 'считать шпонку по формуле 4,4T/(dhlр)', 'считать шпонку по уточнённой формуле'], ['t1Coup', 'scheme', 'met', 'не делить Tв на ηм (по схеме)', 'делить Tв на ηм, как в методичке'], ['awT6', 'pin', 'met', 'подставлять в aw момент шестерни', 'подставлять в aw момент колеса, как записано в методичке'], ['wormSHcheck', 'met', 'ch', 'проверять σH по формуле методички', 'проверять σH по формуле (4.23) Чернавского'], ['FmMode', 'met', 'gost', 'считать Fм по формуле методички', 'считать Fм по ГОСТ 16162'], ['Fm1', false, true, 'не учитывать силу от муфты', 'учитывать силу от муфты']];
     for (const [k, a, b, ta, tb] of opts) { if (O[k] === undefined) continue; const cur = O[k]; const alt = String(cur) === String(a) ? b : a; out.push({ t: String(alt) === String(a) ? ta : tb, p: { [k]: alt } }); }
     if (S.P.task !== 1) for (const u of [2, 2.5, 3]) if (u !== +O.uChain) out.push({ t: 'принять u<sub>цеп</sub> = ' + String(u).replace('.', ','), p: { uChain: u } });
     if (S.P.task === 3) for (const e of [0.7, 0.75, 0.8]) if (e !== +O.etaWpre) out.push({ t: 'принять предварительно ηч = ' + String(e).replace('.', ','), p: { etaWpre: e } });
@@ -678,7 +696,7 @@
       <header class="sheet-head"><div><div class="eyebrow">Задание ${S.P.task} · вариант ${S.P.v} · ${esc(meta.t)}</div><h1>${esc(TAB_TITLE[tab] || meta.t)}</h1><p class="lead">${esc(leadText(tab))}</p></div>${stamp()}</header>
       <div class="sheet-body rep"><div class="kpis">${kpis()}</div><p class="calc-hint">${ICON_COPY} у каждой формулы копирует её в формате MathML — в Word вставляется редактируемое уравнение (Ctrl+V). «TeX» копирует LaTeX. Ссылки в квадратных скобках: [М] — методичка, [Ч] — Чернавский, [АИР] — каталог двигателей.</p>
         <div class="opts chk-bar"><div class="opt"><div class="opt-t"><b>Сверка с ручным расчётом</b><span id="chk-sum">${CHK.on ? '' : 'Под каждой формулой появится поле для вашего значения: утилита сравнит его и подскажет причину расхождения — округление, другой двигатель, другая формула методики или ошибка в подстановке.'}</span></div><div class="opt-c" style="display:flex;gap:10px;align-items:center">${CHK.on ? '<button class="btn" id="chk-clr">Очистить</button>' : ''}<label class="sw"><input type="checkbox" id="chk-on" ${CHK.on ? 'checked' : ''}><span class="track" aria-hidden="true"></span><span class="sr">Сверка</span></label></div></div></div>
-        ${body}
+        ${tab === 'kin' ? motorAuditHtml() : ''}${body}
         <div style="display:flex;justify-content:space-between;gap:8px;margin-top:22px;flex-wrap:wrap">${k > 1 ? `<button class="btn" data-go="${TABS[k - 1].id}">← ${esc(TABS[k - 1].short)}</button>` : '<span></span>'}${k < TABS.length - 1 ? `<button class="btn" data-go="${TABS[k + 1].id}">${esc(TABS[k + 1].short)} →</button>` : ''}</div>
       </div></article>`;
     bindCalc(main); bindChk(main);
@@ -716,7 +734,75 @@
     const list = arr => `<ul class="kchk">${arr.map(l => `<li class="${l.ok ? 'ok' : 'bad'}">${esc(l.msg)}</li>`).join('')}</ul>`;
     return head + sum + (bad.length ? list(bad) : '') + (good.length ? `<details class="kchk-d"><summary>Проверенные размеры (${good.length})</summary>${list(good)}</details>` : '');
   }
-  function renderKompas(main) {
+  /* ---------- скрытое меню отладки (Ctrl+Shift+D или ?debug в адресе) ---------- */
+  function dbgOn() { try { return /[?&]debug\b/.test(location.search) || localStorage.getItem('opkp_debug') === '1'; } catch (e) { return /[?&]debug\b/.test(location.search); } }
+  function debugPanel() {
+    const rows = [1, 3, 6].map(t => {
+      const nos = Array.from({ length: 26 }, (x, i) => i + 1).filter(no => D.byListNo(no).task === t);
+      return `<div class="dbg-g"><b>Задание ${t} — ${esc(D.TASKS[t].short)}</b> <button class="btn sm" data-dbgt="${t}">все</button><div>${nos.map(no => { const v = D.byListNo(no).v; return `<label class="dbg-c"><input type="checkbox" data-dbgno="${no}"${[4, 12, 22].includes(no) ? ' checked' : ''}> № ${no} (вар. ${v})</label>`; }).join('')}</div></div>`;
+    }).join('');
+    return `<h2 id="dbg">7. Отладка: прогон нескольких вариантов в КОМПАС</h2>
+      <div class="note">Скрытое меню (включается и выключается сочетанием Ctrl+Shift+D). Архив OP_KP_DEBUG содержит макросы выбранных вариантов с настройками по умолчанию и общий запуск <code>02_run_debug.bat</code>. После прогона в папке появится <b>debug_для_отправки.zip</b>: журналы, PNG-снимки, DXF-копии построенных листов, сами чертежи .cdw/.spw и данные листов из утилиты — по ним проверяется, где на реальных чертежах стоят осевые линии, размеры, знаки шероховатости и выноски.</div>
+      <p><button class="btn sm" data-dbgp="3">По одному на задание (№ 4, 12, 22)</button> <button class="btn sm" data-dbgp="all">Все 26</button> <button class="btn sm" data-dbgp="none">Снять все</button> <button class="btn sm" data-dbgp="cur">Только текущий (№ ${S.P.listNo})</button></p>
+      ${rows}
+      <p><button class="btn primary" id="dbgzip">${dlIcon()} Скачать OP_KP_DEBUG.zip</button> <span id="dbgst" class="hint"></span></p>
+      <p class="hint">Один вариант строится в КОМПАС примерно 5–15 минут; все 26 — несколько часов.</p>`;
+  }
+  function bindDebug(main) {
+    if (!dbgOn() || !$('#dbgzip', main)) return;
+    const boxes = () => $$('[data-dbgno]', main);
+    $$('[data-dbgt]', main).forEach(b => b.onclick = () => boxes().forEach(c => { if (D.byListNo(+c.dataset.dbgno).task === +b.dataset.dbgt) c.checked = true; }));
+    $$('[data-dbgp]', main).forEach(b => b.onclick = () => { const m = b.dataset.dbgp; boxes().forEach(c => { const no = +c.dataset.dbgno; c.checked = m === 'all' ? true : m === 'none' ? false : m === 'cur' ? no === S.P.listNo : [4, 12, 22].includes(no); }); });
+    $('#dbgzip', main).onclick = async () => {
+      const btn = $('#dbgzip', main), st = $('#dbgst', main);
+      const list = boxes().filter(c => c.checked).map(c => Object.assign({ no: +c.dataset.dbgno }, D.byListNo(+c.dataset.dbgno)));
+      if (!list.length) { st.textContent = 'Отметьте хотя бы один вариант.'; return; }
+      btn.disabled = true;
+      try {
+        const blob = await window.KPDEBUG.build(list, no => { const P = fresh(no); return { P, R: compute(P) }; }, S.T, (i, n, x) => { st.textContent = x ? `Расчёт № ${x.no} (${i + 1} из ${n})…` : 'Упаковка архива…'; });
+        downloadBlob('OP_KP_DEBUG.zip', blob); st.textContent = `Готово: вариантов — ${list.length}.`;
+      } catch (e) { console.error(e); st.textContent = 'Ошибка: ' + e.message; } finally { btn.disabled = false; }
+    };
+  }
+  document.addEventListener('keydown', e => {
+    if (e.ctrlKey && e.shiftKey && (e.code === 'KeyD')) {
+      e.preventDefault();
+      const on = !dbgOn();
+      try { localStorage.setItem('opkp_debug', on ? '1' : '0'); } catch (err) { /* ignore */ }
+      if (typeof toast === 'function') toast(on ? 'Меню отладки включено — вкладка «КОМПАС», раздел 7' : 'Меню отладки выключено');
+      if (S.tab === 'kompas') renderTab();
+    }
+  });
+  /* вкладка КОМПАС: сначала мгновенно показывается каркас с индикатором, тяжёлая подготовка (модели, листы) — после отрисовки кадра */
+  let kompasTok = 0;
+  function renderKompas(main, keepY) {
+    const tok = ++kompasTok;
+    if (keepY === undefined) {
+      main.innerHTML = `<article class="sheet">
+        <header class="sheet-head"><div><div class="eyebrow">Задание ${S.P.task} · вариант ${S.P.v}</div><h1>Файлы для КОМПАС-3D v25</h1><p class="lead">Python-макросы строят 3D-модели деталей и сборку редуктора, рабочие чертежи с основной надписью и спецификацию. Для ручного построения — таблицы размеров и DXF-контуры.</p></div>${stamp()}</header>
+        <div class="sheet-body rep"><div class="k-load" role="status" aria-live="polite"><span class="spinner"></span><div class="k-load-t"><b>Готовлю файлы для КОМПАС</b><small>3D-модели, проверка сборки, листы чертежей — несколько секунд</small><span class="k-bar"><i style="width:4%"></i></span></div></div>
+        <div class="k-skel"><i></i><i></i><i></i><i class="w60"></i></div><div class="k-skel cards"><i></i><i></i><i></i></div></div></article>`;
+    } else main.classList.add('k-busy');
+    // листы строятся по этапам с паузами — каркас и индикатор успевают отрисоваться и обновляться
+    const K = window.KOMPAS, R = S.R, P = S.P, T = S.T;
+    let nStep = 0; const step = t => { const el = $('.k-load small', main), bar = $('.k-bar i', main); if (el) el.textContent = t + '…'; if (bar) bar.style.width = Math.min(96, 8 + 13 * ++nStep) + '%'; };
+    const frame = () => new Promise(res => requestAnimationFrame(() => setTimeout(res, 0)));
+    (async () => {
+      await frame(); await frame();
+      try {
+        if (K && K.sheetsAsync) await K.sheetsAsync(R, P, T, t => { if (tok === kompasTok) step(t); });
+        if (tok !== kompasTok) return;
+        step('Проверка 3D-сборки'); await frame();
+        if (K && K.modelCheck) K.modelCheck(R, P, T);
+        step('Макросы и файлы'); await frame();
+      } catch (e) { console.error(e); }
+      if (tok !== kompasTok || S.tab !== 'kompas' || S.R !== R) return;
+      try { renderKompasFull(main); } finally { main.classList.remove('k-busy'); }
+      if (keepY !== undefined) window.scrollTo(0, keepY);
+      buildToc();
+    })();
+  }
+  function renderKompasFull(main) {
     const K = window.KOMPAS;
     const files = K ? K.files(S.R, S.P, S.T) : [];
     const hints = K ? K.hints(S.R, S.P, S.T) : '';
@@ -739,16 +825,18 @@
         <div class="dw-grid" id="dwg"><p class="progress"><span class="spinner"></span>Строю листы…</p></div>
         <h2>6. Размеры для построения вручную</h2>
         ${hints}
+        ${dbgOn() ? debugPanel() : ''}
       </div></article>`;
+    bindDebug(main);
     $$('[data-koff]', main).forEach(cb => cb.onchange = () => {
       const k = cb.dataset.koff; S.T.koff = Object.assign({}, S.T.koff || {});
       if (cb.checked) delete S.T.koff[k]; else S.T.koff[k] = 1;
-      saveT(); const y = window.scrollY; renderKompas(main); window.scrollTo(0, y);
+      saveT(); renderKompas(main, window.scrollY);
     });
     $$('[data-kall]', main).forEach(b => b.onclick = () => {
       const mode = b.dataset.kall; S.T.koff = {};
       if (mode === 'req') { try { K.catalog(S.R, S.P, S.T).forEach(g => g.items.forEach(it => { if (g.title === 'Чертежи' && !it.req) S.T.koff[it.key] = 1; })); } catch (e) { console.error(e); } }
-      saveT(); const y = window.scrollY; renderKompas(main); window.scrollTo(0, y);
+      saveT(); renderKompas(main, window.scrollY);
     });
     $$('[data-kf]', main).forEach(b => b.onclick = () => { const f = files[+b.dataset.kf]; downloadBlob(f.path.split('/').pop(), new Blob([f.gen()], { type: 'text/plain;charset=utf-8' })); });
     setTimeout(() => {
@@ -786,7 +874,7 @@
       const img = new Image();
       img.onload = () => { const c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, W, H); g.drawImage(img, 0, 0, W, H); c.toBlob(b => res(b), 'image/png'); };
       img.onerror = () => res(null);
-      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgStr);
+      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(window.DRWCORE && DRWCORE.embedFont ? DRWCORE.embedFont(svgStr) : svgStr);
     });
   }
 
