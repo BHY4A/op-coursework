@@ -76,8 +76,15 @@
       const gC = R.gC, gT = R.gT, wC = R.wC, wT = R.wT, L = R.L, dims = R.dims;
       const sI = segsOut(sh.I), sII = segsOut(sh.II), sIII = segsOut(sh.III);
       const kC = keyOf(R, 'wheelC'), kT = keyOf(R, 'wheelT');
-      const d1r = gC.d1deg * Math.PI / 180, xII = -gC.Re * Math.cos(d1r) * 0.98, zI = 0;
-      const zC = zI - gC.Rm * Math.cos((90 - gC.d1deg) * Math.PI / 180);
+      // коническая пара: вершины делительных конусов совпадают. Шестерня — первая ступень вала I (x = 0…l, внешний торец при x = l):
+      // ось колеса проходит через вершину конуса шестерни; колесо ставится центром ступицы (по профилю рабочего чертежа) на ступень вала II
+      const d1r = gC.d1deg * Math.PI / 180, zI = 0;
+      const xII = sI[0].l - gC.Re * Math.cos(d1r);
+      const xcHub = (() => {
+        try { const W = root.DRAWINGS.wheelProfile({ de: gC.de2, dae: gC.dae2, b: gC.b, Re: gC.Re, delta: gC.d2deg, mte: gC.mte, dbore: dims.d2p, dst: wC.dst, lst: wC.lst, key: keyDim(keyOf(R, 'wheelC')) }, 'bevel'); return (W.x0 + W.x1) / 2; }
+        catch (e) { return gC.Rm * Math.cos(gC.d2deg * Math.PI / 180); }
+      })();
+      const zC = zI - xcHub;
       const xpII = midOf(sII, s => /коническ/.test(s.name)), xgII = midOf(sII, s => s.gear), xwIII = midOf(sIII, s => /ступиц/.test(s.name));
       const pk = box(gT.aw + gT.da2 / 2 + gC.de2 / 2 + 60, Math.max(gT.da2, gC.de2) + 40, sumL(sII) + 30, [], 'y');
       const pI = add('val_shesternya', 'Вал-шестерня коническая', 'shaft', { segs: sI }), pII = add('val_II', 'Вал-шестерня цилиндрическая', 'shaft', { segs: sII }), pIII = add('val_III', 'Вал тихоходный', 'shaft', { segs: sIII });
@@ -96,8 +103,8 @@
       dWheel(pC, [['Внешний окружной модуль', 'mte', fnum(gC.mte, 4)], ['Число зубьев', 'z', String(gC.z2)], ['Тип зуба', '—', 'прямой'], ['Исходный контур', '—', 'ГОСТ 13754-81'], ['Угол делительного конуса', 'δ', F.degTxt(gC.d2deg)], ['Внешнее конусное расстояние', 'Re', fnum(gC.Re, 4)], ['Средний делительный диаметр', 'd', fnum(gC.dm2, 4)], ['Степень точности', '—', '8-B ГОСТ 1758-81']]);
     }
     // облегчающие отверстия в диске колеса — те же, что на чертеже колеса (DRAWINGS.wheelProfile)
-    // коническое колесо — по профилю рабочего чертежа (ступица, диск, венец); x — от торца венца (как в КОМПАС)
-    parts.forEach(pd => { if (pd.kind === 'bevel' && root.DRAWINGS && root.DRAWINGS.wheelProfile && pd.geom.Re) { try { const W = root.DRAWINGS.wheelProfile(pd.geom, 'bevel'), x0 = pd.geom.Re * Math.cos(pd.geom.delta * Math.PI / 180); pd.geom.prof = W.pieces[0].map(([x, y]) => [Math.round((x - x0) * 100) / 100, Math.round(y * 100) / 100]); pd.geom.hubx = [Math.round((W.x0 - x0) * 100) / 100, Math.round((W.x1 - x0) * 100) / 100]; } catch (e) { /* упрощённо */ } } });
+    // коническое колесо — по профилю рабочего чертежа (ступица, диск, венец); x — от середины ступицы, +x — к вершине делительного конуса (к оси шестерни)
+    parts.forEach(pd => { if (pd.kind === 'bevel' && root.DRAWINGS && root.DRAWINGS.wheelProfile && pd.geom.Re) { try { const W = root.DRAWINGS.wheelProfile(pd.geom, 'bevel'), x0 = pd.geom.Re * Math.cos(pd.geom.delta * Math.PI / 180); const xc = (W.x0 + W.x1) / 2; pd.geom.prof = W.pieces[0].map(([x, y]) => [Math.round((xc - x) * 100) / 100, Math.round(y * 100) / 100]).reverse(); pd.geom.hubx = [Math.round((xc - W.x1) * 100) / 100, Math.round((xc - W.x0) * 100) / 100]; void x0; } catch (e) { /* упрощённо */ } } });
     parts.forEach(pd => { if ((pd.kind === 'wheel' || pd.kind === 'wormwheel') && root.DRAWINGS && root.DRAWINGS.wheelProfile) { try { const h = root.DRAWINGS.wheelProfile(pd.geom, pd.kind).holes; if (h) pd.geom.holes = { d: h.d, Dc: h.Dc, n: h.n }; } catch (e) { /* без отверстий */ } } });
     return { code, parts, asm: { file: 'reduktor.a3d', code: `${code} 01.00.00`, name: 'Редуктор', items: asm }, drawings };
   }
@@ -330,7 +337,10 @@
         case 'shaft': { const L = g.segs.reduce((a, s) => a + s.l, 0), r = Math.max(...g.segs.map(s => (s.gear && s.gear.da ? Math.max(s.d, s.gear.da) : s.d) / 2)); return R3(0, L, r); }
         case 'wheel': case 'sprocket': { const h = Math.max(g.lst || 0, g.b || 0) / 2; return R3(-h, h, (g.da || g.De) / 2); }
         case 'wormwheel': { const h = Math.max(g.lst || 0, g.b || 0) / 2; return R3(-h, h, Math.max(g.daM || 0, g.da || 0) / 2); }
-        case 'bevel': { const d = g.delta * Math.PI / 180, xi = -g.b * Math.cos(d); return R3(xi, g.lst + xi, g.de / 2 + g.mte * Math.cos(d)); }
+        case 'bevel': {
+          if (g.prof && g.prof.length) { const xs = g.prof.map(q => q[0]), r = Math.max(...g.prof.map(q => q[1])); return R3(Math.min(...xs), Math.max(...xs), r); }
+          const d = g.delta * Math.PI / 180, xi = -g.b * Math.cos(d); return R3(xi, g.lst + xi, g.de / 2 + g.mte * Math.cos(d));
+        }
         case 'bearing': return R3(-g.B / 2, g.B / 2, g.D / 2);
         case 'cover': {
           const b = R3(-g.ls, g.tf, g.Df / 2);
@@ -354,10 +364,22 @@
             o.loops.forEach(l => (l.c ? [[l.c[0] - l.c[2], l.c[1] - l.c[2]], [l.c[0] + l.c[2], l.c[1] + l.c[2]]] : l.p).forEach(q => { b[c[0]] = Math.min(b[c[0]], q[0]); b[c[0] + 3] = Math.max(b[c[0] + 3], q[0]); b[c[1]] = Math.min(b[c[1]], q[1]); b[c[1] + 3] = Math.max(b[c[1] + 3], q[1]); }));
             b[n] = o.a; b[n + 3] = o.b; return b; };
           let B = null;
-          g.ops.filter(o => !o.cut).forEach(o => { const b = box(o); B = B ? B.map((v, i) => i < 3 ? Math.min(v, b[i]) : Math.max(v, b[i])) : b; });
-          // большие сквозные вырезы (срез по разъёму) обрезают габарит по нормали
-          g.ops.filter(o => o.cut).forEach(o => { const b = box(o), n = NRM[o.base], c = CAN[o.base];
-            if (c.every(i => b[i] <= B[i] + 0.01 && b[i + 3] >= B[i + 3] - 0.01)) { if (b[n] <= B[n] + 0.01 && b[n + 3] < B[n + 3]) B[n] = Math.max(B[n], b[n + 3]); else if (b[n + 3] >= B[n + 3] - 0.01 && b[n] > B[n]) B[n + 3] = Math.min(B[n + 3], b[n]); } });
+          // каждый элемент обрезается большими вырезами, которые перекрывают его целиком поперёк своей нормали (срез по разъёму):
+          // элемент целиком по ту сторону среза (стакан вала-шестерни в крышке) в габарит основания не входит
+          const cuts = g.ops.filter(o => o.cut).map(o => ({ b: box(o), n: NRM[o.base], c: CAN[o.base] }));
+          g.ops.forEach((o, k) => {
+            if (o.cut) return;
+            let b = box(o);
+            for (const ct of cuts) {
+              if (g.ops.indexOf(g.ops.find(q => q.cut && box(q).join() === ct.b.join())) < k) continue;   // вырез раньше элемента его не обрезает
+              const { n, c } = ct, cb = ct.b;
+              if (!c.every(i => cb[i] <= b[i] + 0.01 && cb[i + 3] >= b[i + 3] - 0.01)) continue;
+              if (cb[n] <= b[n] + 0.01 && cb[n + 3] >= b[n + 3] - 0.01) { b = null; break; }
+              if (cb[n] <= b[n] + 0.01 && cb[n + 3] > b[n]) b[n] = cb[n + 3];
+              else if (cb[n + 3] >= b[n + 3] - 0.01 && cb[n] < b[n + 3]) b[n + 3] = cb[n];
+            }
+            if (b) B = B ? B.map((v, i) => i < 3 ? Math.min(v, b[i]) : Math.max(v, b[i])) : b;
+          });
           return B.map(v => Math.round(v * 10) / 10);
         }
       }

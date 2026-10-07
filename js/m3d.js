@@ -737,8 +737,10 @@
       S.bores.filter(b => Math.abs((c === 0 ? (b.y1 + b.y2) : (b.x1 + b.x2)) / 2 - ax) < 0.5).forEach((b, i) => ops.push(cyl('расточка ⌀' + Math.round(2 * D) + ' ' + (i + 1), c, c === 0 ? b.x1 : b.y1, c === 0 ? b.x2 : b.y2, c === 0 ? [0, ax, 0] : [ax, 0, 0], D, true)));
     });
     // габариты стенок
-    const xW1 = Math.min(...S.cavs.map(c => c.x1)) - del, xW2 = Math.max(...S.cavs.map(c => c.x2)) + del;
     const yBot = Math.min(...S.cavs.map(c => c.y1)) - del;
+    // лапы — только под той частью основания, стенки которой доходят до опорной плиты (над мелкой частью у вала-шестерни лапы повисли бы в воздухе)
+    const deep = S.cavs.filter(c => c.y1 - del < yBot + pF + 1);
+    const xW1 = Math.min(...deep.map(c => c.x1)) - del, xW2 = Math.max(...deep.map(c => c.x2)) + del;
     const atS = S.cavs.map((c, j) => ({ c, h: cavZ[j] })).filter(q => q.c.y1 - del < ys + tf && q.c.y2 + del > ys - tf);
     const xa = Math.min(...atS.map(q => q.c.x1)) - del, xb = Math.max(...atS.map(q => q.c.x2)) + del, zW = Math.max(...atS.map(q => q.h)) + del;
     // фланцы разъёма — горизонтальная плита по контуру стенок в плоскости разъёма
@@ -850,6 +852,15 @@
       const L = findLantern(q => q[1] < ys && inOpsW(solidB, q), cands, [0, 1, 0], avoid);
       if (L) { lan = lanternBuild(L); lan.parts.forEach(p => { if (!HW.parts.some(q => q.id === p.id)) HW.parts.push(p); }); lan.items.forEach(it => HW.extra.push(it)); }
     }
+    // стакан вала-шестерни принадлежит крышке; если он чуть опускается ниже разъёма, в основании за фланцем осталась бы тонкая «стружка» —
+    // срезаем её от края фланца разъёма до торца стакана
+    S.inPlane.filter(s => s.tube).forEach(s => {
+      const c = s.horiz ? 0 : 1, t = s.tube, ax = s.o[1 - c], rr = (c === 0 ? t.y2 - t.y1 : t.x2 - t.x1) / 2;
+      if (c !== 0 || ax - rr >= ys - 0.05) return;
+      const ctr = [0, ax, 0], bossR = (s.b ? s.b.D / 2 : rr) + 2.1 * (H.dks || 8) + 6;
+      if (t.x2 > flR.x2) tubeCuts.push(cyl('срез стакана за фланцем', 0, flR.x2, t.x2 + 10, ctr, bossR + 1, true));
+      if (t.x1 < flR.x1) tubeCuts.push(cyl('срез стакана за фланцем', 0, t.x1 - 10, flR.x1, ctr, bossR + 1, true));
+    });
     const baseOps = ops.concat(sc.holeOps, plugOps, lan ? [lan.pad].concat(lan.cuts) : [], tubeCuts, [sXZ('срез по разъёму', ys, yTop + 300, [big], true)]);
     const coverOps = ops.filter(o => !/лапах|лапы/.test(o.n)).concat(sc.holeOps, [sXZ('срез по разъёму', yFeet - 300, ys, [big], true)]);
     let lid = null;

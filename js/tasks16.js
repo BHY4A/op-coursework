@@ -576,7 +576,14 @@
       const sl1 = H.del + s11.h + 10, sl3 = H.del + s3.h + 10, bc = gC.b * Math.cos(gC.d1deg * D2R);
       R.shafts = {
         I: [{ d: gC.dae1, l: Math.max(bc, 6), name: 'коническая шестерня z1', gear: { kind: 'bevel', da: gC.dae1, df: gC.dfe1, d: gC.de1, m: gC.mte, z: gC.z1, b: gC.b, delta: gC.d1deg } },
-          { d: d15, l: Math.max(5, a1 - bc / 2 - b1.T / 2 - ap1), name: 'участок вала' }, { d: d14, l: b1.T, name: 'подшипник A' }, { d: d15, l: Math.max(10, lI + 2 * ap1 - b1.T), name: 'распорный участок' },
+          ...(() => {
+            // за внешним торцом шестерни — проточка: вершины зубьев колеса выходят за торец шестерни на mte·cos δ2 на глубине de1/2 − mte·sin δ2
+            // от её оси; вал там должен быть тоньше, иначе колесо задевает вал
+            const lA = Math.max(5, a1 - bc / 2 - b1.T / 2 - ap1), tipR = gC.de1 / 2 - gC.mte * Math.sin(gC.d2deg * D2R), dn = Math.floor(2 * tipR - 2);
+            if (d15 <= dn) return [{ d: d15, l: lA, name: 'участок вала' }];
+            const ln = Math.max(3, Math.ceil(gC.mte * Math.cos(gC.d2deg * D2R) + 2));
+            return [{ d: dn, l: ln, name: 'проточка за шестернёй' }, { d: d15, l: Math.max(2, lA - ln), name: 'участок вала' }];
+          })(), { d: d14, l: b1.T, name: 'подшипник A' }, { d: d15, l: Math.max(10, lI + 2 * ap1 - b1.T), name: 'распорный участок' },
           { d: d14, l: b1.T, name: 'подшипник B' }, { d: d13, l: 4, name: 'под шайбу' }, { d: d12, l: 10, name: `резьба М${d12}×1,5`, thread: true }, { d: s11.d, l: sl1, name: 'под манжету' }, { d: dB1, l: lcp, name: 'выходной конец (муфта)', key: 'coupling1' }],
         II: [{ d: d2, l: b2.T, name: 'подшипник A' }, { d: d2pp, l: Math.max(5, y), name: 'бурт' }, { d: gT.da1, l: gT.b1, name: 'цилиндрическая шестерня', gear: { kind: 'spur', da: gT.da1, df: gT.df1, d: gT.d1, m: gT.m, z: gT.z1 } },
           { d: d2pp, l: y, name: 'бурт' }, { d: d2p, l: wC.lst, name: 'под ступицу конического колеса', key: 'wheelC' }, { d: d2, l: y + b2.T, name: 'втулка + подшипник D' }],

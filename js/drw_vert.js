@@ -79,8 +79,8 @@
     const ok = r => r.y2 - r.y1 > 0.2 && r.x2 - r.x1 > 0.2;
     const walls = g.S.cavs.map(c => clip({ x1: c.x1 - g.del, x2: c.x2 + g.del, y1: c.y1 - g.del, y2: c.y2 + g.del })).filter(ok);
     const bosses = g.S.bosses.map(b => b.c === 1 ? clip({ x1: b.ax - b.bossR, x2: b.ax + b.bossR, y1: Math.min(b.wallIn, b.face), y2: Math.max(b.wallIn, b.face) }) : clip({ x1: Math.min(b.wallIn, b.face), x2: Math.max(b.wallIn, b.face), y1: b.ax - b.bossR, y2: b.ax + b.bossR })).filter(ok);
-    // стакан: у основания нет торцевой части под фланцем (срез фланца стакана, 10 мм от торца — он весь в крышке)
-    const tube = g.S.inPlane.filter(s => s.tube).map(s => clip(part === 'base' ? Object.assign({}, s.tube, s.cartridge === 'hi' ? { x2: s.tube.x2 - 10 } : { x1: s.tube.x1 + 10 }) : s.tube)).concat(part === 'base' ? [] : g.S.inPlane.filter(s => s.tubeFl).map(s => clip(s.tubeFl))).filter(ok);
+    // стакан: у основания нет торцевой части под фланцем (срез фланца стакана, 10 мм от торца — он весь в крышке) и части за фланцем разъёма
+    const tube = g.S.inPlane.filter(s => s.tube).map(s => clip(part === 'base' ? { x1: Math.max(s.tube.x1 + (s.cartridge === 'hi' ? 0 : 10), g.flR.x1), x2: Math.min(s.tube.x2 - (s.cartridge === 'hi' ? 10 : 0), g.flR.x2), y1: s.tube.y1, y2: s.tube.y2 } : s.tube)).concat(part === 'base' ? [] : g.S.inPlane.filter(s => s.tubeFl).map(s => clip(s.tubeFl))).filter(ok);
     const fl = [clip({ x1: g.flR.x1, x2: g.flR.x2, y1: g.ys - g.tf, y2: g.ys + g.tf })].filter(ok);
     const feet = part === 'base' ? [{ x1: g.xW1 - g.K1, x2: g.xW2 + g.K1, y1: g.yFeet, y2: g.yBot + g.pF }] : [];
     return { walls, bosses, tube, fl, feet, cav: g.S.cavs.map(clip).filter(ok), lo, hi };
