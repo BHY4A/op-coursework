@@ -19,12 +19,14 @@
   var G = {
     'sapr-labs': '<path d="M5 22c4 0 4-12 8-12s4 8 7 8 3-4 7-4" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>',
     'krrs-robot': '<rect x="11" y="5" width="10" height="15" rx="2" fill="none" stroke="currentColor" stroke-width="2.2" transform="rotate(8 16 20)"/><circle cx="10" cy="23" r="3.6" fill="none" stroke="currentColor" stroke-width="2.2"/><circle cx="22" cy="23" r="3.6" fill="none" stroke="currentColor" stroke-width="2.2"/>',
-    'op-coursework': '<circle cx="12" cy="17" r="6.5" fill="none" stroke="currentColor" stroke-width="2.2"/><circle cx="23" cy="11" r="4" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M12 10.5v-2M12 25.5v-2M5.5 17h-2M20.5 17h-2" stroke="currentColor" stroke-width="2"/>'
+    'op-coursework': '<circle cx="12" cy="17" r="6.5" fill="none" stroke="currentColor" stroke-width="2.2"/><circle cx="23" cy="11" r="4" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M12 10.5v-2M12 25.5v-2M5.5 17h-2M20.5 17h-2" stroke="currentColor" stroke-width="2"/>',
+    'eco-pdv': '<path d="M5 27h22" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M9 27V15h5v12M18 27v-7l6 3v4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><circle cx="12.5" cy="10" r="2.4" fill="none" stroke="currentColor" stroke-width="1.9"/><circle cx="17.6" cy="7" r="2.9" fill="none" stroke="currentColor" stroke-width="1.9"/><circle cx="23.6" cy="5.4" r="2" fill="none" stroke="currentColor" stroke-width="1.9"/>'
   };
   var APPS = [
     { id: 'sapr-labs', name: 'Электропривод · ЛР 1–6', sub: 'Расчёт и моделирование ЭП с регуляторами', color: '#0a5aa8' },
     { id: 'krrs-robot', name: 'Робот-балансир · LQR', sub: 'Модель, пространство состояний, LQR', color: '#5a3ea8' },
-    { id: 'op-coursework', name: 'Основы проектирования · КП', sub: 'Расчёт привода и файлы для КОМПАС-3D', color: '#0b6e62' }
+    { id: 'op-coursework', name: 'Основы проектирования · КП', sub: 'Расчёт привода и файлы для КОМПАС-3D', color: '#0b6e62' },
+    { id: 'eco-pdv', name: 'Промышленная экология · ПДВ', sub: 'Рассеивание выбросов, Cmax и ПДВ', color: '#557313' }
   ];
   function icon(a, size) {
     return '<span class="suite-ic" style="--c:' + a.color + '"><svg width="' + size + '" height="' + size + '" viewBox="0 0 32 32" aria-hidden="true">' + G[a.id] + '</svg></span>';
