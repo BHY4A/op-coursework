@@ -26,7 +26,7 @@
     { id: 'sapr-labs', name: 'Электропривод · ЛР 1–6', sub: 'Расчёт и моделирование ЭП с регуляторами', color: '#0a5aa8' },
     { id: 'krrs-robot', name: 'Робот-балансир · LQR', sub: 'Модель, пространство состояний, LQR', color: '#5a3ea8' },
     { id: 'op-coursework', name: 'Основы проектирования · КП', sub: 'Расчёт привода и файлы для КОМПАС-3D', color: '#0b6e62' },
-    { id: 'eco-pdv', name: 'Промышленная экология · ПДВ', sub: 'Рассеивание выбросов, Cmax и ПДВ', color: '#557313' }
+    { id: 'eco-pdv', name: 'Промышленная экология · ПДВ', sub: 'Задачи 1.1–1.6: выбросы, ПДВ, ущерб', color: '#557313' }
   ];
   function icon(a, size) {
     return '<span class="suite-ic" style="--c:' + a.color + '"><svg width="' + size + '" height="' + size + '" viewBox="0 0 32 32" aria-hidden="true">' + G[a.id] + '</svg></span>';
