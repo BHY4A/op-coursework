@@ -1,6 +1,8 @@
 /* suite.js — общий для всех утилит файл (одинаковый в каждом репозитории):
  *  1) тема — одна на все утилиты и хаб (ключ suite-theme), ставится до отрисовки страницы, без мигания;
- *  2) меню «Утилиты» в шапке (кнопка #apps) — переход между утилитами и на хаб.
+ *  2) меню «Утилиты» в шапке (кнопка #apps) — переход между утилитами и на хаб;
+ *  3) доступность, одинаковая везде: прокручиваемые области (длинные формулы, таблицы) получают фокус с клавиатуры,
+ *     окна (.modal-back) удерживают фокус внутри и закрываются клавишей Esc (как кнопкой без акцента).
  * Подключается в <head> обычным (не defer) скриптом; у <html> — атрибут data-app с id текущей утилиты. */
 (function () {
   'use strict';
@@ -74,6 +76,39 @@
     window.addEventListener('scroll', function () { if (!pop.hidden) place(); }, { passive: true });
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', build); else build();
+
+  /* ---------- доступность ---------- */
+  var SCROLLERS = '.calc-math, .tbl, .check .body, figure.fig .fig-svg, .code pre.src';
+  function markScroll() {
+    Array.prototype.forEach.call(document.querySelectorAll(SCROLLERS), function (el) {
+      var cs = getComputedStyle(el), sc = function (v) { return v === 'auto' || v === 'scroll'; };
+      var over = (sc(cs.overflowX) && el.scrollWidth > el.clientWidth + 1) || (sc(cs.overflowY) && el.scrollHeight > el.clientHeight + 1);
+      if (over && !el.hasAttribute('tabindex')) { el.tabIndex = 0; el.setAttribute('data-sx', ''); }
+      else if (!over && el.hasAttribute('data-sx')) { el.removeAttribute('tabindex'); el.removeAttribute('data-sx'); }
+    });
+  }
+  var sxQ = 0;
+  function queueScroll() { if (sxQ) return; sxQ = requestAnimationFrame(function () { sxQ = 0; markScroll(); }); }
+  function a11y() {
+    var main = document.getElementById('main');
+    if (main && window.MutationObserver) new MutationObserver(queueScroll).observe(main, { childList: true, subtree: true });
+    window.addEventListener('resize', queueScroll); queueScroll();
+    document.addEventListener('keydown', function (e) {
+      var back = document.querySelector('.modal-back'); if (!back) return;
+      var box = back.querySelector('[role="dialog"]') || back;
+      if (e.key === 'Escape') {
+        var esc = box.querySelector('.modal-act .btn:not(.primary)');
+        if (esc) { e.preventDefault(); esc.click(); }
+      } else if (e.key === 'Tab') {
+        var f = Array.prototype.filter.call(box.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'), function (el) { return !el.disabled && el.offsetParent !== null; });
+        if (!f.length) return;
+        var i = f.indexOf(document.activeElement);
+        if (e.shiftKey && i <= 0) { e.preventDefault(); f[f.length - 1].focus(); }
+        else if (!e.shiftKey && (i === f.length - 1 || i === -1)) { e.preventDefault(); f[0].focus(); }
+      }
+    });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', a11y); else a11y();
 
   window.SUITE = { KEY: KEY, APPS: APPS, icon: icon };
 })();
