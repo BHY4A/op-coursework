@@ -10,7 +10,7 @@
   const pw = v => String(v === undefined || v === null ? '' : v).replace(/·10\^(-?\d+)/g, (m, e) => '·10<sup>' + e.replace('-', '−') + '</sup>');
 
   const TABS = [
-    { id: 'data', no: '◦', short: 'Данные', t: 'Исходные данные', s: 'Вариант, элементы, методика, документы' },
+    { id: 'data', no: '◦', short: 'Данные', t: 'Исходные данные', s: 'Параметры, элементы, методика, отчёт' },
     { id: 'kin', no: '1', short: 'Кинематика', t: 'Привод и кинематика', s: 'Исходные данные, двигатель, u, n, T' },
     { id: 'mat', no: '2', short: 'Материалы', t: 'Материалы', s: 'Допускаемые напряжения' },
     { id: 'gear', no: '3', short: 'Передачи', t: 'Передачи', s: 'Проектный и проверочный расчёт' },
@@ -107,9 +107,11 @@
     if (R && foot) foot.innerHTML = `<b>№ ${S.P.listNo} · задание ${S.P.task}, вариант ${S.P.v}</b><br>${esc(D.TASKS[S.P.task].short)}<br>P = ${fnum(S.P.Pout, 0)} кВт, n = ${fnum(S.P.nout, 0)} мин⁻¹<br>${esc(R.motor ? R.motor.type : '')}`;
   }
   function isEdited() { const d = defP(S.P); return ['Pout', 'nout', 'L', 'Kg', 'Kc'].some(k => +d[k] !== +S.P[k]) || JSON.stringify(d.load) !== JSON.stringify(S.P.load); }
-  function stamp() {
-    const P = S.P, R = S.R;
-    return `<table class="stamp" aria-label="Штамп"><tr><td class="k">№ по списку</td><td class="v">${P.listNo}</td><td class="k">Задание</td><td class="v">${P.task}</td></tr>
+  function stamp(tab) {
+    const P = S.P, R = S.R, m = TABS.find(t => t.id === tab) || TABS[0], n = TABS.filter(t => /^\d$/.test(t.no)).length;
+    const work = tab === 'data' ? 'Данные' : tab === 'kompas' ? 'КОМПАС-3D' : 'Раздел ' + m.no;
+    return `<table class="stamp" aria-label="Штамп"><tr><td class="k">Работа</td><td class="v">${work}</td><td class="k">Лист</td><td class="v">${/^\d$/.test(m.no) ? m.no : tab === 'data' ? 0 : '—'} / ${n}</td></tr>
+      <tr><td class="k">№ по списку</td><td class="v">${P.listNo}</td><td class="k">Задание</td><td class="v">${P.task}</td></tr>
       <tr><td class="k">Вариант</td><td class="v">${P.v}${isEdited() ? '*' : ''}</td><td class="k sym">P / n</td><td class="v">${fnum(P.Pout, 0)} / ${fnum(P.nout, 0)}</td></tr>
       <tr><td class="k">Двигатель</td><td class="v" colspan="3">${R && R.motor ? esc(R.motor.type) + ', ' + fnum(R.motor.P, 0) + ' кВт, ' + R.motor.n + ' мин⁻¹' : '—'}</td></tr></table>`;
   }
@@ -364,7 +366,7 @@
     main.innerHTML = `<article class="sheet">
       <header class="sheet-head"><div><div class="eyebrow">Задание ${P.task} · ${esc(task.short)}</div><h1>№ ${P.listNo} — задание ${P.task}, вариант ${P.v}</h1>
         <p class="lead">${esc(task.full)} Выберите номер по списку вверху страницы — задание и вариант определяются автоматически (1–10 → задание 1, 11–20 → задание 3, 21–26 → задание 6; вариант — последняя цифра, 0 → 10). Любое значение можно изменить: изменённые поля подсвечиваются.</p></div>
-        ${stamp()}
+        ${stamp('data')}
       </header>
       <div class="sheet-body rep data-page">
         <section class="dsec">
@@ -382,7 +384,7 @@
           <div class="fld"><label for="f-load"><span>График нагрузки: доли момента и времени (через «;», например «1 0,2; 0,8 0,3»)</span></label><input id="f-load" class="txt" value="${esc(P.load.map(([k, t]) => String(k).replace('.', ',') + ' ' + String(t).replace('.', ',')).join('; '))}" autocomplete="off"></div>
           <p class="dhint">Сейчас: ${loadTxt}. Сумма долей времени должна быть равна 1.</p>
           ${isT(6) ? fld('Db', 'D<sub>б</sub>', 'Диаметр приводного барабана', 'мм', O.Db || '', !!O.Db, 'По умолчанию 400 мм — как в примере привода ленточного конвейера [Ч, § 12.1, с. 252].', 'O') : ''}
-          <div class="dact"><button class="btn" id="reset-var">Сбросить к варианту ${P.v}</button><button class="btn" id="go-kin">Перейти к расчёту →</button></div>
+          <div class="dact"><button class="btn" id="reset-var">Сбросить к варианту ${P.v}</button><button class="btn" id="go-kin">Перейти к разделу 1 →</button></div>
           <details class="adv"><summary>Таблица вариантов задания ${P.task} (щелчок по строке выбирает вариант)</summary><div class="in"><div class="tbl var-table"><table><thead><tr><th class="num">Вариант</th><th class="num">P, кВт</th><th class="num">n, мин⁻¹</th></tr></thead><tbody>${vrows}</tbody></table></div><p class="dhint">Срок службы ${task.L} лет; K<sub>г</sub> = ${fnum(task.Kg, 0)}; K<sub>сут</sub> = ${fnum(task.Kc, 0)}.</p></div></details>
         </section>
         <section class="dsec">
@@ -452,10 +454,10 @@
           </div></details>
         </section>
         <section class="dsec">
-          <h2>4. Документы и файлы</h2>
+          <h2>4. Отчёт и файлы</h2>
           <h3>Титульный лист и основная надпись</h3>
           <div class="form-grid fg4">
-            ${tfld('student', 'Студент (Ф. И. О.)', 'Иванов И. И.')}${tfld('group', 'Группа', '2291-52')}${tfld('teacher', 'Руководитель проекта', 'Фамилия И. О.')}${tfld('normo', 'Нормоконтролёр', 'Фамилия И. О.')}
+            ${tfld('student', 'Студент (Ф. И. О.)', 'Иванов И. И.')}${tfld('group', 'Группа', '741-15')}${tfld('teacher', 'Руководитель проекта', 'Фамилия И. О.')}${tfld('normo', 'Нормоконтролёр', 'Фамилия И. О.')}
             ${tfld('dept', 'Кафедра', 'ОКПМ')}${tfld('discipline', 'Дисциплина', '')}${tfld('code', 'Обозначение (шифр)', codeDefault())}${tfld('year', 'Год', '')}
           </div>
           <div class="fld"><label for="t-topic"><span>Тема курсового проекта</span></label><input id="t-topic" data-tkey="topic" class="txt" value="${esc(S.T.topic || '')}" placeholder="${esc(D.TASKS[P.task].title)}" autocomplete="off"></div>
@@ -573,7 +575,7 @@
         }
         case 'check': h += `<div class="check ${it.ok ? '' : 'bad'}"><span class="mark">${it.ok ? '✓' : '!'}</span><div class="body">${tex(it.tex, false)}<div class="ct">${pw(refsWeb(it.t || ''))}</div></div></div>`; break;
         case 'table': h += `<div class="tbl"><table>${it.cap ? `<caption>${esc(it.cap)}</caption>` : ''}<thead><tr>${it.head.map(c => `<th>${pw(esc(c))}</th>`).join('')}</tr></thead><tbody>${it.rows.map(r => `<tr>${r.map(c => `<td>${pw(esc(c))}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`; break;
-        case 'fig': h += `<figure class="fig dg" id="fig-${it.id}"><div class="fig-svg">${figSvg(it)}</div><figcaption><span><b>Рисунок ${nums[it.id]}</b> — ${esc(it.title)}</span>${it.kind === 'scheme' ? '<span class="dhint-r">наведите на элемент — его описание</span>' : ''}</figcaption></figure>`; break;
+        case 'fig': h += `<figure class="fig dg" id="fig-${it.id}"><div class="fig-svg">${figSvg(it).replace('role="img"', `role="img" aria-label="${esc(it.title)}"`)}</div><figcaption><span><b>Рисунок ${nums[it.id]}</b> — ${esc(it.title)}</span>${it.kind === 'scheme' ? '<span class="dhint-r">наведите на элемент — его описание</span>' : ''}</figcaption></figure>`; break;
       }
     }
     return h;
@@ -694,7 +696,7 @@
     const meta = TABS.find(t => t.id === tab), k = TABS.findIndex(t => t.id === tab);
     const body = secs.map(s => renderItems(s.items, nums)).join('');
     main.innerHTML = `<article class="sheet">
-      <header class="sheet-head"><div><div class="eyebrow">Задание ${S.P.task} · вариант ${S.P.v} · ${esc(meta.t)}</div><h1>${esc(TAB_TITLE[tab] || meta.t)}</h1><p class="lead">${esc(leadText(tab))}</p></div>${stamp()}</header>
+      <header class="sheet-head"><div><div class="eyebrow">Курсовой проект · раздел ${meta.no}</div><h1>${esc(TAB_TITLE[tab] || meta.t)}</h1><p class="lead">${esc(leadText(tab))}</p></div>${stamp(tab)}</header>
       <div class="sheet-body rep"><div class="kpis">${kpis()}</div><p class="calc-hint">${ICON_COPY} у каждой формулы копирует её в формате MathML — в Word вставляется редактируемое уравнение (Ctrl+V). «TeX» копирует LaTeX. Ссылки в квадратных скобках: [М] — методичка, [Ч] — Чернавский, [АИР] — каталог двигателей.</p>
         <div class="opts chk-bar"><div class="opt"><div class="opt-t"><b>Сверка с ручным расчётом</b><span id="chk-sum">${CHK.on ? '' : 'Под каждой формулой появится поле для вашего значения: утилита сравнит его и подскажет причину расхождения — округление, другой двигатель, другая формула методики или ошибка в подстановке.'}</span></div><div class="opt-c" style="display:flex;gap:10px;align-items:center">${CHK.on ? '<button class="btn" id="chk-clr">Очистить</button>' : ''}<label class="sw"><input type="checkbox" id="chk-on" ${CHK.on ? 'checked' : ''}><span class="track" aria-hidden="true"></span><span class="sr">Сверка</span></label></div></div></div>
         ${tab === 'kin' ? motorAuditHtml() : ''}${body}
@@ -780,7 +782,7 @@
     const tok = ++kompasTok;
     if (keepY === undefined) {
       main.innerHTML = `<article class="sheet">
-        <header class="sheet-head"><div><div class="eyebrow">Задание ${S.P.task} · вариант ${S.P.v}</div><h1>Файлы для КОМПАС-3D v25</h1><p class="lead">Python-макросы строят 3D-модели деталей и сборку редуктора, рабочие чертежи с основной надписью и спецификацию. Для ручного построения — таблицы размеров и DXF-контуры.</p></div>${stamp()}</header>
+        <header class="sheet-head"><div><div class="eyebrow">Курсовой проект · файлы для КОМПАС</div><h1>Файлы для КОМПАС-3D v25</h1><p class="lead">Python-макросы строят 3D-модели деталей и сборку редуктора, рабочие чертежи с основной надписью и спецификацию. Для ручного построения — таблицы размеров и DXF-контуры.</p></div>${stamp('kompas')}</header>
         <div class="sheet-body rep"><div class="k-load" role="status" aria-live="polite"><span class="spinner"></span><div class="k-load-t"><b>Готовлю файлы для КОМПАС</b><small>3D-модели, проверка сборки, листы чертежей — несколько секунд</small><span class="k-bar"><i style="width:4%"></i></span></div></div>
         <div class="k-skel"><i></i><i></i><i></i><i class="w60"></i></div><div class="k-skel cards"><i></i><i></i><i></i></div></div></article>`;
     } else main.classList.add('k-busy');
@@ -808,10 +810,10 @@
     const files = K ? K.files(S.R, S.P, S.T) : [];
     const hints = K ? K.hints(S.R, S.P, S.T) : '';
     main.innerHTML = `<article class="sheet">
-      <header class="sheet-head"><div><div class="eyebrow">Задание ${S.P.task} · вариант ${S.P.v}</div><h1>Файлы для КОМПАС-3D v25</h1><p class="lead">Python-макросы строят 3D-модели деталей и сборку редуктора, рабочие чертежи с основной надписью и спецификацию. Для ручного построения — таблицы размеров и DXF-контуры.</p></div>${stamp()}</header>
+      <header class="sheet-head"><div><div class="eyebrow">Курсовой проект · файлы для КОМПАС</div><h1>Файлы для КОМПАС-3D v25</h1><p class="lead">Python-макросы строят 3D-модели деталей и сборку редуктора, рабочие чертежи с основной надписью и спецификацию. Для ручного построения — таблицы размеров и DXF-контуры.</p></div>${stamp('kompas')}</header>
       <div class="sheet-body rep">
         <h2>1. Как запустить макросы</h2>
-        <ol class="steps"><li>Установите обычный Python 3 с <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">python.org</a>. В первом окне установщика отметьте <b>Add python.exe to PATH</b>. Встроенный в КОМПАС Python не нужен: макросы управляют КОМПАСом снаружи, через его COM-интерфейс.</li><li>Скачайте архив и распакуйте его в папку без кириллицы в пути, например <code>C:\\KP\\</code>.</li><li>Один раз запустите <code>01_install_pywin32.bat</code>: он ставит пакет <code>pywin32</code>, через который Python связывается с КОМПАС. Нужен интернет.</li><li>Запустите <code>02_run_all.bat</code>. КОМПАС-3D откроется сам, если ещё не открыт; пока идёт построение, не работайте в нём. Можно запускать и отдельные макросы: <code>py 10_parts.py</code> и т. д.</li><li>Файлы <code>.m3d</code>, <code>.a3d</code>, <code>.cdw</code>, <code>.spw</code> сохраняются в папку <code>out</code> рядом со скриптами. Журнал выполнения — <code>out\\log.txt</code>.</li></ol>
+        <ol class="steps-n"><li>Установите обычный Python 3 с <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">python.org</a>. В первом окне установщика отметьте <b>Add python.exe to PATH</b>. Встроенный в КОМПАС Python не нужен: макросы управляют КОМПАСом снаружи, через его COM-интерфейс.</li><li>Скачайте архив и распакуйте его в папку без кириллицы в пути, например <code>C:\\KP\\</code>.</li><li>Один раз запустите <code>01_install_pywin32.bat</code>: он ставит пакет <code>pywin32</code>, через который Python связывается с КОМПАС. Нужен интернет.</li><li>Запустите <code>02_run_all.bat</code>. КОМПАС-3D откроется сам, если ещё не открыт; пока идёт построение, не работайте в нём. Можно запускать и отдельные макросы: <code>py 10_parts.py</code> и т. д.</li><li>Файлы <code>.m3d</code>, <code>.a3d</code>, <code>.cdw</code>, <code>.spw</code> сохраняются в папку <code>out</code> рядом со скриптами. Журнал выполнения — <code>out\\log.txt</code>.</li></ol>
         <div class="note warn">Макросы используют API КОМПАС (KompasAPI5/API7 через pywin32). Если какой-то шаг не выполнится, остальные продолжат работу, а в журнале будет указано, что построить вручную; размеры для ручного построения — в таблицах ниже и в DXF.</div>
         <h2>2. Состав: что строить</h2>
         <p>Снимите отметку, если элемент не нужен по заданию или методичке, — макросы его не построят, он пропадёт из сборки, архива и предпросмотра. Отметка «по заданию» — листы, которые требует задание на курсовой проект. Выбор сохраняется вместе с вариантом.</p>
@@ -1004,6 +1006,7 @@
     ta.remove();
   }
   function downloadBlob(name, blob) {
+    if (window.SUITE && SUITE.save) return SUITE.save(name, blob);   // общий механизм (suite.js): сайт или артефакт claude.ai
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click();
     setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1500);

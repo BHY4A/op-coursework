@@ -9,7 +9,7 @@
     const sz = opts.size || 28;
     const doc = new DOMParser().parseFromString(mathml, 'application/xml');
     const math = doc.documentElement;
-    const run = (text, sty) => text === '' ? '' : `<m:r>${sty ? (sty === 'p' && /[\u0400-\u04ff]/.test(text) ? '<m:rPr><m:nor/><m:sty m:val="p"/></m:rPr>' : `<m:rPr><m:sty m:val="${sty}"/></m:rPr>`) : ''}${RPR(sz)}<m:t xml:space="preserve">${xe(text)}</m:t></m:r>`;
+    const run = (text, sty) => text === '' ? '' : `<m:r>${sty === 'nor' ? '<m:rPr><m:nor/></m:rPr>' : sty ? `<m:rPr><m:sty m:val="${sty}"/></m:rPr>` : ''}${sty === 'nor' ? `<w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/><w:sz w:val="${sz}"/><w:szCs w:val="${sz}"/></w:rPr>` : RPR(sz)}<m:t xml:space="preserve">${xe(text)}</m:t></m:r>`;
     const kids = el => Array.from(el.childNodes).filter(n => n.nodeType === 1);
     const seq = els => els.map(conv).join('');
     const arg = el => conv(el);
@@ -26,7 +26,9 @@
         case 'mi': {
           const t = el.textContent, mv = el.getAttribute('mathvariant');
           if (mv === 'bold') return run(t, 'b');
-          if (mv === 'normal' || t.length > 1 || /[\u0370-\u03ff\u0400-\u04ff]/.test(t)) return run(t, 'p');   // ГОСТ 2.304: греческие и кириллица — прямые
+          if (/[\u0400-\u04ff]/.test(t)) return run(t, 'nor');
+          if (mv === 'normal' && /^[A-Za-z]+$/.test(t)) return run(t, 'nor');                    // \mathrm{CO}, \mathrm{C} — химические символы прямым шрифтом в любом редакторе
+          if (mv === 'normal' || t.length > 1 || /[\u0370-\u03ff]/.test(t)) return run(t, 'p');   // ГОСТ 2.304: греческие и кириллица — прямые
           return run(t);
         }
         case 'mn': return run(el.textContent, 'p');
@@ -35,7 +37,7 @@
           if (t === '⁡' || t === '⁢') return '';
           return run(t, 'p');
         }
-        case 'mtext': return run(el.textContent.replace(/ /g, ' '), 'p');
+        case 'mtext': return run(el.textContent.replace(/ /g, ' '), 'nor');
         case 'ms': return run(el.textContent, 'p');
         case 'mspace': {
           const w = parseFloat(el.getAttribute('width') || '0');
@@ -69,6 +71,12 @@
       let out = '';
       for (let i = 0; i < list.length; i++) {
         const el = list[i];
+        // десятичная запятая: 0 , 88 → «0,88» одним числом (без пробела после запятой)
+        if (el.localName === 'mn' && list[i + 2] && list[i + 1].textContent === ',' && list[i + 2].localName === 'mn') {
+          let t = el.textContent, j = i;
+          while (list[j + 2] && list[j + 1].textContent === ',' && list[j + 2].localName === 'mn' && !/,/.test(t)) { t += ',' + list[j + 2].textContent; j += 2; }
+          out += run(t, 'p'); i = j; continue;
+        }
         if (el.localName === 'mo' && el.getAttribute('fence') === 'true' && isOpen(el.textContent)) {
           // ищем парную закрывающую на том же уровне
           let depth = 0, j = -1;
