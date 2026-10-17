@@ -279,6 +279,11 @@
         const dv = root.DRWDRIVE && root.DRWDRIVE.driveSheet(R, P, T || {}, specs(R, P, T || {}, { formats })[1]);
         if (dv) { const code = codeOf(P, T || {}); out.splice(1, 0, Object.assign(dv, { code: `${code} 00.00.00 ВО`, name: dv.name + '\n' + dv.nameSub, material: '', mass: '' })); formats[dv.id] = 'А1'; }
       } catch (e) { console.error(e); }
+      try {
+        // эскиз общего вида — только из чисел расчёта (без 3D-модели), для сдачи после компоновки (пп. 1.9–1.10)
+        const ds = root.DRWSKETCH && root.DRWSKETCH.sketchSheet(R, P, T || {}, specs(R, P, T || {}, { formats })[1]);
+        if (ds) { const code = codeOf(P, T || {}); const i = out.findIndex(d => d.id === 'obshiy_vid'); out.splice(i >= 0 ? i + 1 : 1, 0, Object.assign(ds, { code: `${code} 00.00.00 ВО`, name: ds.name + '\n' + ds.nameSub, material: '', mass: '' })); formats[ds.id] = 'А1'; }
+      } catch (e) { console.error(e); }
       det.forEach(d => out.push(d));
       SHEETS.set(R, { key, v: { list: out, formats } });
       return { list: out, formats };

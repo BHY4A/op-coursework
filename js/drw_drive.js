@@ -234,9 +234,9 @@
     return { res, items, axZ, zM0 };
   }
 
-  function driveSheet(R, P, T, drvSpec) {
-    const L = layout(R, P, T); if (!L) return null;
-    const { F } = L;
+  /* общая сборка листа общего вида: виды → размеры → позиции → техтребования и характеристика → раскладка на А1.
+     build.views(k) → { res: { front: { sh }, top: { sh } }, items }, build.dims(V, k) — размеры на видах */
+  function compose(R, P, T, drvSpec, build, meta) {
     const findPos = re => { let p = ''; drvSpec.sections.forEach(sc => sc.items.forEach(it => { if (!p && it.pos && re.test(it.name)) p = it.pos; })); return p; };
     const POS = { red: findPos(/^Редуктор/), frame: findPos(/^Рама/), drum: findPos(/барабан/), motor: findPos(/Электродвигатель/), coupling: findPos(/Муфта/), chain: findPos(/^Цепь/) };
     const K = R.K || {};
@@ -247,8 +247,34 @@
       ...(R.chn ? [`3. Звёздочки цепной передачи установить в одной плоскости; отклонение — не более 0,2 мм на 100 мм межосевого расстояния. Стрела провисания цепи ${nf(0.02 * R.chn.a, 0)} мм.`] : []),
       `${R.chn ? 4 : 3}. Ограждения муфты${R.chn ? ' и цепной передачи' : ''} условно не показаны.`, `${R.chn ? 5 : 4}. Раму крепить к полу фундаментными болтами М${(R.H && R.H.d1) || 16}.`];
     for (const [k, kt] of [[0.4, '1:2,5'], [0.25, '1:4'], [0.2, '1:5'], [0.1, '1:10']]) for (const land of [true, false]) {
-      const V = views(R, P, T, L, k);
-      // размеры
+      const V = build.views(k);
+      const fr = V.res.front.sh, tp = V.res.top.sh;
+      build.dims(V, k);
+      // позиции
+      const pl = (vw, sh) => root.DRWASM.positions(sh, V.items[vw].map(it => Object.assign({ pos: POS[it.kind] || '' }, it)).filter((it, i, arr) => it.pos && arr.findIndex(q => q.pos === it.pos) === i));
+      pl('front', fr); pl('top', tp);
+      if (build.post) build.post(V, k);
+      const sh = new Sheet('A1', land), f = sh.frame;
+      sh.occupy(sh.stamp, 2); sh.occupy(sh.reserved(), 2);
+      const W = 185, hT = (arr) => { let n = 0; arr.forEach(t => { n += C.wrap(String(t), W - 8, 3.5).length; }); return n * 3.5 * 1.65; };
+      let y0 = sh.stamp.y2 + 8;
+      sh.notes(sh.stamp.x1 + 2, y0, W - 4, req, { title: 'Технические требования' }); const rq = { x1: sh.stamp.x1, y1: y0 - 2, x2: f.x2 - 2, y2: y0 + hT(req) + 9 }; sh.occupy(rq, 2);
+      y0 = rq.y2 + 8;
+      sh.notes(sh.stamp.x1 + 2, y0, W - 4, tech, { title: 'Техническая характеристика' }); sh.occupy({ x1: sh.stamp.x1, y1: y0 - 2, x2: f.x2 - 2, y2: y0 + hT(tech) + 9 }, 2);
+      const fb = fr.bbox(0), tb = tp.bbox(0), sL = Math.max(0, fb.x1 - tb.x1);   // вид сверху шире слева — сдвинуть оба вправо
+      const p1 = DR.placeGroup(sh, fr.p, { near: [f.x1 + 15 + sL + (fb.x2 - fb.x1) / 2, f.y2 - 15 - (fb.y2 - fb.y1) / 2] });
+      if (!p1) continue;
+      const p2 = DR.placeGroup(sh, tp.p, { fixX: p1.dx, near: [0, p1.box.y1 - 12 - (tb.y2 - tb.y1) / 2] });
+      if (!p2) continue;
+      return { id: meta.id, file: meta.file, name: (root.DATA.TASKS[P.task] || {}).title || 'Привод', nameSub: meta.nameSub, scale: kt, fmt: 'A1', landscape: land, sh };
+    }
+    return null;
+  }
+
+  function driveSheet(R, P, T, drvSpec) {
+    const L = layout(R, P, T); if (!L) return null;
+    const { F } = L;
+    return compose(R, P, T, drvSpec, { views: k => views(R, P, T, L, k), dims: (V, k) => {
       const fr = V.res.front.sh, tp = V.res.top.sh;
       {
         const b = fr.geoBox();
@@ -267,25 +293,8 @@
         tp.attempt([[-14, 14], [-14, -14], [14, -14]].map(([dx, dy]) => () => tp.leader(h.fx * k + Math.sign(dx) * F.dF / 2 * k * 0.7, -h.fy * k + Math.sign(dy) * F.dF / 2 * k * 0.7, h.fx * k + dx, -h.fy * k + dy, `⌀${F.dF}`, `${F.floor.length} отв.`, { side: dx > 0 ? 'r' : 'l' })));
         if (R.chn) { /* межосевое расстояние цепной передачи */ }
       }
-      // позиции
-      const pl = (vw, sh) => root.DRWASM.positions(sh, V.items[vw].map(it => Object.assign({ pos: POS[it.kind] || '' }, it)).filter((it, i, arr) => it.pos && arr.findIndex(q => q.pos === it.pos) === i));
-      pl('front', fr); pl('top', tp);
-      const sh = new Sheet('A1', land), f = sh.frame;
-      sh.occupy(sh.stamp, 2); sh.occupy(sh.reserved(), 2);
-      const W = 185, hT = (arr) => { let n = 0; arr.forEach(t => { n += C.wrap(String(t), W - 8, 3.5).length; }); return n * 3.5 * 1.65; };
-      let y0 = sh.stamp.y2 + 8;
-      sh.notes(sh.stamp.x1 + 2, y0, W - 4, req, { title: 'Технические требования' }); const rq = { x1: sh.stamp.x1, y1: y0 - 2, x2: f.x2 - 2, y2: y0 + hT(req) + 9 }; sh.occupy(rq, 2);
-      y0 = rq.y2 + 8;
-      sh.notes(sh.stamp.x1 + 2, y0, W - 4, tech, { title: 'Техническая характеристика' }); sh.occupy({ x1: sh.stamp.x1, y1: y0 - 2, x2: f.x2 - 2, y2: y0 + hT(tech) + 9 }, 2);
-      const fb = fr.bbox(0), tb = tp.bbox(0), sL = Math.max(0, fb.x1 - tb.x1);   // вид сверху шире слева — сдвинуть оба вправо
-      const p1 = DR.placeGroup(sh, fr.p, { near: [f.x1 + 15 + sL + (fb.x2 - fb.x1) / 2, f.y2 - 15 - (fb.y2 - fb.y1) / 2] });
-      if (!p1) continue;
-      const p2 = DR.placeGroup(sh, tp.p, { fixX: p1.dx, near: [0, p1.box.y1 - 12 - (tb.y2 - tb.y1) / 2] });
-      if (!p2) continue;
-      return { id: 'obshiy_vid', file: 'privod_VO.cdw', name: (root.DATA.TASKS[P.task] || {}).title || 'Привод', nameSub: 'Чертёж общего вида', scale: kt, fmt: 'A1', landscape: land, sh };
-    }
-    return null;
+    } }, { id: 'obshiy_vid', file: 'privod_VO.cdw', nameSub: 'Чертёж общего вида' });
   }
 
-  root.DRWDRIVE = { driveSheet, projectReducer, Raster };
+  root.DRWDRIVE = { driveSheet, compose, projectReducer, Raster };
 })(typeof window !== 'undefined' ? window : globalThis);
