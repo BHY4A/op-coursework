@@ -12,6 +12,7 @@
   /* верхние индексы «⁻¹» и т. п.: в шрифте ГОСТ (и в КОМПАС) таких знаков нет — рисуются отдельной надписью 0,7h над строкой */
   const SUP = { '⁻': '-', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
   const SUP_RE = /[⁻⁰¹⁴-⁹]/;
+  let TGSEQ = 0;
   function cw(c) {
     if (SUP[c]) return 0.7 * cw(SUP[c]);
     if (c === ' ') return 0.38;
@@ -70,11 +71,17 @@
       const c = Math.cos(ang * D2R), sn = Math.sin(ang * D2R);
       const P = (u, v) => [x + (fx + u) * c - (fy + v) * sn, y + (fx + u) * sn + (fy + v) * c];
       const wb = tw(dv.base, h);
-      let q = P(0, 0); this.text(q[0], q[1], dv.base, { h, ang });
+      let q = P(0, 0);
+      // для КОМПАС — один текст с компонентами «верхнее/нижнее отклонение» (отдельные надписи ниже — запасной вариант)
+      const tg = ++TGSEQ, i0 = this.p.length;
+      const runs = [[dv.base, 's']].concat(dv.up !== undefined ? [[dv.up, 'up']] : []).concat(dv.lo !== undefined ? [[dv.lo, 'lo']] : []).concat([['', 'end']]);
+      this.p.push({ t: 'D', k: 'T', a: [r3(q[0]), r3(q[1]), h, ang], s, runs, tg });
+      const done = () => { for (let i = i0 + 1; i < this.p.length; i++) if (this.p[i].t === 'T') this.p[i].tg = tg; return this; };
+      this.text(q[0], q[1], dv.base, { h, ang });
       if (dv.up !== undefined && dv.lo !== undefined) { q = P(wb + 0.4, h * 0.55); this.text(q[0], q[1], dv.up, { h: h * 0.7, ang }); q = P(wb + 0.4, -h * 0.15); this.text(q[0], q[1], dv.lo, { h: h * 0.7, ang }); }
       else if (dv.up !== undefined) { q = P(wb + 0.4, h * 0.45); this.text(q[0], q[1], dv.up, { h: h * 0.7, ang }); }
       else { q = P(wb + 0.4, -h * 0.1); this.text(q[0], q[1], dv.lo, { h: h * 0.7, ang }); }
-      return this;
+      return done();
     }
     if (SUP_RE.test(s)) {
       // строка с верхним индексом: обычные части и индекс — отдельными надписями (как предельные отклонения)
@@ -87,11 +94,16 @@
       const c = Math.cos(ang * D2R), sn = Math.sin(ang * D2R);
       const P = (u, v) => [x + (fx + u) * c - (fy + v) * sn, y + (fx + u) * sn + (fy + v) * c];
       let u = 0;
+      // для КОМПАС — один текст: индекс — компонентом «верхнее отклонение» (так в КОМПАС пишут степени: мин⁻¹, м³)
+      const tg = ++TGSEQ, i0 = this.p.length, q0 = P(0, 0), kr = [];
+      runs.forEach(([t, isS]) => { if (isS) kr.push([t, 'up'], ['', 'end']); else kr.push([t, 's']); });
+      this.p.push({ t: 'D', k: 'T', a: [r3(q0[0]), r3(q0[1]), h, ang], s, runs: kr, tg });
       runs.forEach(([t, isS]) => {
         const hh = isS ? h * 0.7 : h, q = P(u + (isS ? 0.4 : 0), isS ? h * 0.5 : 0);
         this.text(q[0], q[1], t, { h: hh, ang });
         let ww = 0; for (const ch of t) ww += cw(ch); u += ww * hh * 1.17 + (isS ? 0.6 : 0);
       });
+      for (let i = i0 + 1; i < this.p.length; i++) if (this.p[i].t === 'T') this.p[i].tg = tg;
       return this;
     }
     const w = tw(s, h), an = o.anchor || 'lb';
@@ -325,7 +337,7 @@
         lines.push(r3(p1[0]), r3(p1[1]), r3(p2[0]), r3(p2[1]));
       }
     }
-    if (lines.length) this.p.push({ t: 'H', l: lines, rings: rings.map(r => r.map(p => [r3(p[0]), r3(p[1])])) });
+    if (lines.length) this.p.push({ t: 'H', l: lines, rings: rings.map(r => r.map(p => [r3(p[0]), r3(p[1])])), ang, step });
     return this;
   };
   /* вариант штриховки для соседних деталей разреза (ГОСТ 2.306: разный наклон и шаг) */
@@ -384,6 +396,9 @@
     if (!o.noExt2 && Math.abs(yd - y2) > 0.5) this.line(x2, y2 + (up ? up * (o.gap || 0) : 0), x2, yd + (up || (yd > y2 ? 1 : -1)) * EXT, 2);
     const inside = len >= 2 * AR + 2;
     const fits = len >= w + 2 * AR + 2;
+    // что измеряет размер — для КОМПАС (размер создаётся объектом «Линейный размер», а не отрезками); ai — стрелки внутри
+    const D = { t: 'D', k: 'H', a: [x1, o.noExt1 ? yd : y1, x2, o.noExt2 ? yd : y2, yd], s: String(text), h, ai: inside ? 1 : 0 };
+    const ret = () => { this.p.push(D); return this; };
     let tx = (x1 + x2) / 2, anchor = 'cb';
     if (o.textX !== undefined) { tx = o.textX; anchor = 'lb'; }
     if (inside) {
@@ -393,15 +408,15 @@
         const fn = d => o.out === 'left' ? () => { this.line(x1 - d - w - 3, yd, x1, yd, 2); this.text(x1 - 1.5 - d, yd + 0.9, text, { h, anchor: 'rb' }); }
           : () => { this.line(x2, yd, x2 + d + w + 3, yd, 2); this.text(x2 + 1.5 + d, yd + 0.9, text, { h, anchor: 'lb' }); };
         this.textFree(ds.map(fn), i0);
-        return this;
+        return ret();
       }
-      if (!fits && o.textX === undefined) { this.textFree(outH(this, x1, x2, yd, 0, text, h, w, o.side === 'left'), i0); return this; }
+      if (!fits && o.textX === undefined) { this.textFree(outH(this, x1, x2, yd, 0, text, h, w, o.side === 'left'), i0); return ret(); }
     } else {
       const ext = 7;
       this.line(x1 - ext, yd, x2 + ext, yd, 2); this.p[this.p.length - 1].dl = 1; this.arrow(x1, yd, 0); this.arrow(x2, yd, 180);
       if (o.textX === undefined) {
         // малый размер: текст над размерной линией между выносными (если помещается по высоте ряда) или на продолжении линии
-        this.textFree(outH(this, x1, x2, yd, ext, text, h, w, o.side === 'left'), i0); return this;
+        this.textFree(outH(this, x1, x2, yd, ext, text, h, w, o.side === 'left'), i0); return ret();
       }
     }
     if (inside && fits && o.textX === undefined) {
@@ -409,9 +424,7 @@
       for (let k = 1; k * step <= span + 1e-9; k++) ds.push(k * step, -k * step);
       this.textFree(ds.map(d => () => this.text(tx + d, yd + 0.9, text, { h, anchor })), i0);
     } else this.text(tx, yd + 0.9, text, { h, anchor });
-    // что измеряет размер — для КОМПАС (размер создаётся объектом «Линейный размер», а не отрезками)
-    this.p.push({ t: 'D', k: 'H', a: [x1, o.noExt1 ? yd : y1, x2, o.noExt2 ? yd : y2, yd], s: String(text), h });
-    return this;
+    return ret();
   };
   /* вертикальный размер, размерная линия на абсциссе xd; текст слева от линии, снизу вверх */
   S.dimV = function (x1, y1, x2, y2, xd, text, o) {
@@ -427,6 +440,8 @@
     if (!o.noExt1 && Math.abs(xd - x1) > 0.5) this.line(x1, y1, xd + (rt || (xd > x1 ? 1 : -1)) * EXT, y1, 2);
     if (!o.noExt2 && Math.abs(xd - x2) > 0.5) this.line(x2, y2, xd + (rt || (xd > x2 ? 1 : -1)) * EXT, y2, 2);
     const inside = len >= 2 * AR + 2, fits = len >= w + 2 * AR + 2;
+    const D = { t: 'D', k: 'V', a: [o.noExt1 ? xd : x1, y1, o.noExt2 ? xd : x2, y2, xd], s: String(text), h, ai: inside ? 1 : 0 };
+    const ret = () => { this.p.push(D); return this; };
     let ty = (y1 + y2) / 2, anchor = 'cb';
     if (o.textY !== undefined) { ty = o.textY; anchor = 'lb'; }
     if (inside) {
@@ -437,20 +452,19 @@
         const fn = d => o.out === 'below' ? () => { this.line(xd, y1 - d - w - 3, xd, y1, 2); this.text(xd - 0.9, y1 - 1.5 - d, text, { h, anchor: 'rb', ang: 90 }); }
           : () => { this.line(xd, y2, xd, y2 + d + w + 3, 2); this.text(xd - 0.9, y2 + 1.5 + d, text, { h, anchor: 'lb', ang: 90 }); };
         this.textFree(ds.map(fn), i0);
-        return this;
-      } else if (!fits && o.textY === undefined) { this.textFree(outV(this, xd, y1, y2, 0, text, h, w, o.side === 'below'), i0); return this; }
+        return ret();
+      } else if (!fits && o.textY === undefined) { this.textFree(outV(this, xd, y1, y2, 0, text, h, w, o.side === 'below'), i0); return ret(); }
     } else {
       const ext = 7;
       this.line(xd, y1 - ext, xd, y2 + ext, 2); this.p[this.p.length - 1].dl = 1; this.arrow(xd, y1, 90); this.arrow(xd, y2, 270);
-      if (o.textY === undefined) { this.textFree(outV(this, xd, y1, y2, ext, text, h, w, o.side === 'below'), i0); return this; }
+      if (o.textY === undefined) { this.textFree(outV(this, xd, y1, y2, ext, text, h, w, o.side === 'below'), i0); return ret(); }
     }
     if (inside && fits && o.textY === undefined && !o.out) {
       const span = (len - w - 2 * AR - 1) / 2, step = Math.max(1.5, span / 6), ds = [0];
       for (let k = 1; k * step <= span + 1e-9; k++) ds.push(k * step, -k * step);
       this.textFree(ds.map(d => () => this.text(xd - 0.9, ty + d, text, { h, anchor, ang: 90 })), i0);
     } else this.text(xd - 0.9, ty, text, { h, anchor, ang: 90 });
-    this.p.push({ t: 'D', k: 'V', a: [o.noExt1 ? xd : x1, y1, o.noExt2 ? xd : x2, y2, xd], s: String(text), h });
-    return this;
+    return ret();
   };
   /* диаметр с обрывом размерной линии (вторая сторона не изображена или в разрезе с пазом): стрелка только у точки (x, y1),
      линия продолжается за ось до yEnd; текст вдоль линии (ГОСТ 2.307, п. 2.10) */
@@ -463,6 +477,22 @@
     for (let yy = lo + AR + 1; yy + w <= hi - 0.5 + 1e-9; yy += 1.5) ds.push(yy);
     if (!ds.length) ds.push(lo + AR + 1);
     this.textFree(ds.map(yy => () => this.text(x - 0.9, yy, text, { h, anchor: 'lb', ang: 90 })), i0);
+    // для КОМПАС — объект «Линейный размер с обрывом»
+    this.p.push({ t: 'D', k: 'BR', a: [r3(x), r3(y1), r3(x), r3(yEnd)], s: String(text), h });
+    return this;
+  };
+  /* размер, параллельный отрезку p1–p2 (наклонный), размерная линия на расстоянии off по нормали (nx, ny); ta — угол надписи */
+  S.dimAligned = function (p1, p2, nx, ny, off, text, ta, o) {
+    o = o || {};
+    const h = o.h || 3.5, i0 = this.p.length, a = Math.atan2(p2[1] - p1[1], p2[0] - p1[0]) / D2R;
+    this.line(p1[0] + nx, p1[1] + ny, p1[0] + nx * (off + 2), p1[1] + ny * (off + 2), 2).line(p2[0] + nx, p2[1] + ny, p2[0] + nx * (off + 2), p2[1] + ny * (off + 2), 2);
+    const q1 = [p1[0] + nx * off, p1[1] + ny * off], q2 = [p2[0] + nx * off, p2[1] + ny * off];
+    this.line(q1[0], q1[1], q2[0], q2[1], 2); this.arrow(q1[0], q1[1], 180 + a); this.arrow(q2[0], q2[1], a);
+    this.text((q1[0] + q2[0]) / 2 + nx * 0.8, (q1[1] + q2[1]) / 2 + ny * 0.8, text, { h, ang: ta === undefined ? a : ta, anchor: 'cb' });
+    // для КОМПАС — «Линейный размер» с ориентацией параллельно объекту
+    const pg = 'al' + (++TGSEQ);
+    for (let i = i0; i < this.p.length; i++) this.p[i].pg = pg;
+    this.p.push({ t: 'D', k: 'PL', a: [r3(p1[0]), r3(p1[1]), r3(p2[0]), r3(p2[1]), r3((q1[0] + q2[0]) / 2), r3((q1[1] + q2[1]) / 2)], s: String(text), h, pg });
     return this;
   };
   /* угловой размер: вершина (x, y), лучи a1→a2 (против часовой), радиус дуги R */
@@ -473,6 +503,8 @@
     this.arrow(x + R * Math.cos(a2 * D2R), y + R * Math.sin(a2 * D2R), a2 + 90);
     const am = (a1 + a2) / 2, tx = x + (R + 1.5) * Math.cos(am * D2R), ty = y + (R + 1.5) * Math.sin(am * D2R);
     this.text(tx, ty, text, { h: o.h || 3.5, anchor: Math.cos(am * D2R) >= 0 ? 'lm' : 'rm' });
+    // для КОМПАС — объект «Угловой размер»
+    this.p.push({ t: 'D', k: 'AN', a: [r3(x), r3(y), r3(a1), r3(a2), r3(R)], s: String(text), h: o.h || 3.5 });
     return this;
   };
   /* выноска с полкой: от точки (x, y) к началу полки (sx, sy); texts — строки над и под полкой */
@@ -488,6 +520,8 @@
     const tx = side === 'r' ? sx + 0.75 : ex + 0.75;
     if (above) this.text(tx, sy + 0.9, above, { h });
     if (below) this.text(tx, sy - 0.9 - h, below, { h });
+    // для КОМПАС — объект «Линия-выноска»: точка (x, y), начало полки (sx, sy), надписи над и под полкой
+    this.p.push({ t: 'D', k: 'L', a: [r3(x), r3(y), r3(sx), r3(sy)], s: String(above || ''), s2: String(below || ''), h, side, end: o.dot ? 'dot' : o.arrow === false ? 'none' : 'arrow' });
     return this;
   };
 
@@ -505,6 +539,9 @@
     if (o.open) this.line(pL[0], pL[1], T(h * t, h)[0], T(h * t, h)[1], 1);
     if (o.circle) { const cc = T(0, h * 0.55); this.circle(cc[0], cc[1], h * 0.3, 1); }
     if (val) { this.line(pR[0], pR[1], pE[0], pE[1], 1); const tp = T(H * t + 0.6, H + 0.9); this.text(tp[0], tp[1], val, { h, ang: o.rot || 0 }); }
+    // для КОМПАС — объект «Шероховатость» (кроме знака в составе выноски и знака в углу листа)
+    const st = this._annStack || [];
+    if (st.length === 1 && st[0] === 'rough') this.p.push({ t: 'D', k: 'R', a: [r3(x), r3(y), 0, 0], s: String(val || ''), h, rot: o.rot || 0, type: o.circle ? 2 : o.open ? 1 : 0 });
     return this;
   };
   /* знак шероховатости на полке линии-выноски со стрелкой к поверхности (x, y) */
@@ -518,6 +555,8 @@
     this.line(x, y, sx, sy, 2).line(sx, sy, ex, sy, 2);
     this.arrow(x, y, Math.atan2(y - sy, x - sx) / D2R);
     this.rough(Math.min(sx, ex) + h * t + 1, sy, val, { h, free: true });
+    // для КОМПАС — объект «Шероховатость» с линией-выноской
+    this.p.push({ t: 'D', k: 'RL', a: [r3(x), r3(y), r3(sx), r3(sy)], s: String(val || ''), h, side: side > 0 ? 'r' : 'l', type: o.circle ? 2 : o.open ? 1 : 0 });
     return this;
   };
   /* шероховатость остальных поверхностей в правом верхнем углу: «Ra 6,3 (√)» */
@@ -535,6 +574,8 @@
     const tipx = bx1 - 4 - H * t - wv - 1.2, tipy = y2 - H - 1.5;
     // o.cast — поверхности, не обрабатываемые по данному чертежу (литьё): знак с кружком без параметра (ГОСТ 2.309-73, ред. 2003)
     this.rough(tipx, tipy, o.cast ? '' : val, { h, free: true, circle: !!o.cast });
+    // для КОМПАС — «Неуказанная шероховатость» документа (знак в правом верхнем углу со знаком в скобках)
+    this.p.push({ t: 'D', k: 'Q', a: [r3(tipx), r3(tipy), 0, 0], s: o.cast ? '' : String(val), h, type: o.cast ? 2 : 0 });
     return this;
   };
 
@@ -579,6 +620,9 @@
       const a = pts[pts.length - 2], b = pts[pts.length - 1];
       this.arrow(b[0], b[1], Math.atan2(b[1] - a[1], b[0] - a[0]) / D2R);
     }
+    // для КОМПАС — объект «Допуск формы»: рамка (левый нижний угол), знак, значение, база, стрелка к поверхности
+    const to = o.to ? (this._lastAnch || [o.to])[0] : null;
+    this.p.push({ t: 'D', k: 'F', a: [r3(x), r3(y), to ? r3(to[0]) : 0, to ? r3(to[1]) : 0], s: cells.slice(1).join(' '), cells: cells.slice(1).map(String), sym: cells[0], h, to: !!to, via: (o.via || []).map(p => [r3(p[0]), r3(p[1])]), from: o.from || 'l' });
     return { w: W, h: hh };
   };
   /* база: треугольник на поверхности (x, y), направление выноса ang, буква в квадрате */
@@ -592,6 +636,8 @@
     const bx = ex + c * 3.5, by = ey + s * 3.5;
     this.rect(bx - 3.5, by - 3.5, bx + 3.5, by + 3.5, 1);
     this.text(bx, by, letter, { h: 3.5, anchor: 'cm' });
+    // для КОМПАС — объект «Обозначение базы»: знак на поверхности, конец выноски у рамки, буква
+    this.p.push({ t: 'D', k: 'B', a: [r3(x), r3(y), r3(ex), r3(ey)], s: String(letter), h: 3.5 });
     return this;
   };
 
@@ -604,6 +650,8 @@
     for (const yy of [y2 + g + L - 1, y1 - g - L + 1]) { this.line(x, yy, x + dx * 6, yy, 2); this.arrow(x + dx * 7.5, yy, dir, 3, 1); }
     this.text(x + dx * 4.5, y2 + g + L + 1.2, letter, { h: 5, anchor: 'cb' });
     this.text(x + dx * 4.5, y1 - g - L - 1.2, letter, { h: 5, anchor: 'ct' });
+    // для КОМПАС — объект «Линия разреза/сечения» (сверху вниз; стрелки — в сторону взгляда)
+    this.p.push({ t: 'D', k: 'C', a: [r3(x), r3(y2 + g + L), r3(x), r3(y1 - g - L)], s: String(letter), h: 5, look: look === 'r' ? 'r' : 'l' });
     return this;
   };
   /* стрелка взгляда для вида «А» */
@@ -611,6 +659,8 @@
     const c = Math.cos(ang * D2R), s = Math.sin(ang * D2R);
     this.line(x - c * 12, y - s * 12, x, y, 2); this.arrow(x, y, ang, 4, 1.4);
     this.text(x - c * 7 - s * 3, y - s * 7 + c * 3, letter, { h: 7, anchor: 'cb' });
+    // для КОМПАС — объект «Стрелка взгляда»
+    this.p.push({ t: 'D', k: 'W', a: [r3(x - c * 12), r3(y - s * 12), r3(x), r3(y)], s: String(letter), h: 7, tx: r3(x - c * 7 - s * 3), ty: r3(y - s * 7 + c * 3) });
     return this;
   };
   S.title = function (x, y, str, o) { this.text(x, y, str, Object.assign({ h: 7, anchor: 'cb' }, o || {})); return this; };
@@ -621,6 +671,7 @@
     const h = o.h || 3.5, rh = o.rowH || 8, W = colW.reduce((a, b) => a + b, 0);
     let y = ytop;
     const heights = rows.map(r => (r.h || rh));
+    const i0 = this.p.length, tcells = [];
     const total = heights.reduce((a, b) => a + b, 0);
     this.line(x, ytop, x + W, ytop, 1).line(x, ytop - total, x + W, ytop - total, 1);
     let cx = x;
@@ -637,11 +688,16 @@
           const tx = al === 'c' ? xx + colW[ci] / 2 : al === 'r' ? xx + colW[ci] - 1.5 : xx + 1.5;
           const hf = Math.min(h, (colW[ci] - 2.5) / Math.max(twx(ln, 1), 0.1));
           this.text(tx, ty, ln, { h: hf, anchor: al + 'm' });
+          (tcells[ri] = tcells[ri] || [])[ci] = (tcells[ri][ci] || []).concat([[ln, r3(hf)]]);
         });
         xx += colW[ci];
       });
       y -= hh;
     });
+    // для КОМПАС — объект «Таблица» (ширины столбцов, высоты строк, тексты ячеек); отрезки и тексты выше — запасной вариант
+    const pg = 'tb' + (++TGSEQ);
+    for (let i = i0; i < this.p.length; i++) this.p[i].pg = pg;
+    this.p.push({ t: 'D', k: 'TB', a: [r3(x), r3(ytop), r3(x + W), r3(ytop - total)], s: '', colW: colW.map(r3), heights: heights.map(r3), cells: tcells, align: colW.map((_, ci) => (o.align || [])[ci] || 'l'), h, pg });
     return total;
   };
   /* разбивка строки по ширине */
@@ -667,8 +723,15 @@
       wrap(body, width - ind, h).forEach((ln, i) => lines.push({ s: (i ? '' : pre) + ln, x: x + (i ? ind : 0) }));
     });
     let y = ybot + (lines.length - 1) * lh;
+    const i0 = this.p.length, top = y + lh + 1 + (o.title ? h : 0);
     if (o.title) { this.text(x + width / 2, y + lh + 1, o.title, { h, anchor: 'cb' }); }
     lines.forEach(l => { this.text(l.x, y, l.s, { h }); y -= lh; });
+    // технические требования — для КОМПАС объект документа «Технические требования» (пункты — абзацами, перенос строк делает КОМПАС)
+    if (!o.title || o.title === 'Технические требования') {
+      const pg = 'tt' + (++TGSEQ);
+      for (let i = i0; i < this.p.length; i++) this.p[i].pg = pg;
+      this.p.push({ t: 'D', k: 'TT', a: [r3(x - 2), r3(ybot - 2), r3(x + width + 2), r3(top + 2)], s: '', items: items.map(String), h, pg });
+    }
     return lines.length * lh + (o.title ? lh + 1 : 0);
   };
 
@@ -910,8 +973,12 @@
         }
       }
       const st = 2 * R >= 12 ? 3 : 2, e = 2 * R >= 12 ? 3 : 2;
-      if (!has('h')) P.push({ t: 'L', a: [r3(cx - R - e), r3(cy), r3(cx + R + e), r3(cy)], s: st, auto: 1 });
-      if (!has('v')) P.push({ t: 'L', a: [r3(cx), r3(cy - R - e), r3(cx), r3(cy + R + e)], s: st, auto: 1 });
+      const hh = has('h'), vv = has('v');
+      // обе центровые линии добавлены здесь — для КОМПАС это объект «Обозначение центра»
+      const pg = !hh && !vv ? 'cm' + (++TGSEQ) : undefined, ex = pg ? { pg } : {};
+      if (!hh) P.push(Object.assign({ t: 'L', a: [r3(cx - R - e), r3(cy), r3(cx + R + e), r3(cy)], s: st, auto: 1 }, ex));
+      if (!vv) P.push(Object.assign({ t: 'L', a: [r3(cx), r3(cy - R - e), r3(cx), r3(cy + R + e)], s: st, auto: 1 }, ex));
+      if (pg) P.push({ t: 'D', k: 'CM', a: [r3(cx), r3(cy), r3(R + e), 0], s: '', pg });
     }
     // выносные линии от осей (межосевые расстояния): осевая линия доводится до начала выносной линии
     const AX = P.filter(q => q.t === 'L' && q.s === 3 && q.g === undefined);
@@ -927,6 +994,9 @@
         }
       }
     }
+    // лист без разрывов под надписями — для КОМПАС: там фон под текстом и размерами очищает сам КОМПАС
+    // (настройка «Очистка фона»), а если её выключить, линии остаются целыми
+    this._pre = P.slice();
     // разрывы осевых линий и штриховки под надписями
     const rects = P.filter(q => q.t === 'T').map(q => textRect(q, -0.8));
     const cut = (x1, y1, x2, y2) => {
@@ -963,7 +1033,7 @@
         const prevAnch = this._lastAnch, stack = (this._annStack = this._annStack || []); stack.push(name); this._lastAnch = null;
         let r; try { r = f.apply(this, a); } finally { stack.pop(); }
         const inCorner = stack.includes('roughCorner');
-        for (let i = i0; i < this.p.length; i++) if (this.p[i].g === undefined) this.p[i].g = g;
+        for (let i = i0; i < this.p.length; i++) { if (this.p[i].g === undefined) this.p[i].g = g; else if (this.p[i].og === undefined) this.p[i].og = g; }
         this.p.push({ t: 'K', k: name, g, a: [0, 0], pts: (inCorner ? [] : this._lastAnch || ptsOf.apply(null, a) || []).map(q => [r3(q[0]), r3(q[1])]), text: textArg >= 0 ? String(a[textArg] || '') : '' });
         this._lastAnch = prevAnch;
         return r;

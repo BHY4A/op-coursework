@@ -85,7 +85,7 @@
     items.push({ kind: 'drum', pt: P(xc, g.Db / 2 - g.s / 2) });
     items.push({ kind: 'shaft', pt: P((g.discs[0] + g.discs[1]) / 2, g.dr.dbar / 4) });
     // стрелка вида А — с торца опоры A (со стороны глухой крышки)
-    { const xa = (g.L + 34) * k, ya = g.Rh * 0.5 * k; sh.line(xa, ya, xa + 14, ya, 1); sh.arrow(xa, ya, 180, 6, 2); sh.text(xa + 7, ya + 3, 'А', { h: 7, anchor: 'cb' }); }
+    { const xa = (g.L + 34) * k, ya = g.Rh * 0.5 * k; sh.viewArrow(xa, ya, 180, 'А'); }
     // размеры
     const yb = -g.H0;
     sh.dimH(...P(0, -g.dr.dv / 2), ...P(g.L, -g.dr.dp / 2), (yb - 18) * k, nf(g.L) + '*');

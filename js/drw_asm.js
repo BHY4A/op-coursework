@@ -811,8 +811,9 @@
         const opts = [];
         for (const xx of xs) {
           const p1 = s.P(xx, -r), p2 = s.P(xx, r);
-          if (s.horiz) opts.push(() => sh.dimV(p1[0], p1[1], p2[0], p2[1], p1[0], txt), () => sh.dimV(p1[0], p1[1], p2[0], p2[1], p1[0], txt, { out: 'above' }), () => sh.dimV(p1[0], p1[1], p2[0], p2[1], p1[0], txt, { out: 'below' }));
-          else opts.push(() => sh.dimH(p1[0], p1[1], p2[0], p2[1], p1[1], txt), () => sh.dimH(p1[0], p1[1], p2[0], p2[1], p1[1], txt, { out: 'left' }), () => sh.dimH(p1[0], p1[1], p2[0], p2[1], p1[1], txt, { out: 'right' }));
+          // размерная линия — через сам диаметр (fixed: без отодвигания вдоль оси — иначе размер «уплывает» от поверхности на длинных выносных линиях)
+          if (s.horiz) opts.push(() => sh.dimV(p1[0], p1[1], p2[0], p2[1], p1[0], txt, { fixed: true }), () => sh.dimV(p1[0], p1[1], p2[0], p2[1], p1[0], txt, { out: 'above', fixed: true }), () => sh.dimV(p1[0], p1[1], p2[0], p2[1], p1[0], txt, { out: 'below', fixed: true }));
+          else opts.push(() => sh.dimH(p1[0], p1[1], p2[0], p2[1], p1[1], txt, { fixed: true }), () => sh.dimH(p1[0], p1[1], p2[0], p2[1], p1[1], txt, { out: 'left', fixed: true }), () => sh.dimH(p1[0], p1[1], p2[0], p2[1], p1[1], txt, { out: 'right', fixed: true }));
         }
         sh.attempt(opts);
       };
@@ -847,6 +848,7 @@
   }
 
   /* номера позиций: полки по краям изображения, без пересечения выносок */
+  let PGSEQ = 0;
   function positions(sh, list, o) {
     o = o || {};
     if (!list.length) return;
@@ -879,10 +881,14 @@
         // группа крепёжных деталей — общая выноска, номера позиций столбиком (ГОСТ 2.109-73, п. 4.18)
         const ns = String(it.pos).split('/'), w = Math.max(...ns.map(q => tw(q, 7))) + 2, dir = sd === 'b' ? -1 : 1;
         const ex = side === 'r' ? sx + w : sx - w;
+        const i0 = sh.p.length, pg = 'p' + (++PGSEQ);
         sh.line(it.pt[0], it.pt[1], sx, sy, 2);
         sh.dot(it.pt[0], it.pt[1], 0.8);
         ns.forEach((q, j) => { const yy = sy + dir * 9 * j; sh.line(sx, yy, ex, yy, 2); sh.text(side === 'r' ? sx + 1 : ex + 1, yy + 2, q, { h: 7, pos: true }); });
         if (ns.length > 1) sh.line(sx, sy, sx, sy + dir * 9 * (ns.length - 1), 2);
+        // для КОМПАС — объект «Обозначение позиции» (линия-выноска с точкой, номера на полках); отрезки выше — запасной вариант
+        for (let i = i0; i < sh.p.length; i++) sh.p[i].pg = pg;
+        sh.p.push({ t: 'D', k: 'P', a: [it.pt[0], it.pt[1], sx, sy], ns, side, dir, h: 7, pg });
       });
     });
   }
@@ -1445,7 +1451,7 @@
       const yJ = us * k;
       sM.attempt([[-34, 10], [-34, -18], [12, 12]].map(([dx, dy]) => () => sM.tol(bxM.x1 + dx, yJ + dy, ['flat', '0,05'], { from: dx < 0 ? 'r' : 'l', to: [bxM.x1 + 6, yJ] })));
       if (part === 'base') sM.attempt([0.18, 0.82].map(fx => () => sM.rough(bxM.x1 + (bxM.x2 - bxM.x1) * fx, yJ, 'Ra 1,6')));
-      else sM.attempt([0.12, 0.88].map(fx => () => { const x = bxM.x1 + (bxM.x2 - bxM.x1) * fx; sM.line(x, yJ, x + 8, yJ - 12, 2).line(x + 8, yJ - 12, x + 30, yJ - 12, 2); sM.arrow(x, yJ, Math.atan2(12, -8) / D2R); sM.rough(x + 12, yJ - 12, 'Ra 1,6'); }));
+      else sM.attempt([0.12, 0.88].map(fx => () => { const x = bxM.x1 + (bxM.x2 - bxM.x1) * fx; sM.roughLeader(x, yJ, x + 8, yJ - 12, 'Ra 1,6'); }));
       // габариты и высоты
       sM.dimH(bxM.x1, bxM.y1, bxM.x2, bxM.y1, bxM.y1 - 12, nf((bxM.x2 - bxM.x1) / k, 0) + '*');
       { const hv = (bxM.y2 - bxM.y1) / k, hp = us - zB; sM.dimV(bxM.x2, bxM.y1, bxM.x2, bxM.y2, bxM.x2 + 24, (part === 'base' && Math.abs(hv - hp) < 1 ? nf(hp, 1) : nf(hv, 0)) + '*'); }   // габарит основания = высота разъёма, без расхождения в округлении

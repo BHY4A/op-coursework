@@ -319,21 +319,48 @@
     if (d.sh.finalize) d.sh.finalize();
     const r2 = x => Math.round(x * 100) / 100;
     const P = [];
-    // линейные размеры: описание (что измеряется) + их отрезки и текст — запасной вариант, если КОМПАС не примет объект «Размер»
-    const DG = new Map();
-    d.sh.p.forEach(q => { if (q.t === 'D' && q.g !== undefined) DG.set(q.g, { k: q.k, a: q.a.map(r2), t: q.s, p: [] }); });
+    // В КОМПАС уходит лист без разрывов осевых и штриховки под надписями: фон под текстом очищает сам КОМПАС.
+    const src = d.sh._pre || d.sh.p;
+    // обозначения, которые КОМПАС строит своими объектами: линейные размеры (H, V), линии-выноски (L), позиции (P), шероховатость (R, RL — на выноске, Q — неуказанная),
+    // допуски формы (F), базы (B), линии разреза (C), стрелки взгляда (W), тексты с индексами и отклонениями (T), таблицы (TB), наклонные размеры (PL), обозначения центра (CM), технические требования (TT).
+    // У каждого — описание объекта и его отрезки/тексты (запасной вариант, если КОМПАС объект не примет)
+    // группы: позиции — по pg, тексты с индексами/отклонениями — по tg, остальные обозначения — по g
+    const DG = new Map(), dkey = q => q.pg !== undefined ? 'p' + q.pg : q.k === 'T' ? 't' + q.tg : q.g !== undefined ? 'g' + q.g : undefined;
+    const key = q => q.pg !== undefined && DG.has('p' + q.pg) ? 'p' + q.pg : q.og !== undefined && DG.has('g' + q.og) ? 'g' + q.og : q.g !== undefined && DG.has('g' + q.g) ? 'g' + q.g : q.tg !== undefined && DG.has('t' + q.tg) ? 't' + q.tg : undefined;
+    src.forEach(q => {
+      if (q.t !== 'D' || dkey(q) === undefined) return;
+      const m = { k: q.k, a: q.a.map(r2), t: q.s, h: q.h, p: [] };
+      if (q.k === 'T') m.runs = q.runs;
+      if (q.k === 'H' || q.k === 'V') m.ai = q.ai;
+      if (q.k === 'L') Object.assign(m, { t2: q.s2, side: q.side, end: q.end });
+      if (q.k === 'P') Object.assign(m, { ns: q.ns, side: q.side, dir: q.dir });
+      if (q.k === 'R') Object.assign(m, { rot: q.rot, type: q.type });
+      if (q.k === 'RL' || q.k === 'Q') Object.assign(m, { side: q.side, type: q.type });
+      if (q.k === 'F') Object.assign(m, { cells: q.cells, sym: q.sym, to: q.to, via: q.via, from: q.from });
+      if (q.k === 'C') m.look = q.look;
+      if (q.k === 'TT') m.items = q.items;
+      if (q.k === 'TB') Object.assign(m, { colW: q.colW, heights: q.heights, cells: q.cells, align: q.align });
+      if (q.k === 'W') Object.assign(m, { tx: q.tx, ty: q.ty });
+      DG.set(dkey(q), m);
+    });
+    const tw = q => r2(root.DRWCORE.tw(q.s, q.a[2]));
     const enc = q => q.t === 'L' ? ['L', r2(q.a[0]), r2(q.a[1]), r2(q.a[2]), r2(q.a[3]), q.s] : q.t === 'C' ? ['C', r2(q.a[0]), r2(q.a[1]), r2(q.a[2]), q.s] : q.t === 'A' ? ['A', r2(q.a[0]), r2(q.a[1]), r2(q.a[2]), r2(q.a[3]), r2(q.a[4]), q.s]
-      : q.t === 'T' ? ['T', r2(q.a[0]), r2(q.a[1]), r2(q.a[2]), r2(q.a[3]), q.s, r2(root.DRWCORE.tw(q.s, q.a[2]))].concat(q.pos ? ['P'] : []) : q.t === 'H' ? ['H', q.l.map(r2)] : null;
-    for (const q of d.sh.p) {
-      if (q.g !== undefined && DG.has(q.g)) { const e = enc(q); if (e) DG.get(q.g).p.push(e); continue; }
-      if (q.t === 'L') P.push(['L', r2(q.a[0]), r2(q.a[1]), r2(q.a[2]), r2(q.a[3]), q.s]);
-      else if (q.t === 'C') P.push(['C', r2(q.a[0]), r2(q.a[1]), r2(q.a[2]), q.s]);
-      else if (q.t === 'A') P.push(['A', r2(q.a[0]), r2(q.a[1]), r2(q.a[2]), r2(q.a[3]), r2(q.a[4]), q.s]);
-      else if (q.t === 'T') P.push(['T', r2(q.a[0]), r2(q.a[1]), r2(q.a[2]), r2(q.a[3]), q.s, r2(root.DRWCORE.tw(q.s, q.a[2]))].concat(q.pos ? ['P'] : []));
-      else if (q.t === 'H') P.push(['H', q.l.map(r2)]);
+      : q.t === 'T' ? ['T', r2(q.a[0]), r2(q.a[1]), r2(q.a[2]), r2(q.a[3]), q.s, tw(q)].concat(q.pos ? ['P'] : [])
+      : q.t === 'H' ? ['H', q.l.map(r2), (q.rings || []).map(r => r.map(p => [r2(p[0]), r2(p[1])])), q.ang === undefined ? 45 : q.ang, q.step || 2.5] : null;
+    for (const q of src) {
+      const m = q.t === 'D' ? null : DG.get(key(q));
+      if (q.t === 'D') continue;
+      if (m) {
+        const e = enc(q); if (e) m.p.push(e);
+        // прямоугольник надписи размера на листе утилиты — по нему КОМПАС ставит надпись туда же
+        // (номинал и отклонение «5^+0,2» — два текста: берётся общий прямоугольник)
+        if (q.t === 'T' && (m.k === 'H' || m.k === 'V')) { const r = d.sh.textRect(q, 0), b = m.tb; m.tb = (b ? [Math.min(b[0], r.x1), Math.min(b[1], r.y1), Math.max(b[2], r.x2), Math.max(b[3], r.y2)] : [r.x1, r.y1, r.x2, r.y2]).map(r2); }
+        continue;
+      }
+      const e = enc(q); if (e) P.push(e);
     }
     const SPEC = { reduktor_sb: 'spec_reduktor.spw', obshiy_vid: 'spec_privod.spw', rama_sb: 'spec_rama.spw', val_baraban_sb: 'spec_val_baraban.spw' };
-    return { file: d.file, spec: SPEC[d.id] || '', fmt: d.fmt, land: !!d.landscape, code: d.code, name: d.name, material: d.material || '', mass: d.mass || '', scale: d.scale || '', p: P, dims: [...DG.values()] };
+    return { file: d.file, spec: SPEC[d.id] || '', fmt: d.fmt, land: !!d.landscape, code: d.code, name: d.name, material: d.material || '', mass: d.mass || '', scale: d.scale || '', p: P, dims: [...DG.values()].filter(m => m.p.length) };
   }
   /* спецификации для предпросмотра: листы А4 по ГОСТ 2.106 (форматы документов — как у построенных листов) */
   function specSheets(R, P, T) {
@@ -517,7 +544,8 @@
     const sp = specs(R, P, T, { formats: SH.formats }).filter(s => !off.has('c:' + s.file));
     if (!M.asm.off) M.asm.bbox = asmBox(M);
     const check = chk ? { clashes: chk.clashes, drawingMismatch: chk.drawingMismatch, lines: (chk.lines || []).map(l => (l.ok ? 'OK ' : '!! ') + l.msg), error: chk.error } : null;
-    return Object.assign({ task: P.task, v: P.v, kdims: T.kompasDims === 'lines' ? 'lines' : 'native' }, stampInfo(T), M, { specs: sp, sheets: sh.map(sheetData), check });
+    const tw35 = t => Math.round(root.DRWCORE.tw(t, 3.5) * 100) / 100;
+    return Object.assign({ task: P.task, v: P.v, kdims: T.kompasDims === 'lines' ? 'lines' : 'native', calw: { '8': tw35('8'), '88888888': tw35('88888888') } }, stampInfo(T), M, { specs: sp, sheets: sh.map(sheetData), check });
   }
   function py(body, d, run) {
     const K = root.KPY || {};

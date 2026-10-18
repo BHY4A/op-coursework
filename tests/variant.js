@@ -27,9 +27,9 @@ try {
     const dims = texts.filter(s => s.length <= 24 && /\d/.test(s) && !/^\d+\.\s/.test(s)).sort();
     if (texts.some(s => /[⁻¹]/.test(s))) fail(`${d.id}: в надписи остался символ верхнего индекса (его нет в шрифте ГОСТ)`);
     if (['reduktor_sb', 'korpus'].includes(d.id)) aws.forEach(aw => { if (!texts.some(s => s.startsWith(nf3(aw) + '±'))) fail(`${d.id}: нет межосевого ${nf3(aw)} с допуском`); });
-    // линейные размеры для КОМПАС: описание есть, запасные отрезки есть, точки привязки — на концах выносных линий
+    // обозначения для КОМПАС (размеры, выноски, позиции): описание есть, запасные отрезки есть, точки привязки — на концах линий
     const sdat = K.sheetData(d);
-    (sdat.dims || []).forEach(m => { const L = m.p.filter(q => q[0] === 'L'); const near = (x, y) => L.some(q => Math.hypot(q[1] - x, q[2] - y) < 0.6 || Math.hypot(q[3] - x, q[4] - y) < 0.6); if (!m.p.length || !near(m.a[0], m.a[1]) || !near(m.a[2], m.a[3])) fail(`${d.id}: размер «${m.t}» для КОМПАС не совпадает с нарисованным`); });
+    (sdat.dims || []).filter(m => 'HVLP'.includes(m.k)).forEach(m => { const L = m.p.filter(q => q[0] === 'L'); const near = (x, y) => L.some(q => Math.hypot(q[1] - x, q[2] - y) < 0.6 || Math.hypot(q[3] - x, q[4] - y) < 0.6); if (!m.p.length || !near(m.a[0], m.a[1]) || !near(m.a[2], m.a[3])) fail(`${d.id}: размер «${m.t}» для КОМПАС не совпадает с нарисованным`); });
     // замечания линтера — на итоговом листе (после разрывов осевых и штриховки под надписями)
     d.sh.finalize();
     const lint = ctx.DRWLINT.lint(d.sh).map(q => q.msg);

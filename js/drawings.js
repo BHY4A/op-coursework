@@ -189,12 +189,7 @@
       if (X(apex) > f.x1 + 8) sh.attempt([0.75, 0.55, 0.95].map(q => () => sh.dimAng(X(apex), Y(0), 0, g.delta, Math.max(16, (xs - apex) * k * q), deg(g.delta))));
       const ux = Math.cos(g.delta * D2R), uy = Math.sin(g.delta * D2R), nx = -uy, ny = ux;
       const p1 = [X(xs), Y(Rai)], p2 = [X(xb), Y(Rae)];
-      sh.attempt([8, 14, 20].map(off => () => {
-        sh.line(p1[0] + nx * 1, p1[1] + ny * 1, p1[0] + nx * (off + 2), p1[1] + ny * (off + 2), 2).line(p2[0] + nx * 1, p2[1] + ny * 1, p2[0] + nx * (off + 2), p2[1] + ny * (off + 2), 2);
-        const q1 = [p1[0] + nx * off, p1[1] + ny * off], q2 = [p2[0] + nx * off, p2[1] + ny * off];
-        sh.line(q1[0], q1[1], q2[0], q2[1], 2); sh.arrow(q1[0], q1[1], 180 + g.delta); sh.arrow(q2[0], q2[1], g.delta);
-        sh.text((q1[0] + q2[0]) / 2 + nx * 0.8, (q1[1] + q2[1]) / 2 + ny * 0.8, nf(g.b, 1), { h: 3.5, ang: g.delta, anchor: 'cb' });
-      }));
+      sh.attempt([8, 14, 20].map(off => () => sh.dimAligned(p1, p2, nx, ny, off, nf(g.b, 1), g.delta)));
     }
     // ---------- базы
     for (const [s, letter] of dLet) sh.attempt([2, 9, 16, 23].map(len => () => sh.datum(X(s.xd), Y(-s.r), 270, letter, { len })));
@@ -290,7 +285,7 @@
     if (q.t === 'L') c.a = [q.a[0] + dx, q.a[1] + dy, q.a[2] + dx, q.a[3] + dy];
     else if (q.t === 'C' || q.t === 'A' || q.t === 'T') { c.a = q.a.slice(); c.a[0] += dx; c.a[1] += dy; }
     else if (q.t === 'K') { c.pts = q.pts.map(p => [p[0] + dx, p[1] + dy]); }
-    else if (q.t === 'D') { c.a = q.k === 'H' ? [q.a[0] + dx, q.a[1] + dy, q.a[2] + dx, q.a[3] + dy, q.a[4] + dy] : [q.a[0] + dx, q.a[1] + dy, q.a[2] + dx, q.a[3] + dy, q.a[4] + dx]; }
+    else if (q.t === 'D') { if (q.tx !== undefined) { c.tx = q.tx + dx; c.ty = q.ty + dy; } if (q.via && q.via.length) c.via = q.via.map(p => [p[0] + dx, p[1] + dy]); c.a = q.k === 'PL' ? [q.a[0] + dx, q.a[1] + dy, q.a[2] + dx, q.a[3] + dy, q.a[4] + dx, q.a[5] + dy] : q.k === 'T' ? [q.a[0] + dx, q.a[1] + dy, q.a[2], q.a[3]] : q.k === 'AN' ? [q.a[0] + dx, q.a[1] + dy, q.a[2], q.a[3], q.a[4]] : q.k === 'F' && !q.to ? [q.a[0] + dx, q.a[1] + dy, 0, 0] : q.k === 'L' || q.k === 'P' || q.k === 'TT' || q.k === 'BR' || q.k === 'TB' || q.k === 'WD' || q.k === 'R' || q.k === 'F' || q.k === 'B' || q.k === 'C' || q.k === 'W' || q.k === 'RL' || q.k === 'Q' ? [q.a[0] + dx, q.a[1] + dy, q.a[2] + dx, q.a[3] + dy] : q.k === 'H' ? [q.a[0] + dx, q.a[1] + dy, q.a[2] + dx, q.a[3] + dy, q.a[4] + dy] : [q.a[0] + dx, q.a[1] + dy, q.a[2] + dx, q.a[3] + dy, q.a[4] + dx]; }
     else if (q.t === 'H') { c.l = q.l.map((v, i) => v + (i % 2 ? dy : dx)); c.rings = q.rings.map(r => r.map(p => [p[0] + dx, p[1] + dy])); }
     return c;
   }
@@ -622,12 +617,7 @@
       const bv = P.bevel, ux = Math.cos(bv.dl), uy = Math.sin(bv.dl), nx = -uy, ny = ux;
       const p1 = [X(bv.Ti[0]), Y(bv.Ti[1])], p2 = [X(bv.Te[0]), Y(bv.Te[1])];
       const a = Math.atan2(uy, ux) / D2R;
-      sh.attempt([8, 13, 18].map(off => () => {
-        sh.line(p1[0] + nx, p1[1] + ny, p1[0] + nx * (off + 2), p1[1] + ny * (off + 2), 2).line(p2[0] + nx, p2[1] + ny, p2[0] + nx * (off + 2), p2[1] + ny * (off + 2), 2);
-        const q1 = [p1[0] + nx * off, p1[1] + ny * off], q2 = [p2[0] + nx * off, p2[1] + ny * off];
-        sh.line(q1[0], q1[1], q2[0], q2[1], 2); sh.arrow(q1[0], q1[1], 180 + a); sh.arrow(q2[0], q2[1], a);
-        sh.text((q1[0] + q2[0]) / 2 + nx * 0.8, (q1[1] + q2[1]) / 2 + ny * 0.8, nf(g.b, 1), { h: 3.5, ang: a - 180 < -90 ? a : a - 180, anchor: 'cb' });
-      }));
+      sh.attempt([8, 13, 18].map(off => () => sh.dimAligned(p1, p2, nx, ny, off, nf(g.b, 1), a - 180 < -90 ? a : a - 180)));
       // угол конуса вершин δa — между образующей конуса вершин и осью (вершина угла — внешняя точка венца)
       const aTip = Math.atan2(bv.Ti[1] - bv.Te[1], bv.Ti[0] - bv.Te[0]) / D2R, dA = Math.atan2(bv.Te[1] - bv.Ti[1], bv.Te[0] - bv.Ti[0]) / D2R;
       const a1 = Math.min(180, (aTip + 360) % 360), a2 = Math.max(180, (aTip + 360) % 360);

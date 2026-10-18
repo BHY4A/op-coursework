@@ -140,7 +140,7 @@
       const call = (h, d, n) => sh.attempt([[12, 12], [-12, 12], [12, -12]].map(([dx, dy]) => () => sh.leader(X(h.fx) + Math.sign(dx) * d / 2 * k * 0.7, Y(h.fy) + Math.sign(dy) * d / 2 * k * 0.7, X(h.fx) + dx, Y(h.fy) + dy, `⌀${d}`, `${n} отв.`, { side: dx > 0 ? 'r' : 'l' })));
       call(F.redHoles[F.redHoles.length - 1], F.dRed, F.redHoles.length); call(F.motHoles[F.motHoles.length - 1], F.dMot, F.motHoles.length);
       // сварные швы: №1 — поперечины к продольным швеллерам, №2 — подкладки
-      const weld = (x, y, tx, ty, t) => { sh.line(x, y, tx, ty, 2); sh.line(tx, ty, tx + (tx > x ? 9 : -9), ty, 2); sh.arrow(x, y, Math.atan2(y - ty, x - tx) * 180 / Math.PI, 2.2, 0.8); sh.text(tx + (tx > x ? 0.8 : -8.2), ty + 0.8, t, { h: 3.5 }); };
+      const weld = (x, y, tx, ty, t) => sh.leader(x, y, tx, ty, t, '', { side: tx > x ? 'r' : 'l', free: true });
       const c0 = F.cross[0];
       weld(X(c0.x + b2), Y(F.yL + b2), X(c0.x + b2) + 14, Y(F.yL + b2) + 16, '№1');
       const pR = F.padsR[F.padsR.length - 1];
