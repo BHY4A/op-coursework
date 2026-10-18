@@ -296,6 +296,7 @@
   /* разместить готовую группу примитивов (нарисованную у начала координат) на листе без наложений */
   function placeGroup(sh, prims, o) {
     o = o || {};
+    if (prims && prims._sh && prims._sh.repair && !prims._sh._repaired) { prims._sh.repair(); prims._sh._repaired = true; }
     const boxes = prims.map(q => primBox(sh, q)).filter(Boolean);
     let gx1 = Infinity, gy1 = Infinity, gx2 = -Infinity, gy2 = -Infinity;
     boxes.forEach(b => { gx1 = Math.min(gx1, b.x1); gy1 = Math.min(gy1, b.y1); gx2 = Math.max(gx2, b.x2); gy2 = Math.max(gy2, b.y2); });

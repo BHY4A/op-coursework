@@ -38,6 +38,7 @@
     this.W = this.landscape ? Math.max(a, b) : Math.min(a, b);
     this.H = this.landscape ? Math.min(a, b) : Math.max(a, b);
     this.p = [];
+    Object.defineProperty(this.p, '_sh', { value: this });   // обратная ссылка: placeGroup переставляет обозначения листа-черновика перед копированием
     this.frame = { x1: 20, y1: 5, x2: this.W - 5, y2: this.H - 5 };
     this.stamp = { x1: this.W - 5 - 185, y1: 5, x2: this.W - 5, y2: 60 };
     this.hatchN = 0;
@@ -154,9 +155,26 @@
     }
     return m;
   }
+  /* габарит примитива (для отбора кандидатов на наложение) */
+  function pbox(q) {
+    if (q._b !== undefined && q._ba === q.a) return q._b;
+    const b = pbox0(q);
+    Object.defineProperty(q, '_b', { value: b, writable: true, configurable: true }); Object.defineProperty(q, '_ba', { value: q.a, writable: true, configurable: true });
+    return b;
+  }
+  function pbox0(q) {
+    if (q.t === 'L') return [Math.min(q.a[0], q.a[2]), Math.min(q.a[1], q.a[3]), Math.max(q.a[0], q.a[2]), Math.max(q.a[1], q.a[3])];
+    if (q.t === 'T') { const r = textRect(q, 0); return [r.x1, r.y1, r.x2, r.y2]; }
+    if (q.t === 'C' || q.t === 'A') return [q.a[0] - q.a[2], q.a[1] - q.a[2], q.a[0] + q.a[2], q.a[1] + q.a[2]];
+    return null;
+  }
   S.conflicts = function (added, old, stopAt1, withAxes) {
     const f = this.frame;
     let n = 0;
+    // наложения возможны только в пределах габарита добавленного обозначения — остальной лист не проверяется (результат тот же, быстрее)
+    { let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+      for (const q of added) { const b = pbox(q); if (!b) continue; if (b[0] < x1) x1 = b[0]; if (b[1] < y1) y1 = b[1]; if (b[2] > x2) x2 = b[2]; if (b[3] > y2) y2 = b[3]; }
+      if (x1 !== Infinity) { x1 -= 1; y1 -= 1; x2 += 1; y2 += 1; old = old.filter(q => { const b = pbox(q); return !b || !(b[2] < x1 || b[0] > x2 || b[3] < y1 || b[1] > y2); }); } }
     const T = added.filter(q => q.t === 'T').map(q => textRect(q, -0.7));
     const OT = old.filter(q => q.t === 'T').map(q => textRect(q, 0));
     const OL = old.filter(q => q.t === 'L' && (q.s !== 3 || withAxes));
@@ -181,18 +199,61 @@
   /* попробовать варианты: первый без наложений; иначе — вариант с наименьшим числом наложений */
   S.attempt = function (fns, o) {
     o = o || {};
-    let best = 0, bn = Infinity;
-    for (let i = 0; i < fns.length; i++) {
+    let best = 0, bn = Infinity, res = -1;
+    const top = !this._attDepth;
+    this._attDepth = (this._attDepth || 0) + 1;
+    try {
+      let kept = false;
+      for (let i = 0; i < fns.length; i++) {
+        const i0 = this.p.length;
+        fns[i]();
+        const added = this.p.slice(i0);
+        const n = this.conflicts(added, this.p.slice(0, i0));
+        if (n === 0) { best = i; res = i; kept = true; if (top && fns.length > 1) (this._atts = this._atts || []).push({ fns, prims: added }); break; }   // пробный вариант подошёл — оставляем, не рисуем заново
+        this.p.length = i0;
+        if (n < bn) { bn = n; best = i; }
+      }
+      if (kept) return res;
       const i0 = this.p.length;
-      fns[i]();
-      const added = this.p.slice(i0);
-      const n = this.conflicts(added, this.p.slice(0, i0));
-      this.p.length = i0;
-      if (n === 0) { fns[i](); return i; }
-      if (n < bn) { bn = n; best = i; }
+      fns[best]();
+      // запомнить варианты — для перестановки после того, как на лист лягут все остальные обозначения (repair)
+      if (top && fns.length > 1) (this._atts = this._atts || []).push({ fns, prims: this.p.slice(i0) });
+    } finally { this._attDepth--; }
+    return res;
+  };
+  /* перестановка обозначений: каждое обозначение, которое после заполнения листа на что-то наложилось
+     (надпись на линии, размерная линия на контуре, размер на размере), заново выбирает лучший из своих вариантов
+     с учётом ВСЕХ остальных элементов листа; повторяется, пока есть улучшения. Варианты — те же, что заданы
+     при простановке (правила ГОСТ 2.307 соблюдены в каждом), меняется только выбор между ними. */
+  S.repair = function (maxIter) {
+    const recs = (this._atts || []).filter(r => r.fns.length > 1 && r.prims.length);
+    let moved = 0;
+    const P = this.p;
+    for (let it = 0; it < (maxIter || 4); it++) {
+      let changed = false;
+      for (const r of recs) {
+        const own = new Set(r.prims);
+        const others = P.filter(q => !own.has(q));
+        if (others.length !== P.length - r.prims.length) continue;   // обозначение уже перенесено/удалено
+        const cur = this.conflicts(r.prims, others);
+        if (!cur) continue;
+        P.length = 0; others.forEach(q => P.push(q));
+        let best = -1, bn = cur;
+        this._attDepth = (this._attDepth || 0) + 1;
+        try {
+          for (let i = 0; i < r.fns.length; i++) {
+            const i0 = P.length; r.fns[i]();
+            const n = this.conflicts(P.slice(i0), P.slice(0, i0));
+            P.length = i0;
+            if (n < bn) { bn = n; best = i; if (!n) break; }
+          }
+          if (best >= 0) { const i0 = P.length; r.fns[best](); r.prims = P.slice(i0); changed = true; moved++; }
+          else r.prims.forEach(q => P.push(q));
+        } finally { this._attDepth--; }
+      }
+      if (!changed) break;
     }
-    fns[best]();
-    return -1;
+    return moved;
   };
   S.textRect = textRect;
   /* занятые области и поиск свободного места */
@@ -914,10 +975,48 @@
     wrapAnn('cutV', () => [], 3);
     wrapAnn('viewArrow', () => [], 3);
   })();
+  /* Размеры и выноски, проставленные одним вызовом (без перебора вариантов), получают допустимые альтернативы:
+     размерная линия отодвигается от изображения шагами по 7 мм (ГОСТ 2.307: не ближе 10 мм к контуру,
+     7…10 мм между параллельными размерными линиями), полка выноски — дальше или в другую сторону.
+     Выбор между ними — через attempt, а после заполнения листа — через repair.
+     Режим «без размеров» (DRWCORE.opts.noDims): размеры и выноски с размерами не проставляются — для ручной простановки. */
+  const OPTS = { noDims: false };
+  const DIMTXT = /⌀|^М\d|отв\.|^R\d|×45°|^\d+[,\d]*\*?$/;
+  (function () {
+    const dH = S.dimH, dV = S.dimV, ld = S.leader, dA = S.dimAng, dHV = S.dimHalfV;
+    S.dimH = function (x1, y1, x2, y2, yd, text, o) {
+      if (OPTS.noDims) return this;
+      if (this._attDepth || (o && o.fixed)) return dH.apply(this, arguments);
+      const sg = yd >= Math.max(y1, y2) ? 1 : yd <= Math.min(y1, y2) ? -1 : 0;
+      if (!sg) return dH.apply(this, arguments);
+      this.attempt([0, 7, 14, 21].map(d => () => dH.call(this, x1, y1, x2, y2, yd + sg * d, text, o)));
+      return this;
+    };
+    S.dimV = function (x1, y1, x2, y2, xd, text, o) {
+      if (OPTS.noDims) return this;
+      if (this._attDepth || (o && o.fixed)) return dV.apply(this, arguments);
+      const sg = xd >= Math.max(x1, x2) ? 1 : xd <= Math.min(x1, x2) ? -1 : 0;
+      if (!sg) return dV.apply(this, arguments);
+      this.attempt([0, 7, 14, 21].map(d => () => dV.call(this, x1, y1, x2, y2, xd + sg * d, text, o)));
+      return this;
+    };
+    S.dimAng = function () { return OPTS.noDims ? this : dA.apply(this, arguments); };
+    S.dimHalfV = function () { return OPTS.noDims ? this : dHV.apply(this, arguments); };
+    S.leader = function (x, y, sx, sy, above, below, o) {
+      const isDim = DIMTXT.test(String(above || '')) || DIMTXT.test(String(below || ''));
+      if (OPTS.noDims && isDim) return this;
+      if (this._attDepth || (o && (o.dot || o.free))) return ld.apply(this, arguments);
+      const dx = sx - x, dy = sy - y, a = arguments;
+      const side = o && o.side, flip = side === 'r' ? 'l' : side === 'l' ? 'r' : side;
+      this.attempt([[1, 1, side], [1.6, 1.6, side], [-1, 1, flip], [1, -1, side], [-1.6, 1.6, flip], [1.6, -1.6, side]].map(([kx, ky, sd]) => () => ld.call(this, x, y, x + dx * kx, y + dy * ky, above, below, Object.assign({}, o || {}, sd ? { side: sd } : {}))));
+      void a;
+      return this;
+    };
+  })();
   /* встроить шрифт ГОСТ 2.304 в SVG (для растрирования через <img>, где внешние шрифты недоступны) */
   function embedFont(svg) {
     const b = root.GOST_FONT_A_ITALIC; if (!b || /@font-face/.test(svg)) return svg;
     return svg.replace(/(<svg[^>]*>)/, `$1<style>@font-face{font-family:'GOST 2.304 A';font-style:italic;src:url(data:font/ttf;base64,${b}) format('truetype')}</style>`);
   }
-  root.DRWCORE = { Sheet, View, tw, wrap, toSVG, embedFont, fmtNum, D2R, FMT };
+  root.DRWCORE = { Sheet, View, tw, wrap, toSVG, embedFont, fmtNum, D2R, FMT, opts: OPTS };
 })(typeof window !== 'undefined' ? window : globalThis);

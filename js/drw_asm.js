@@ -731,6 +731,48 @@
     const m = calc.find(v => Math.abs(v - aw) < 0.3), v = m !== undefined ? m : Math.round(aw * 10) / 10;
     return nf(v, 3) + '±' + nf(FA(v), 3);
   }
+  /* установочные размеры в плане: отверстия в лапах (⌀, количество), расстояния между крайними отверстиями */
+  function feetPlanDims(sh, k, U, V, feet, o) {
+    o = o || {};
+    if (!feet || !feet.holes || !feet.holes.length) return;
+    const N = [U[1] * V[2] - U[2] * V[1], U[2] * V[0] - U[0] * V[2], U[0] * V[1] - U[1] * V[0]];
+    if (Math.abs(dot(N, feet.up)) < 0.9) return;
+    const P = h => [dot(h, U) * k, dot(h, V) * k], pts = feet.holes.map(P), r = feet.d / 2 * k;
+    // опорная плита лап — видимая часть за контуром корпуса (на разрезе в плане она ниже плоскости разреза)
+    (o.plate || []).forEach(loop => {
+      const q = loop.map(P), RS = new RectSet();
+      RS.add({ x1: Math.min(...q.map(t => t[0])), x2: Math.max(...q.map(t => t[0])), y1: Math.min(...q.map(t => t[1])), y2: Math.max(...q.map(t => t[1])) });
+      (o.occl || []).forEach(b => RS.sub(b));
+      RS.solve().edges.forEach(([x1, y1, x2, y2]) => sh.line(x1, y1, x2, y2, 1));
+    });
+    if (o.draw) pts.forEach(([x, y]) => { sh.circle(x, y, r, 1); sh.line(x - r - 2, y, x + r + 2, y, 3).line(x, y - r - 2, x, y + r + 2, 3); });
+    const bb = sh.geoBox();
+    const xs = [...new Set(pts.map(p => Math.round(p[0] * 100) / 100))].sort((a, b) => a - b), ys = [...new Set(pts.map(p => Math.round(p[1] * 100) / 100))].sort((a, b) => a - b);
+    const real = v => nf(v / k, 0);
+    if (xs.length > 1) { const y = ys[0]; sh.attempt([12, 21, 30].map(d => () => sh.dimH(xs[0], y, xs[xs.length - 1], y, Math.min(bb.y1, y - r) - d, real(xs[xs.length - 1] - xs[0])))); }
+    if (ys.length > 1) { const x = xs[xs.length - 1]; sh.attempt([12, 21, 30].map(d => () => sh.dimV(x, ys[0], x, ys[ys.length - 1], Math.max(bb.x2, x + r) + d, real(ys[ys.length - 1] - ys[0])))); }
+    const h0 = pts.reduce((a, p) => (p[0] + p[1] < a[0] + a[1] ? p : a), pts[0]);
+    sh.attempt([[-14, -14], [-14, 14], [14, -14], [-20, -8]].map(([dx, dy]) => () => sh.leader(h0[0] + Math.sign(dx) * r * 0.7, h0[1] + Math.sign(dy) * r * 0.7, h0[0] + dx, h0[1] + dy, `⌀${nf(feet.d, 0)}`, `${pts.length} отв.`, { side: dx > 0 ? 'r' : 'l' })));
+  }
+  /* высоты осей валов над опорной плоскостью лап — на виде, где вертикаль листа совпадает с вертикалью редуктора */
+  function axisHeights(sh, k, U, V, feet, shafts, o) {
+    o = o || {};
+    if (!feet) return;
+    const s = dot(V, feet.up); if (Math.abs(s) < 0.9) return;
+    const N = [U[1] * V[2] - U[2] * V[1], U[2] * V[0] - U[0] * V[2], U[0] * V[1] - U[1] * V[0]];
+    const yF = s * feet.bottom * k, bb = sh.geoBox();
+    const seen = [];
+    shafts.filter(q => Math.abs(dot(q.ax, V)) < 0.1).forEach(q => {
+      const h = dot(q.pos, feet.up) - feet.bottom; if (seen.some(v => Math.abs(v - h) < 0.5) || (o.skip || []).some(v => Math.abs(v - h) < 0.5)) return;
+      seen.push(h);
+      const endOn = Math.abs(dot(q.ax, N)) > 0.9;
+      const L = q.segs[q.segs.length - 1].x1, ends = [q.pos, q.pos.map((v, i) => v + q.ax[i] * L)];
+      const pa = endOn ? q.pos : ends.reduce((a, p) => (dot(p, U) < dot(a, U) ? p : a));
+      const xa = dot(pa, U) * k, ya = dot(pa, V) * k;
+      const i = seen.length - 1;
+      sh.attempt([0, 9, 18, 27].map(d => () => sh.dimV(bb.x1, yF, xa, ya, bb.x1 - 12 - 9 * i - d, nf(h, 1))));
+    });
+  }
   function sectionDims(S, R, task, k) {
     const sh = S.sh, inPlane = S.inPlane;
     const bb0 = sh.geoBox ? sh.geoBox() : sh.bbox(0);
@@ -763,15 +805,28 @@
         }
         sh.attempt(opts);
       };
+      const gearAt = s.segs.filter(g => g.gear || g.role === 'gear' || g.role === 'hub');
       s.places.forEach(pl => {
         const b = s.b || {};
         across((pl.a + pl.b) / 2, pl.seg.r, `⌀${nf(pl.seg.d, 0)}k6`, pl.a, pl.b);
         const xo = pl.left ? pl.a - 3 : pl.b + 3;
-        if (b.D) across(xo, b.D / 2, `⌀${nf(b.D, 0)}H7`);
+        // крышка подшипника есть со стороны, где за подшипником нет зубчатого венца/ступицы и других подшипников (консольная шестерня — без крышки)
+        const outer = pl.left ? !s.places.some(q => q !== pl && q.a < pl.a) && !gearAt.some(g => g.x1 <= pl.a + 0.5) : !s.places.some(q => q !== pl && q.b > pl.b) && !gearAt.some(g => g.x0 >= pl.b - 0.5);
+        if (b.D) {
+          if (outer) { across(xo, b.D / 2, `⌀${nf(b.D, 0)}H7/h8`); across((pl.a + pl.b) / 2, b.D / 2, `⌀${nf(b.D, 0)}H7`, pl.a, pl.b); }
+          else across(xo, b.D / 2, `⌀${nf(b.D, 0)}H7`);
+        }
       });
       s.segs.forEach(g => {
         if (g.role === 'hub') across((g.x0 + g.x1) / 2, g.r, `⌀${nf(g.d, 0)}H7/${task === 1 ? 'p6' : 'k6'}`, g.x0, g.x1);
-        if (g.role === 'out') across(g.x0 + g.l * 0.6, g.r, `⌀${nf(g.d, 0)}${task === 1 ? 'k6' : 'm6'}`, g.x0, g.x1);
+        if (g.role === 'out') {
+          across(g.x0 + g.l * 0.6, g.r, `⌀${nf(g.d, 0)}${task === 1 ? 'k6' : 'm6'}`, g.x0, g.x1);
+          // присоединительный размер: длина выходного конца
+          const opts = [];
+          [1, -1].forEach(sd => [9, 15, 22].forEach(o => { const p1 = s.P(g.x0, sd * g.r), p2 = s.P(g.x1, sd * g.r);
+            opts.push(s.horiz ? () => sh.dimH(p1[0], p1[1], p2[0], p2[1], p1[1] + sd * Math.sign(s.n2[1] || 1) * o, nf(g.l, 0)) : () => sh.dimV(p1[0], p1[1], p2[0], p2[1], p1[0] + sd * Math.sign(s.n2[0] || 1) * o, nf(g.l, 0))); }));
+          sh.attempt(opts);
+        }
       });
     });
     // габаритные размеры разреза
@@ -912,6 +967,7 @@
     // с сохранением проекционной связи (методичка, разд. 2.2), над ними — их масштаб
     const SC = [[1, '1:1'], [0.5, '1:2'], [0.4, '1:2,5'], [0.25, '1:4'], [0.2, '1:5']];
     const F0 = (() => { try { return root.M3D.housing3d(R, P, T || {}).fasteners; } catch (e) { return null; } })();
+    const FEET = (() => { try { return root.M3D.housing3d(R, P, T || {}).feet; } catch (e) { return null; } })();
     const geo = R.task === 1 && root.M3D ? (root.M3D.housing3d(R, P, T || {}) || {}).geo : null;
     const cr = (u, v) => [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
     const mainSec = k => {
@@ -927,6 +983,21 @@
         S.sh.dimV(x1, yF, x1, geo.ys * k, x1 - 12, nf(geo.ys - geo.yFeet, 0));
       }
       sectionDims(S, R, R.task, k);
+      // установочные размеры: высоты осей над опорной плоскостью (вид-фасад) или отверстия в лапах (разрез в плане)
+      axisHeights(S.sh, k, V.main.u, V.main.v, FEET, A.shafts);
+      if (FEET && Math.abs(dot(cr(V.main.u, V.main.v), FEET.up)) > 0.9) {
+        let plate = [];
+        try { const H3 = root.M3D.housing3d(R, P, T || {}); plate = H3.baseOps.filter(op => !op.cut && /опорная плита|^лапы/.test(op.n) && op.base === 'XOY').flatMap(op => op.loops.filter(l => l.p).map(l => l.p.map(([x, y]) => [x, y, op.a]))); } catch (e) { plate = []; }
+        feetPlanDims(S.sh, k, V.main.u, V.main.v, FEET, { draw: true, plate, occl: [S.housingBox, S.flg].filter(Boolean) });
+      }
+      // червячная передача: межосевое расстояние — от оси червяка до оси колеса
+      if (R.task === 3 && R.g) {
+        const w = A.wheels.find(q => q.kind === 'wormwheel'), s0 = A.shafts[0];
+        if (w && s0) {
+          const xw = dot(w.pos, V.main.u) * k, yw = dot(w.pos, V.main.v) * k, y0 = dot(s0.pos, V.main.v) * k;
+          S.sh.attempt([40, -40, 60, -60, 25, -25].map(d => () => S.sh.dimV(xw, yw, xw, y0, xw + d, awText(R, R.g.aw))));
+        }
+      }
       return S;
     };
     // все виды при масштабах k1 (основной) и k2 (неосновные); позиции — без повторов между видами
@@ -947,7 +1018,7 @@
       take(S.items, list);
       if (G2) take(G2.items, list2);
       const E = MX && V.extra ? modelView(A, R, MX, Fx, V.extra.u, V.extra.v, k2) : null;
-      if (E) take(E.items, listE);
+      if (E) { take(E.items, listE); feetPlanDims(E.sh, k2, V.extra.u, V.extra.v, FEET, { draw: false }); }
       if (V.second) { const w = A.wheels.find(q => q.kind === 'wormwheel'); if (w) { const bbm = S.sh.bbox(0); const x = dot(w.pos, V.main.u) * k1; S.sh.cutV(x, bbm.y1 - 2, bbm.y2 + 2, 'Б', 'r'); } }
       positions(S.sh, list);
       if (G2) positions(G2.sh, list2);
@@ -962,11 +1033,14 @@
     // общая точка для проекционной связи при разных масштабах — середина между осями валов
     const mid = ax => A.shafts.reduce((s, q) => s + dot(q.pos, ax), 0) / Math.max(1, A.shafts.length);
     const al = (dRef, kRef, kNew, c) => dRef + c * (kRef - kNew);
-    for (const fmt of ['A1']) for (const [k, kt] of SC) for (const [k2] of SC.filter(q => q[0] <= k)) {
+    // сначала — раскладки со всеми видами (вид с лапами нужен для установочных размеров), только потом — без третьего вида
+    for (const needE of (V.extra ? [true, false] : [false])) for (const fmt of ['A1']) for (const [k, kt] of SC) for (const [k2] of SC.filter(q => q[0] <= k)) {
       const B = build(k, k2);
+      if (needE && !B.E) continue;
       const { S, G2, E } = B;
       const DBG = root.ASMDBG ? (m => root.ASMDBG.push(kt + '/' + k2 + ' ' + m)) : () => {};
       for (const withE of (E ? [true, false] : [false])) {
+        if (needE && !withE) continue;
         if (!withE && B.onlyE) break;                 // без третьего вида пропали бы позиции
         const sh = new Sheet(fmt, true);
         const f = sh.frame;
@@ -1342,9 +1416,16 @@
       else sM.attempt([0.12, 0.88].map(fx => () => { const x = bxM.x1 + (bxM.x2 - bxM.x1) * fx; sM.line(x, yJ, x + 8, yJ - 12, 2).line(x + 8, yJ - 12, x + 30, yJ - 12, 2); sM.arrow(x, yJ, Math.atan2(12, -8) / D2R); sM.rough(x + 12, yJ - 12, 'Ra 1,6'); }));
       // габариты и высоты
       sM.dimH(bxM.x1, bxM.y1, bxM.x2, bxM.y1, bxM.y1 - 12, nf((bxM.x2 - bxM.x1) / k, 0) + '*');
-      sM.dimV(bxM.x2, bxM.y1, bxM.x2, bxM.y2, bxM.x2 + 24, nf((bxM.y2 - bxM.y1) / k, 0) + '*');
+      { const hv = (bxM.y2 - bxM.y1) / k, hp = us - zB; sM.dimV(bxM.x2, bxM.y1, bxM.x2, bxM.y2, bxM.x2 + 24, (part === 'base' && Math.abs(hv - hp) < 1 ? nf(hp, 1) : nf(hv, 0)) + '*'); }   // габарит основания = высота разъёма, без расхождения в округлении
       if (part === 'base') {
-        sM.dimV(bxM.x2, zB * k, bxM.x2, yJ, bxM.x2 + 12, nf(us - zB, 0) + '±0,2');
+        sM.dimV(bxM.x2, zB * k, bxM.x2, yJ, bxM.x2 + 12, nf(us - zB, 1) + '±0,2');
+        // задание 3: червяк ниже разъёма — ось расточки под червяк, межосевое расстояние до оси колеса и высота оси червяка
+        if (R.task === 3 && R.g && bores.length) {
+          const yW = (us - R.g.aw) * k, xw = XM(bores[0].c);
+          sM.line(bxM.x1 - 6, yW, bxM.x2 + 6, yW, 3);
+          sM.attempt([30, -30, 50, -50].map(d => () => sM.dimV(xw, yJ, xw, yW, xw + d, awText(R, R.g.aw))));
+          sM.attempt([0, 9].map(d => () => sM.dimV(bxM.x1, zB * k, bxM.x1 + 2, yW, bxM.x1 - 20 - d, nf(us - R.g.aw - zB, 1) + '±0,2')));
+        }
         sM.dimV(bxM.x1, zB * k, bxM.x1, H3.lvl.zFoot * k, bxM.x1 - 10, nf(H3.lvl.zFoot - zB, 0));
       } else {
         const tf = 1.5 * (H.del || 8);

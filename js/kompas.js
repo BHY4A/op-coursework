@@ -238,9 +238,12 @@
   const SHEETS = new WeakMap();
   /* построение листов по этапам: генератор отдаёт название следующего этапа — синхронно (sheets) или с паузами для отрисовки (sheetsAsync) */
   function* sheetsGen(R, P, T) {
-    const key = JSON.stringify({ c: codeOf(P, T || {}), s: (T || {}).student, t: (T || {}).teacher });
+    const nd = !!(T || {}).noDims;   // «без размеров» — для ручной простановки
+    const key = JSON.stringify({ c: codeOf(P, T || {}), s: (T || {}).student, t: (T || {}).teacher, nd });
     const c = SHEETS.get(R); if (c && c.key === key) return c.v;
-    yield 'Рабочие чертежи деталей';
+    // флаг действует только пока строятся листы (между шагами генератора — снят, чтобы не задеть рисунки записки)
+    const on = () => { if (root.DRWCORE) root.DRWCORE.opts.noDims = nd; }, off = () => { if (root.DRWCORE) root.DRWCORE.opts.noDims = false; };
+    off(); yield 'Рабочие чертежи деталей'; on();
     const out = [];
     if (root.DRAWINGS && root.DRWASM) {
       let det = [];
@@ -248,23 +251,23 @@
       const formats = {}; det.forEach(d => { formats[d.id] = d.fmt.replace('A', 'А'); });
       let sp = null;
       try { sp = specs(R, P, T || {}, { formats })[0]; } catch (e) { console.error(e); }
-      yield 'Сборочный чертёж редуктора';
+      off(); yield 'Сборочный чертёж редуктора'; on();
       try {
         const a = sp && root.DRWASM.asmSheet(R, P, T || {}, sp);
         if (a) out.push({ id: 'reduktor_sb', file: 'reduktor_SB.cdw', code: sp.code + ' СБ', name: 'Редуктор\nСборочный чертёж', material: '', mass: '', scale: a.scale, fmt: a.fmt, landscape: true, sh: a.sh });
       } catch (e) { console.error(e); }
-      yield 'Чертежи корпуса';
+      off(); yield 'Чертежи корпуса'; on();
       try {
         if (sp) {
           // по 3D-модели — по одному листу за этап; иначе — общим вызовом
           const b = root.DRWASM.housingSheets(R, P, T || {}, sp, { part: 'base' });
           let hs = null;
-          if (b) { yield 'Чертёж крышки корпуса'; const c2 = root.DRWASM.housingSheets(R, P, T || {}, sp, { part: 'cover' }); if (c2) hs = b.concat(c2); }
+          if (b) { off(); yield 'Чертёж крышки корпуса'; on(); const c2 = root.DRWASM.housingSheets(R, P, T || {}, sp, { part: 'cover' }); if (c2) hs = b.concat(c2); }
           if (!hs) hs = root.DRWASM.housingSheets(R, P, T || {}, sp);
           hs.forEach(d => { out.push(d); formats[d.id] = d.fmt.replace('A', 'А'); });
         }
       } catch (e) { console.error(e); }
-      yield 'Рама и общий вид';
+      off(); yield 'Рама и общий вид'; on();
       try {
         const fs = root.DRWFRAME && specs(R, P, T || {}, { formats })[2];
         const fr = fs && root.DRWFRAME.frameSheet(R, P, T || {}, codeOf(P, T || {}), fs);
@@ -293,8 +296,10 @@
       } catch (e) { console.error(e); }
       det.forEach(d => out.push(d));
       SHEETS.set(R, { key, v: { list: out, formats } });
+      off();
       return { list: out, formats };
     }
+    off();
     return { list: out, formats: {} };
   }
   function sheets(R, P, T) { const g = sheetsGen(R, P, T); let r; do r = g.next(); while (!r.done); return r.value; }
@@ -316,7 +321,14 @@
     const SPEC = { reduktor_sb: 'spec_reduktor.spw', obshiy_vid: 'spec_privod.spw', rama_sb: 'spec_rama.spw', val_baraban_sb: 'spec_val_baraban.spw' };
     return { file: d.file, spec: SPEC[d.id] || '', fmt: d.fmt, land: !!d.landscape, code: d.code, name: d.name, material: d.material || '', mass: d.mass || '', scale: d.scale || '', p: P };
   }
+  /* спецификации для предпросмотра: листы А4 по ГОСТ 2.106 (форматы документов — как у построенных листов) */
+  function specSheets(R, P, T) {
+    if (!root.DRWSPEC) return [];
+    const SH = sheets(R, P, T), off = offSet(T);
+    return specs(R, P, T || {}, { formats: SH.formats }).filter(s => !off.has('c:' + s.file)).flatMap(s => root.DRWSPEC.sheets(s, T || {}));
+  }
   function sheetSVG(d, T, o) {
+    if (d.isSpec) return root.DRWCORE.toSVG(d.sh, o || {});   // рамка и основная надпись (форма 2/2а) уже на листе
     const pv = d.sh.previewFrame({ code: d.code, name: d.name, material: d.material, mass: d.mass, scale: d.scale, org: 'КНИТУ' + (T && T.group ? ' ' + T.group : ''), student: T && T.student, teacher: T && T.teacher, normo: T && T.normo });
     return root.DRWCORE.toSVG(d.sh, Object.assign({ preview: pv }, o || {}));
   }
@@ -552,5 +564,5 @@
     return h;
   }
 
-  root.KOMPAS = { modelCheck, partBox, catalog, offSet, model3d, sheets, sheetsAsync, sheetSVG, sheetData, files, hints, specs, model, data, Dxf };
+  root.KOMPAS = { modelCheck, partBox, catalog, offSet, model3d, sheets, sheetsAsync, specSheets, sheetSVG, sheetData, files, hints, specs, model, data, Dxf };
 })(typeof window !== 'undefined' ? window : globalThis);

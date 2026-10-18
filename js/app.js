@@ -823,8 +823,9 @@
         <h2>4. Файлы</h2>
         <div class="files"><div class="files-head"><h3>Макросы и файлы для КОМПАС-3D</h3><button class="btn primary" id="kz">${dlIcon()} Скачать всё (.zip)</button></div>
           ${files.map((f, i) => `<div class="file-row"><span><b>${esc(f.path)}</b><small>${esc(f.desc || '')}</small></span><button class="btn sm" data-kf="${i}" aria-label="Скачать ${esc(f.path)}" title="Скачать">${dlIcon()}</button></div>`).join('')}</div>
-        <h2>5. Чертежи</h2>
-        <p>Листы, которые макрос <code>30_drawings.py</code> строит в КОМПАС: сборочный чертёж редуктора, чертёж общего вида привода, сборочные чертежи рамы и узла барабана, рабочие чертежи корпуса, крышки корпуса, валов и колёс. Рамку и основную надпись КОМПАС добавляет сам по формату листа; здесь они показаны для наглядности. Нажмите на лист, чтобы открыть его крупно.</p>
+        <h2>5. Чертежи и спецификации</h2>
+        <p>Листы, которые макрос <code>30_drawings.py</code> строит в КОМПАС: сборочный чертёж редуктора, чертёж общего вида привода (и эскиз общего вида), сборочные чертежи рамы и узла барабана, рабочие чертежи корпуса, крышки корпуса, валов и колёс; в конце — спецификации (ГОСТ 2.106, листы А4). Рамку и основную надпись КОМПАС добавляет сам по формату листа; здесь они показаны для наглядности. Нажмите на лист, чтобы открыть его крупно.</p>
+        <label class="kcat-i"><input type="checkbox" id="nodims" ${S.T.noDims ? 'checked' : ''}><span>Не проставлять размеры<small>На всех чертежах останутся изображения, позиции, шероховатость, допуски формы и технические требования; размеры (в том числе посадки и выноски отверстий) — проставить самостоятельно в КОМПАС. Действует и на предпросмотр, и на макросы.</small></span></label>
         <div class="dw-grid" id="dwg"><p class="progress"><span class="spinner"></span>Строю листы…</p></div>
         <h2>6. Размеры для построения вручную</h2>
         ${hints}
@@ -836,6 +837,7 @@
       if (cb.checked) delete S.T.koff[k]; else S.T.koff[k] = 1;
       saveT(); renderKompas(main, window.scrollY);
     });
+    { const nd = $('#nodims', main); if (nd) nd.onchange = () => { S.T.noDims = nd.checked; saveT(); renderKompas(main, window.scrollY); }; }
     $$('[data-kall]', main).forEach(b => b.onclick = () => {
       const mode = b.dataset.kall; S.T.koff = {};
       if (mode === 'req') { try { K.catalog(S.R, S.P, S.T).forEach(g => g.items.forEach(it => { if (g.title === 'Чертежи' && !it.req) S.T.koff[it.key] = 1; })); } catch (e) { console.error(e); } }
@@ -846,8 +848,9 @@
       const box = $('#dwg', main); if (!box || !K || !K.sheets) return;
       let list = [];
       try { const off = K.offSet(S.T); list = K.sheets(S.R, S.P, S.T).list.filter(d => !off.has('s:' + d.id)); } catch (e) { console.error(e); }
+      try { if (K.specSheets) list = list.concat(K.specSheets(S.R, S.P, S.T)); } catch (e) { console.error(e); }   // спецификации — после чертежей
       if (!list.length) { box.innerHTML = '<p>Не удалось построить листы для этого варианта.</p>'; return; }
-      box.innerHTML = list.map((d, i) => `<button class="dw-card" data-dw="${i}" aria-label="Открыть лист ${esc(d.code)}"><span class="dw-img">${K.sheetSVG(d, S.T, { px: 900 })}</span><span class="dw-cap"><b>${esc(d.name.replace('\n', ' — '))}</b><small>${esc(d.code)} · ${d.fmt.replace('A', 'А')} · ${esc(d.scale)}</small></span></button>`).join('');
+      box.innerHTML = list.map((d, i) => `<button class="dw-card" data-dw="${i}" aria-label="Открыть лист ${esc(d.code)}"><span class="dw-img">${K.sheetSVG(d, S.T, { px: 900 })}</span><span class="dw-cap"><b>${esc(d.isSpec ? 'Спецификация — ' + d.name.split('\n')[0] : d.name.replace('\n', ' — '))}</b><small>${esc(d.code)} · ${d.fmt.replace('A', 'А')}${d.scale ? ' · ' + esc(d.scale) : ''}</small></span></button>`).join('');
       $$('[data-dw]', box).forEach(b => b.onclick = () => {
         const d = list[+b.dataset.dw];
         const ov = document.createElement('div'); ov.className = 'dw-over';
