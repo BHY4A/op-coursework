@@ -118,7 +118,7 @@
     sh.line((-b - 8) * k, 0, (b + 8) * k, 0, 3).line(0, (-g.H0 - 8) * k, 0, (g.Rh + 8) * k, 3);
     sh.dimH(...P(-b, -g.H0), ...P(b, -g.H0), (-g.H0 - 14) * k, nf(g.Lb) + '*');
     sh.dimH(...P(-g.hx, -g.H0), ...P(g.hx, -g.H0), (-g.H0 - 24) * k, nf(2 * g.hx));
-    sh.dimV(...P(b, -g.H0), ...P(b, 0), (b + 12) * k, nf(g.H0) + '±0,2');
+    sh.dimV(...P(b, -g.H0), ...P(b, 0), (b + 12) * k, nf(Math.round(g.H0 * 10) / 10, 1) + '±0,2');
     sh.leader((-g.hx - 6) * k, (top + 6) * k, (-g.hx - 20) * k, (top + 22) * k, `⌀${nf(g.hole)}`, '4 отв.');
     sh.text(0, (g.Rh + 14) * k, 'А', { h: 7, anchor: 'cb' });
     return { sh };

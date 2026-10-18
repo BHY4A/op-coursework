@@ -184,14 +184,15 @@
   Doc.prototype.stamp2 = function (st) {
     const g = [7, 10, 23, 15, 10, 70, 5, 5, 5, 15, 20];   // 185 мм
     const s = (t, o) => ({ t, o: Object.assign({ size: 16 }, o || {}) });
-    const roleRow = (role, name, extra) => ({ h: 5, cells: [Object.assign({ span: 2 }, s(role, { align: 'left' })), s(name, { align: 'left' }), s(''), s('')].concat(extra) });
+    const roleRow = (role, name, extra, date) => ({ h: 5, cells: [Object.assign({ span: 2 }, s(role, { align: 'left' })), s(name, { align: 'left' }), s(''), s(date || '', { size: 14 })].concat(extra) });
+    const lit = String(st.lit || 'У').slice(0, 3).padEnd(3, ' ').split('').map(ch => s(ch.trim()));
     const rows = [
       { h: 5, cells: [s(''), s(''), s(''), s(''), s(''), { span: 6, vmerge: 'restart', t: st.code, o: { size: 28 } }] },
       { h: 5, cells: [s(''), s(''), s(''), s(''), s(''), { span: 6, vmerge: 'cont' }] },
       { h: 5, cells: [s('Изм.'), s('Лист'), s('№ докум.'), s('Подп.'), s('Дата'), { span: 6, vmerge: 'cont' }] },
-      roleRow('Разраб.', st.dev, [{ vmerge: 'restart', t: st.name, o: { size: 24 } }, { span: 3, t: 'Лит.', o: { size: 16 } }, s('Лист'), s('Листов')]),
-      roleRow('Пров.', st.chk, [{ vmerge: 'cont' }, s('У'), s(''), s(''), { t: '', o: { field: 'PAGE', size: 16 } }, { t: '', o: { field: 'NUMPAGES', size: 16 } }]),
-      roleRow('Т. контр.', '', [{ vmerge: 'cont' }, { span: 5, vmerge: 'restart', t: st.org, o: { size: 24 } }]),
+      roleRow('Разраб.', st.dev, [{ vmerge: 'restart', t: st.name, o: { size: 24 } }, { span: 3, t: 'Лит.', o: { size: 16 } }, s('Лист'), s('Листов')], st.date),
+      roleRow('Пров.', st.chk, [{ vmerge: 'cont' }].concat(lit, [{ t: '', o: { field: 'PAGE', size: 16 } }, { t: '', o: { field: 'NUMPAGES', size: 16 } }])),
+      roleRow('Т. контр.', st.tc || '', [{ vmerge: 'cont' }, { span: 5, vmerge: 'restart', t: st.org, o: { size: 24 } }]),
       roleRow('Н. контр.', st.norm, [{ vmerge: 'cont' }, { span: 5, vmerge: 'cont' }]),
       roleRow('Утв.', st.appr || '', [{ vmerge: 'cont' }, { span: 5, vmerge: 'cont' }])
     ];

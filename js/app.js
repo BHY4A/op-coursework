@@ -460,6 +460,12 @@
             ${tfld('student', 'Студент (Ф. И. О.)', 'Иванов И. И.')}${tfld('group', 'Группа', '741-15')}${tfld('teacher', 'Руководитель проекта', 'Фамилия И. О.')}${tfld('normo', 'Нормоконтролёр', 'Фамилия И. О.')}
             ${tfld('dept', 'Кафедра', 'ОКПМ')}${tfld('discipline', 'Дисциплина', '')}${tfld('code', 'Обозначение (шифр)', codeDefault())}${tfld('year', 'Год', '')}
           </div>
+          <h3>Основная надпись чертежей, спецификаций и записки</h3>
+          <div class="form-grid fg4">
+            ${tfld('stOrg', 'Графа 9 — организация', 'КНИТУ' + (S.T.group ? ' ' + S.T.group : ''))}${tfld('stLit', 'Литера (графа 4)', 'У')}${tfld('stTcontr', 'Т. контр.', 'Фамилия И. О.')}${tfld('stUtv', 'Утв.', 'Фамилия И. О.')}
+            ${tfld('stDate', 'Дата (у «Разраб.»)', 'дд.мм.гг')}
+          </div>
+          <p class="dhint">Разраб. — студент, Пров. — руководитель, Н. контр. — нормоконтролёр (поля выше). Пустая графа 9 — «КНИТУ» и группа; пустая литера — «У» (учебная документация). Поля попадают в предпросмотр, спецификации, макросы КОМПАС и рамку записки.</p>
           <div class="fld"><label for="t-topic"><span>Тема курсового проекта</span></label><input id="t-topic" data-tkey="topic" class="txt" value="${esc(S.T.topic || '')}" placeholder="${esc(D.TASKS[P.task].title)}" autocomplete="off"></div>
           <div class="fld"><label for="t-org"><span>Шапка титульного листа (каждая строка — отдельный абзац)</span></label><textarea id="t-org" data-tkey="org" rows="5">${esc(S.T.org)}</textarea></div>
           <p class="dhint">Шифр документов: «${esc(S.T.code || codeDefault())} 00.00.00 ПЗ» — пояснительная записка, «… 01.00.00 СБ» — редуктор, «… 02.00.00 СБ» — рама, «… 01.00.NN» — детали редуктора. Поле можно изменить.</p>
@@ -826,6 +832,7 @@
         <h2>5. Чертежи и спецификации</h2>
         <p>Листы, которые макрос <code>30_drawings.py</code> строит в КОМПАС: сборочный чертёж редуктора, чертёж общего вида привода (и эскиз общего вида), сборочные чертежи рамы и узла барабана, рабочие чертежи корпуса, крышки корпуса, валов и колёс; в конце — спецификации (ГОСТ 2.106, листы А4). Рамку и основную надпись КОМПАС добавляет сам по формату листа; здесь они показаны для наглядности. Нажмите на лист, чтобы открыть его крупно.</p>
         <label class="kcat-i"><input type="checkbox" id="nodims" ${S.T.noDims ? 'checked' : ''}><span>Не проставлять размеры<small>На всех чертежах останутся изображения, позиции, шероховатость, допуски формы и технические требования; размеры (в том числе посадки и выноски отверстий) — проставить самостоятельно в КОМПАС. Действует и на предпросмотр, и на макросы.</small></span></label>
+        ${S.P.task === 3 ? `<label class="kcat-i"><span>Допуск межосевого расстояния червячной передачи<small>Методические указания его не регламентируют. По умолчанию — ГОСТ 3675-81 (стандарт на червячные передачи, по степени точности); если преподаватель требует, как для цилиндрических — ГОСТ 1643-81 (вид сопряжения B).</small><select id="wormfa"><option value="3675" ${S.T.wormFa !== '1643' ? 'selected' : ''}>ГОСТ 3675-81</option><option value="1643" ${S.T.wormFa === '1643' ? 'selected' : ''}>ГОСТ 1643-81</option></select></span></label>` : ''}
         <div class="dw-grid" id="dwg"><p class="progress"><span class="spinner"></span>Строю листы…</p></div>
         <h2>6. Размеры для построения вручную</h2>
         ${hints}
@@ -838,6 +845,7 @@
       saveT(); renderKompas(main, window.scrollY);
     });
     { const nd = $('#nodims', main); if (nd) nd.onchange = () => { S.T.noDims = nd.checked; saveT(); renderKompas(main, window.scrollY); }; }
+    { const wf = $('#wormfa', main); if (wf) wf.onchange = () => { S.T.wormFa = wf.value; saveT(); renderKompas(main, window.scrollY); }; }
     $$('[data-kall]', main).forEach(b => b.onclick = () => {
       const mode = b.dataset.kall; S.T.koff = {};
       if (mode === 'req') { try { K.catalog(S.R, S.P, S.T).forEach(g => g.items.forEach(it => { if (g.title === 'Чертежи' && !it.req) S.T.koff[it.key] = 1; })); } catch (e) { console.error(e); } }

@@ -8,7 +8,6 @@
   const scratch = () => { const sh = new Sheet('A1', true); sh.frame = { x1: -1e5, y1: -1e5, x2: 1e5, y2: 1e5 }; return sh; };
   const circ = (sh, x, y, r, st) => sh.circle(x, y, r, st === undefined ? 1 : st);
   const cross = (sh, x, y, r) => { sh.line(x - r, y, x + r, y, 3).line(x, y - r, x, y + r, 3); };
-  const FA = a => a <= 120 ? 0.035 : a <= 180 ? 0.04 : a <= 250 ? 0.045 : a <= 315 ? 0.05 : 0.055;
 
   // данные: прямоугольники полости по уровням (XY) и их глубина по Z
   function levelsOf(g) { return g.S.cavs.map((c, j) => ({ c, h: g.cavZ[j] })); }
@@ -106,7 +105,7 @@
     sh.dimH(...P(bx1, by1), ...P(bx2, by1), by1 * k - 14, nf(bx2 - bx1) + '*');
     if (!(part === 'base' && Math.abs(by1 - g.yFeet) < 0.5 && Math.abs(by2 - g.ys - g.tf * 0) < g.tf + 0.5)) sh.dimV(...P(bx2, by1), ...P(bx2, by2), bx2 * k + 14, nf(by2 - by1) + '*');
     if (part === 'base') {
-      sh.dimV(...P(bx1, g.yFeet), ...P(bx1, g.ys), bx1 * k - 12, nf(g.ys - g.yFeet) + '±0,2');
+      sh.dimV(...P(bx1, g.yFeet), ...P(bx1, g.ys), bx1 * k - 12, nf(Math.round((g.ys - g.yFeet) * 10) / 10, 1) + '±0,2');
       sh.dimV(...P(g.xW1 - g.K1, g.yFeet), ...P(g.xW1 - g.K1, g.yBot + g.pF), bx1 * k - 22, nf(g.yBot + g.pF - g.yFeet));
     }
     // диаметры расточек вертикальных валов и межосевое расстояние
@@ -193,7 +192,7 @@
           const sh = new Sheet(fmt, true), f = sh.frame;
           const notes = notesBase(part === 'cover');
           sh.occupy(sh.stamp, 2); sh.occupy(sh.reserved(), 2);
-          sh.roughCorner('Ra 12,5'); sh.occupy({ x1: f.x2 - 62, y1: f.y2 - 28, x2: f.x2, y2: f.y2 }, 0);
+          sh.roughCorner('', { cast: true }); sh.occupy({ x1: f.x2 - 62, y1: f.y2 - 28, x2: f.x2, y2: f.y2 }, 0);
           let hN = 0; notes.forEach(t => { hN += C.wrap(String(t), 176, 3.5).length; }); hN *= 3.5 * 1.65;
           sh.notes(sh.stamp.x1 + 2, sh.stamp.y2 + 6, 180, notes); sh.occupy({ x1: sh.stamp.x1, y1: sh.stamp.y2 + 4, x2: f.x2 - 2, y2: sh.stamp.y2 + 8 + hN }, 2);
           const eb = El.sh.bbox(0);

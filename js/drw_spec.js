@@ -38,12 +38,14 @@
     ['Разраб.', 'Пров.', 'Н.контр.', 'Утв.'].forEach((q, i) => t(x0 + 0.6, y0 + 15.8 - i * 5, q, sm));
     t(x0 + 137, y0 + 21, 'Лит.', sm); t(x0 + 152, y0 + 21, 'Лист', sm); t(x0 + 167, y0 + 21, 'Листов', sm);
     t(x0 + 157.5, y0 + 16.2, String(nSheet), H, 'cb'); t(x0 + 175, y0 + 16.2, String(nTot), H, 'cb');
-    if (T && T.student) t(x0 + 17.6, y0 + 15.8, T.student, sm);
-    if (T && T.teacher) t(x0 + 17.6, y0 + 10.8, T.teacher, sm);
+    const I = root.KOMPAS && root.KOMPAS.stampInfo ? root.KOMPAS.stampInfo(T) : { student: (T || {}).student, teacher: (T || {}).teacher, org: 'КНИТУ' };
+    [[I.student, 15.8], [I.teacher, 10.8], [I.normo, 5.8], [I.utv, 0.8]].forEach(([q, y]) => q && t(x0 + 17.6, y0 + y, q, sm));
+    if (I.dateDev) t(x0 + 55.3, y0 + 15.8, I.dateDev, Math.min(2.5, 9.2 / Math.max(C.tw(I.dateDev, 1), 0.1)));
+    if (I.lit) String(I.lit).slice(0, 3).split('').forEach((ch, i) => t(x0 + 137.5 + 5 * i, y0 + 16.2, ch, H, 'cb'));
     t(x0 + 65 + 60, y0 + 32.5, s.code, 6, 'cm');
     const nm = String(s.name || ''), hn = Math.min(5, 66 / Math.max(C.tw(nm, 1), 1));
     t(x0 + 100, y0 + 12.5, nm, hn, 'cm');
-    t(x0 + 160, y0 + 7.5, 'КНИТУ' + (T && T.group ? ' ' + T.group : ''), 5, 'cm');
+    t(x0 + 160, y0 + 7.5, I.org, Math.min(5, 48 / Math.max(C.tw(I.org, 1), 0.1)), 'cm');
   }
   function stampForm2a(sh, f, s, nSheet) {
     const x0 = f.x1, y0 = f.y1, L = (a, b, c, d, st) => sh.line(a, b, c, d, st || 1);

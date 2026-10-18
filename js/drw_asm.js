@@ -724,12 +724,22 @@
   function hexagon(sh, x, y, s) { const pts = []; for (let i = 0; i < 6; i++) { const a = (30 + i * 60) * D2R; pts.push([x + s * Math.cos(a), y + s * Math.sin(a)]); } sh.poly(pts, 1); }
 
   /* ---------------------------------------------------------------- размеры и позиции на разрезе */
-  const FA = aw => aw <= 120 ? 0.035 : aw <= 180 ? 0.04 : aw <= 250 ? 0.045 : aw <= 315 ? 0.05 : 0.055;
+  /* предельные отклонения межосевого расстояния ±fa, мм.
+     Цилиндрические передачи — ГОСТ 1643-81, табл. 13: вид сопряжения B (на чертежах колёс «8-B») → класс отклонений V (п. 1.7).
+     Червячные — ГОСТ 3675-81, табл. 13 (нормы контакта), по степени точности передачи. */
+  const FA_CYL_B = [[80, 0.060], [125, 0.070], [180, 0.080], [250, 0.090], [315, 0.100], [400, 0.110]];
+  const FA_WORM = { 7: [[80, 0.045], [120, 0.050], [180, 0.060], [250, 0.067], [315, 0.075], [400, 0.080], [500, 0.085]],
+    8: [[80, 0.071], [120, 0.080], [180, 0.090], [250, 0.105], [315, 0.110], [400, 0.125], [500, 0.130]],
+    9: [[80, 0.110], [120, 0.130], [180, 0.150], [250, 0.160], [315, 0.180], [400, 0.200], [500, 0.210]] };
+  const pick = (tab, aw) => (tab.find(([lim]) => aw <= lim) || tab[tab.length - 1])[1];
+  const FA = (aw, worm, deg) => worm ? pick(FA_WORM[deg] || FA_WORM[8], aw) : pick(FA_CYL_B, aw);
   /* межосевое расстояние с предельным отклонением: точное значение из расчёта (223,5; 112,5; 196,875), а не округлённое до целого */
   function awText(R, aw) {
     const calc = [R.g, R.gB, R.gT, R.gC].filter(g => g && g.aw > 0).map(g => g.aw);
     const m = calc.find(v => Math.abs(v - aw) < 0.3), v = m !== undefined ? m : Math.round(aw * 10) / 10;
-    return nf(v, 3) + '±' + nf(FA(v), 3);
+    // червячная передача: по ГОСТ 3675-81 (по умолчанию) или, по требованию преподавателя, как цилиндрическая по ГОСТ 1643-81 (настройка)
+    const worm = R.task === 3 && R.g && Math.abs(R.g.aw - v) < 0.3 && (C.opts || {}).wormFa !== '1643', deg = (R.st && R.st.deg) || 8;
+    return nf(v, 3) + '±' + nf(FA(v, worm, deg), 3);
   }
   /* установочные размеры в плане: отверстия в лапах (⌀, количество), расстояния между крайними отверстиями */
   function feetPlanDims(sh, k, U, V, feet, o) {
@@ -989,6 +999,24 @@
         let plate = [];
         try { const H3 = root.M3D.housing3d(R, P, T || {}); plate = H3.baseOps.filter(op => !op.cut && /опорная плита|^лапы/.test(op.n) && op.base === 'XOY').flatMap(op => op.loops.filter(l => l.p).map(l => l.p.map(([x, y]) => [x, y, op.a]))); } catch (e) { plate = []; }
         feetPlanDims(S.sh, k, V.main.u, V.main.v, FEET, { draw: true, plate, occl: [S.housingBox, S.flg].filter(Boolean) });
+      }
+      // привязка выходных концов валов (методичка: «длина и посадочный диаметр входного и выходного валов, их привязка к оси редуктора»):
+      // от торца выходного конца — до оси перпендикулярного вала, а если такого нет — до оси отверстий в лапах
+      {
+        const U0 = V.main.u, V0 = V.main.v, N0 = cr(U0, V0), P2 = q => [dot(q, U0) * k, dot(q, V0) * k];
+        A.shafts.filter(s => Math.abs(dot(s.ax, N0)) < 0.1).forEach(s => {
+          const out = s.segs.find(g => g.role === 'out'); if (!out) return;
+          const tip = s.pos.map((v, i) => v + s.ax[i] * out.x1), tA = dot(tip, s.ax);
+          const other = A.shafts.filter(o => o !== s && Math.abs(dot(o.ax, s.ax)) < 0.1);
+          let ref = null;
+          if (other.length) { const o = other.reduce((a, b) => Math.abs(dot(b.pos, s.ax) - tA) < Math.abs(dot(a.pos, s.ax) - tA) ? b : a); ref = s.pos.map((v, i) => v + s.ax[i] * (dot(o.pos, s.ax) - dot(s.pos, s.ax))); }
+          else if (FEET && FEET.holes.length) { const h = FEET.holes.reduce((a, b) => Math.abs(dot(b, s.ax) - tA) < Math.abs(dot(a, s.ax) - tA) ? b : a); ref = s.pos.map((v, i) => v + s.ax[i] * (dot(h, s.ax) - dot(s.pos, s.ax))); }
+          if (!ref) return;
+          const a = P2(tip), b = P2(ref), L = Math.abs(dot(tip, s.ax) - dot(ref, s.ax)); if (L < 5) return;
+          const hor = Math.abs(dot(s.ax, U0)) > 0.9, bb = S.sh.geoBox();
+          if (hor) S.sh.attempt([12, 21, 30].flatMap(d => [() => S.sh.dimH(a[0], a[1], b[0], b[1], bb.y2 + d, nf(L, 1)), () => S.sh.dimH(a[0], a[1], b[0], b[1], bb.y1 - d, nf(L, 1))]));
+          else S.sh.attempt([12, 21, 30].flatMap(d => [() => S.sh.dimV(a[0], a[1], b[0], b[1], bb.x2 + d, nf(L, 1)), () => S.sh.dimV(a[0], a[1], b[0], b[1], bb.x1 - d, nf(L, 1))]));
+        });
       }
       // червячная передача: межосевое расстояние — от оси червяка до оси колеса
       if (R.task === 3 && R.g) {
@@ -1284,7 +1312,7 @@
       sh.feet = { hx1, hx2, K1, yb, pF, d1, us };
       // размеры
       const xr = hx2 + K1;
-      sh.dimV(xr, yb, (bores[0] || par[0] || { h: hx2 }).h, 0, xr + 12, nf(-yb / k, 0) + '±0,2');
+      sh.dimV(xr, yb, (bores[0] || par[0] || { h: hx2 }).h, 0, xr + 12, nf(Math.round(-yb / k * 10) / 10, 1) + '±0,2');
       sh.dimV(xr, yb, xr, yb + pF, xr + 22, nf(pF / k, 0));
       sh.dimV(hx1 - K, -tf, hx1 - K, 0, Math.min(hx1 - K, sh.geoBox().x1) - 12, nf(tf / k, 0));
       sh.dimH(hx1 - K1, yb, hx2 + K1, yb, yb - 12, nf((hx2 - hx1 + 2 * K1) / k, 0));
@@ -1492,7 +1520,7 @@
       const V3 = make(k);
       const sh = new Sheet(fmt, true), f = sh.frame;
       sh.occupy(sh.stamp, 2); sh.occupy(sh.reserved(), 2);
-      sh.roughCorner('Ra 12,5');
+      sh.roughCorner('', { cast: true });   // корпусные отливки: остальные поверхности не обрабатываются
       sh.occupy({ x1: f.x2 - 62, y1: f.y2 - 28, x2: f.x2, y2: f.y2 }, 0);
       const hN = notesH(notes, 185);
       sh.notes(sh.stamp.x1 + 2, sh.stamp.y2 + 6, 180, notes); sh.occupy({ x1: sh.stamp.x1, y1: sh.stamp.y2 + 4, x2: f.x2 - 2, y2: sh.stamp.y2 + 8 + hN }, 2);
@@ -1550,7 +1578,7 @@
           const notes = notesBase(part === 'cover');
           if (C && sh) {
             sh.occupy(sh.stamp, 2); sh.occupy(sh.reserved(), 2);
-            sh.roughCorner('Ra 12,5');
+            sh.roughCorner('', { cast: true });   // корпусные отливки: остальные поверхности не обрабатываются
             sh.occupy({ x1: f.x2 - 62, y1: f.y2 - 28, x2: f.x2, y2: f.y2 }, 0);
             const hN = notesH(notes, 185);
             sh.notes(sh.stamp.x1 + 2, sh.stamp.y2 + 6, 180, notes); sh.occupy({ x1: sh.stamp.x1, y1: sh.stamp.y2 + 4, x2: f.x2 - 2, y2: sh.stamp.y2 + 8 + hN }, 2);

@@ -530,7 +530,8 @@
     this.line(sx - 2.4 * t * 1.2, sy + 2.8, sx, sy, 1).line(sx, sy, sx + 6.2 * t * 1.2, sy + 6.2, 1);
     // основной знак со значением
     const tipx = bx1 - 4 - H * t - wv - 1.2, tipy = y2 - H - 1.5;
-    this.rough(tipx, tipy, val, { h, free: true });
+    // o.cast — поверхности, не обрабатываемые по данному чертежу (литьё): знак с кружком без параметра (ГОСТ 2.309-73, ред. 2003)
+    this.rough(tipx, tipy, o.cast ? '' : val, { h, free: true, circle: !!o.cast });
     return this;
   };
 
@@ -695,12 +696,16 @@
     if (s.code) T(x0 + 65 + 60, y0 + 47.5, s.code, 6, 'cm');
     if (s.name) { const lines = String(s.name).split('\n'); const hn = Math.min(5, ...lines.map(ln => 68 / Math.max(tw(ln, 1), 1))); lines.forEach((ln, i, a) => T(x0 + 100, y0 + 27.5 + (a.length - 1) * hn * 0.7 - i * hn * 1.4, ln, hn, 'cm')); }
     if (s.material) T(x0 + 100, y0 + 7.5, s.material, s.material.length > 30 ? 3.5 : 5, 'cm');
-    if (s.org) T(x0 + 160, y0 + 7.5, s.org, 5, 'cm');
+    if (s.org) T(x0 + 160, y0 + 7.5, s.org, Math.min(5, 48 / Math.max(tw(s.org, 1), 0.1)), 'cm');   // вписать в графу 9 (50 мм)
     if (s.mass) T(x0 + 158.5, y0 + 27.5, s.mass, 3.5, 'cm');
     if (s.scale) T(x0 + 176, y0 + 27.5, s.scale, 3.5, 'cm');
     if (s.student) T(x0 + 17.6, y0 + 25.8, s.student, sm);
     if (s.teacher) T(x0 + 17.6, y0 + 20.8, s.teacher, sm);
     if (s.normo) T(x0 + 17.6, y0 + 5.8, s.normo, sm);
+    if (s.tcontr) T(x0 + 17.6, y0 + 15.8, s.tcontr, sm);
+    if (s.utv) T(x0 + 17.6, y0 + 0.8, s.utv, sm);
+    if (s.dateDev) T(x0 + 55.3, y0 + 25.8, s.dateDev, Math.min(2.5, 9.2 / Math.max(tw(s.dateDev, 1), 0.1)));
+    if (s.lit) String(s.lit).slice(0, 3).split('').forEach((ch, i) => T(x0 + 137.5 + 5 * i, y0 + 27.5, ch, 3.5, 'cm'));
     // графа 26 (обозначение документа, повёрнутая) в верхнем левом углу
     if (s.code) {
       if (this.landscape) { L(f.x1, f.y2 - 14, f.x1 + 70, f.y2 - 14, 1); L(f.x1 + 70, f.y2 - 14, f.x1 + 70, f.y2, 1); T(f.x1 + 35, f.y2 - 7, s.code, 5, 'cm', 180); }
@@ -980,7 +985,7 @@
      7…10 мм между параллельными размерными линиями), полка выноски — дальше или в другую сторону.
      Выбор между ними — через attempt, а после заполнения листа — через repair.
      Режим «без размеров» (DRWCORE.opts.noDims): размеры и выноски с размерами не проставляются — для ручной простановки. */
-  const OPTS = { noDims: false };
+  const OPTS = { noDims: false, wormFa: '3675' };
   const DIMTXT = /⌀|^М\d|отв\.|^R\d|×45°|^\d+[,\d]*\*?$/;
   (function () {
     const dH = S.dimH, dV = S.dimV, ld = S.leader, dA = S.dimAng, dHV = S.dimHalfV;

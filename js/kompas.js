@@ -7,6 +7,12 @@
   const esc = t => String(t === undefined || t === null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const p2 = x => String(x).padStart(2, '0');
 
+  /* поля основной надписи — из настроек «Основная надпись чертежей» (раздел «Отчёт и файлы») */
+  function stampInfo(T) {
+    T = T || {};
+    return { org: String(T.stOrg || ('КНИТУ' + (T.group ? ' ' + T.group : ''))).trim(), student: T.student || '', teacher: T.teacher || '', normo: T.normo || '',
+      tcontr: T.stTcontr || '', utv: T.stUtv || '', lit: T.stLit === undefined || T.stLit === '' ? 'У' : String(T.stLit).trim(), dateDev: T.stDate || '' };   // литера по умолчанию «У» — учебная, как в записке
+  }
   function codeOf(P, T) { return (T.code || ('ОП КП ' + p2(P.task) + '-' + p2(P.v))).trim(); }
   const keyDim = k => k ? { b: k.b, h: k.h, t1: k.t1, t2: k.t2, l: k.l } : null;
   const segsOut = segs => segs.map(s => ({ d: r1(s.d), l: r1(s.l), name: s.name, key: keyDim(s.keyDim), gear: s.gear ? Object.assign({}, s.gear) : null }));
@@ -239,10 +245,11 @@
   /* построение листов по этапам: генератор отдаёт название следующего этапа — синхронно (sheets) или с паузами для отрисовки (sheetsAsync) */
   function* sheetsGen(R, P, T) {
     const nd = !!(T || {}).noDims;   // «без размеров» — для ручной простановки
-    const key = JSON.stringify({ c: codeOf(P, T || {}), s: (T || {}).student, t: (T || {}).teacher, nd });
+    const wf = (T || {}).wormFa === '1643' ? '1643' : '3675';   // допуск aw червячной передачи
+    const key = JSON.stringify({ c: codeOf(P, T || {}), s: (T || {}).student, t: (T || {}).teacher, nd, wf });   // основная надпись в геометрию листов не входит — её поля кэш не сбрасывают
     const c = SHEETS.get(R); if (c && c.key === key) return c.v;
     // флаг действует только пока строятся листы (между шагами генератора — снят, чтобы не задеть рисунки записки)
-    const on = () => { if (root.DRWCORE) root.DRWCORE.opts.noDims = nd; }, off = () => { if (root.DRWCORE) root.DRWCORE.opts.noDims = false; };
+    const on = () => { if (root.DRWCORE) Object.assign(root.DRWCORE.opts, { noDims: nd, wormFa: wf }); }, off = () => { if (root.DRWCORE) Object.assign(root.DRWCORE.opts, { noDims: false, wormFa: '3675' }); };
     off(); yield 'Рабочие чертежи деталей'; on();
     const out = [];
     if (root.DRAWINGS && root.DRWASM) {
@@ -329,7 +336,7 @@
   }
   function sheetSVG(d, T, o) {
     if (d.isSpec) return root.DRWCORE.toSVG(d.sh, o || {});   // рамка и основная надпись (форма 2/2а) уже на листе
-    const pv = d.sh.previewFrame({ code: d.code, name: d.name, material: d.material, mass: d.mass, scale: d.scale, org: 'КНИТУ' + (T && T.group ? ' ' + T.group : ''), student: T && T.student, teacher: T && T.teacher, normo: T && T.normo });
+    const pv = d.sh.previewFrame(Object.assign({ code: d.code, name: d.name, material: d.material, mass: d.mass, scale: d.scale }, stampInfo(T)));
     return root.DRWCORE.toSVG(d.sh, Object.assign({ preview: pv }, o || {}));
   }
   /* модель для макросов: корпус — основание и крышка по геометрии сборочного чертежа, плюс подшипники и крышки подшипников */
@@ -485,7 +492,7 @@
     const sp = specs(R, P, T, { formats: SH.formats }).filter(s => !off.has('c:' + s.file));
     if (!M.asm.off) M.asm.bbox = asmBox(M);
     const check = chk ? { clashes: chk.clashes, drawingMismatch: chk.drawingMismatch, lines: (chk.lines || []).map(l => (l.ok ? 'OK ' : '!! ') + l.msg), error: chk.error } : null;
-    return Object.assign({ task: P.task, v: P.v, student: T.student || '', teacher: T.teacher || '', normo: T.normo || '', org: 'КНИТУ' + (T.group ? ' ' + T.group : '') }, M, { specs: sp, sheets: sh.map(sheetData), check });
+    return Object.assign({ task: P.task, v: P.v }, stampInfo(T), M, { specs: sp, sheets: sh.map(sheetData), check });
   }
   function py(body, d, run) {
     const K = root.KPY || {};
@@ -564,5 +571,5 @@
     return h;
   }
 
-  root.KOMPAS = { modelCheck, partBox, catalog, offSet, model3d, sheets, sheetsAsync, specSheets, sheetSVG, sheetData, files, hints, specs, model, data, Dxf };
+  root.KOMPAS = { stampInfo, modelCheck, partBox, catalog, offSet, model3d, sheets, sheetsAsync, specSheets, sheetSVG, sheetData, files, hints, specs, model, data, Dxf };
 })(typeof window !== 'undefined' ? window : globalThis);

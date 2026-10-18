@@ -1,0 +1,10 @@
+{
+  "name": "op-coursework",
+  "private": true,
+  "description": "Расчёт привода, пояснительная записка и чертежи для курсового проекта «Основы проектирования» (КНИТУ)",
+  "scripts": {
+    "test": "node tests/run.js",
+    "test:update": "node tests/run.js --update"
+  },
+  "engines": { "node": ">=18" }
+}

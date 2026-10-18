@@ -271,7 +271,8 @@
     const secs = part === 'all' ? R.sections : R.sections.filter(s => s.tab === part);
     let n = 0; for (const s of secs) for (const it of s.items) if (it.k === 'fig' && ctx.png[it.id]) st.figNums[it.id] = String(++n);
     const code = (T.code || ctx.codeDefault()) + ' 00.00.00 ПЗ';
-    const stampData = { code, name: (T.topic || ctx.D.TASKS[P.task].title) + '\nПояснительная записка', dev: T.student || '', chk: T.teacher || '', norm: T.normo || '', org: 'КНИТУ' + (T.group ? ' ' + T.group : '') };
+    const SI = root.KOMPAS && root.KOMPAS.stampInfo ? root.KOMPAS.stampInfo(T) : {};
+    const stampData = { code, name: (T.topic || ctx.D.TASKS[P.task].title) + '\nПояснительная записка', dev: T.student || '', chk: T.teacher || '', norm: T.normo || '', org: SI.org || ('КНИТУ' + (T.group ? ' ' + T.group : '')), tc: SI.tcontr || '', appr: SI.utv || '', lit: SI.lit || 'У', date: SI.dateDev || '' };
     stampData.name = stampData.name.replace('\n', '. ');
     // колонтитулы основной части
     let hfMain;
