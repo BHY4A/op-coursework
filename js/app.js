@@ -831,7 +831,10 @@
           ${files.map((f, i) => `<div class="file-row"><span><b>${esc(f.path)}</b><small>${esc(f.desc || '')}</small></span><button class="btn sm" data-kf="${i}" aria-label="Скачать ${esc(f.path)}" title="Скачать">${dlIcon()}</button></div>`).join('')}</div>
         <h2>5. Чертежи и спецификации</h2>
         <p>Листы, которые макрос <code>30_drawings.py</code> строит в КОМПАС: сборочный чертёж редуктора, чертёж общего вида привода (и эскиз общего вида), сборочные чертежи рамы и узла барабана, рабочие чертежи корпуса, крышки корпуса, валов и колёс; в конце — спецификации (ГОСТ 2.106, листы А4). Рамку и основную надпись КОМПАС добавляет сам по формату листа; здесь они показаны для наглядности. Нажмите на лист, чтобы открыть его крупно.</p>
+        <div class="files-head"><span></span><button class="btn primary" id="pdfall">${dlIcon()} Альбом чертежей и спецификаций (.pdf)</button></div>
         <label class="kcat-i"><input type="checkbox" id="nodims" ${S.T.noDims ? 'checked' : ''}><span>Не проставлять размеры<small>На всех чертежах останутся изображения, позиции, шероховатость, допуски формы и технические требования; размеры (в том числе посадки и выноски отверстий) — проставить самостоятельно в КОМПАС. Действует и на предпросмотр, и на макросы.</small></span></label>
+        <label class="kcat-i"><input type="checkbox" id="kdims" ${S.T.kompasDims !== 'lines' ? 'checked' : ''}><span>Размеры в КОМПАС — объектами «Линейный размер»<small>Размер в КОМПАС можно выделить, перетащить, поправить надпись. Номинал задан вручную (с полями допусков, отклонениями и «*»). Если КОМПАС какой-то размер не принял, он рисуется по-старому — отрезками и текстом, в журнале будет отметка. Угловые размеры и выноски отверстий — пока отрезками. Без отметки — все размеры отрезками и текстом.</small></span></label>
+        <label class="kcat-i"><input type="checkbox" id="scaleu" ${S.T.scaleUniform ? 'checked' : ''}><span>Все виды сборочного чертежа редуктора в одном масштабе<small>По умолчанию — как в методичке: «если все виды не умещаются в одном масштабе, неосновные виды выполняют в уменьшенном масштабе с сохранением проекционной связи». С отметкой — подбирается самый крупный общий масштаб для всех видов (главный вид может стать мельче); если на А1 не помещается ни в каком — как в методичке.</small></span></label>
         ${S.P.task === 3 ? `<label class="kcat-i"><span>Допуск межосевого расстояния червячной передачи<small>Методические указания его не регламентируют. По умолчанию — ГОСТ 3675-81 (стандарт на червячные передачи, по степени точности); если преподаватель требует, как для цилиндрических — ГОСТ 1643-81 (вид сопряжения B).</small><select id="wormfa"><option value="3675" ${S.T.wormFa !== '1643' ? 'selected' : ''}>ГОСТ 3675-81</option><option value="1643" ${S.T.wormFa === '1643' ? 'selected' : ''}>ГОСТ 1643-81</option></select></span></label>` : ''}
         <div class="dw-grid" id="dwg"><p class="progress"><span class="spinner"></span>Строю листы…</p></div>
         <h2>6. Размеры для построения вручную</h2>
@@ -845,6 +848,9 @@
       saveT(); renderKompas(main, window.scrollY);
     });
     { const nd = $('#nodims', main); if (nd) nd.onchange = () => { S.T.noDims = nd.checked; saveT(); renderKompas(main, window.scrollY); }; }
+    { const pb = $('#pdfall', main); if (pb) pb.onclick = () => makeAlbum(pb); }
+    { const kd = $('#kdims', main); if (kd) kd.onchange = () => { S.T.kompasDims = kd.checked ? 'native' : 'lines'; saveT(); renderKompas(main, window.scrollY); }; }
+    { const su = $('#scaleu', main); if (su) su.onchange = () => { S.T.scaleUniform = su.checked; saveT(); renderKompas(main, window.scrollY); }; }
     { const wf = $('#wormfa', main); if (wf) wf.onchange = () => { S.T.wormFa = wf.value; saveT(); renderKompas(main, window.scrollY); }; }
     $$('[data-kall]', main).forEach(b => b.onclick = () => {
       const mode = b.dataset.kall; S.T.koff = {};
@@ -880,6 +886,24 @@
     const kz = $('#kz', main); if (kz) kz.onclick = async () => { const zip = new JSZip(); files.forEach(f => zip.file('KOMPAS/' + f.path, f.gen())); downloadBlob(zipName('KOMPAS'), await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' })); };
   }
 
+  /* альбом PDF: те же листы, что в предпросмотре (с учётом снятых отметок), каждый в своём формате; jsPDF подгружается по требованию */
+  function loadScript(src) { return new Promise((res, rej) => { if (window.jspdf) return res(); const el = document.createElement('script'); el.src = src; el.onload = res; el.onerror = () => rej(new Error('не загрузился ' + src)); document.head.appendChild(el); }); }
+  async function makeAlbum(btn) {
+    const K = window.KOMPAS; if (!K || !window.DRWPDF) return;
+    btn.disabled = true; const label = btn.innerHTML; btn.textContent = 'Готовлю PDF…';
+    try {
+      await loadScript('vendor/jspdf.umd.min.js');
+      const off = K.offSet(S.T);
+      let list = K.sheets(S.R, S.P, S.T).list.filter(d => !off.has('s:' + d.id)).concat(K.specSheets(S.R, S.P, S.T));
+      list = K.albumOrder(list);
+      await new Promise(r => setTimeout(r, 30));
+      const code = (S.T.code || codeDefault());
+      const doc = DRWPDF.album(list, d => K.sheetPrims(d, S.T), { title: code + ' — чертежи и спецификации' });
+      downloadBlob(`${code.replace(/\s+/g, '_')}_альбом.pdf`, doc.output('blob'));
+      toast(`Альбом: ${list.length} листов`);
+    } catch (e) { console.error(e); toast('Не удалось собрать PDF: ' + e.message); }
+    finally { btn.disabled = false; btn.innerHTML = label; }
+  }
   /* лист чертежа → PNG (белый фон, ширина wpx пикселей) */
   function sheetPng(svgStr, wpx) {
     return new Promise(res => {

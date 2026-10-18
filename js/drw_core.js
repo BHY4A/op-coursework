@@ -409,6 +409,8 @@
       for (let k = 1; k * step <= span + 1e-9; k++) ds.push(k * step, -k * step);
       this.textFree(ds.map(d => () => this.text(tx + d, yd + 0.9, text, { h, anchor })), i0);
     } else this.text(tx, yd + 0.9, text, { h, anchor });
+    // что измеряет размер — для КОМПАС (размер создаётся объектом «Линейный размер», а не отрезками)
+    this.p.push({ t: 'D', k: 'H', a: [x1, o.noExt1 ? yd : y1, x2, o.noExt2 ? yd : y2, yd], s: String(text), h });
     return this;
   };
   /* вертикальный размер, размерная линия на абсциссе xd; текст слева от линии, снизу вверх */
@@ -447,6 +449,7 @@
       for (let k = 1; k * step <= span + 1e-9; k++) ds.push(k * step, -k * step);
       this.textFree(ds.map(d => () => this.text(xd - 0.9, ty + d, text, { h, anchor, ang: 90 })), i0);
     } else this.text(xd - 0.9, ty, text, { h, anchor, ang: 90 });
+    this.p.push({ t: 'D', k: 'V', a: [o.noExt1 ? xd : x1, y1, o.noExt2 ? xd : x2, y2, xd], s: String(text), h });
     return this;
   };
   /* диаметр с обрывом размерной линии (вторая сторона не изображена или в разрезе с пазом): стрелка только у точки (x, y1),
@@ -985,13 +988,13 @@
      7…10 мм между параллельными размерными линиями), полка выноски — дальше или в другую сторону.
      Выбор между ними — через attempt, а после заполнения листа — через repair.
      Режим «без размеров» (DRWCORE.opts.noDims): размеры и выноски с размерами не проставляются — для ручной простановки. */
-  const OPTS = { noDims: false, wormFa: '3675' };
+  const OPTS = { noDims: false, wormFa: '3675', scaleUniform: false };
   const DIMTXT = /⌀|^М\d|отв\.|^R\d|×45°|^\d+[,\d]*\*?$/;
   (function () {
     const dH = S.dimH, dV = S.dimV, ld = S.leader, dA = S.dimAng, dHV = S.dimHalfV;
     S.dimH = function (x1, y1, x2, y2, yd, text, o) {
       if (OPTS.noDims) return this;
-      if (this._attDepth || (o && o.fixed)) return dH.apply(this, arguments);
+      if (this._attDepth > 1 || (o && o.fixed)) return dH.apply(this, arguments);
       const sg = yd >= Math.max(y1, y2) ? 1 : yd <= Math.min(y1, y2) ? -1 : 0;
       if (!sg) return dH.apply(this, arguments);
       this.attempt([0, 7, 14, 21].map(d => () => dH.call(this, x1, y1, x2, y2, yd + sg * d, text, o)));
@@ -999,21 +1002,52 @@
     };
     S.dimV = function (x1, y1, x2, y2, xd, text, o) {
       if (OPTS.noDims) return this;
-      if (this._attDepth || (o && o.fixed)) return dV.apply(this, arguments);
+      if (this._attDepth > 1 || (o && o.fixed)) return dV.apply(this, arguments);
       const sg = xd >= Math.max(x1, x2) ? 1 : xd <= Math.min(x1, x2) ? -1 : 0;
       if (!sg) return dV.apply(this, arguments);
       this.attempt([0, 7, 14, 21].map(d => () => dV.call(this, x1, y1, x2, y2, xd + sg * d, text, o)));
       return this;
     };
-    S.dimAng = function () { return OPTS.noDims ? this : dA.apply(this, arguments); };
+    S.dimAng = function (x, y, a1, a2, R, text, o) {
+      if (OPTS.noDims) return this;
+      if (this._attDepth > 1) return dA.apply(this, arguments);
+      this.attempt([0, 5, 10, 16].map(d => () => dA.call(this, x, y, a1, a2, R + d, text, o)));   // дуга дальше от вершины угла
+      return this;
+    };
+    /* знак шероховатости: на поверхности, а если там тесно — на полке линии-выноски со стрелкой в ту же точку (ГОСТ 2.309) */
+    const rg = S.rough;
+    S.rough = function (x, y, val, o) {
+      if (this._attDepth > 1 || (o && o.free) || !val) return rg.apply(this, arguments);   // и внутри перебора вызывающего кода — вложенный выбор
+      const rot = ((o && o.rot) || 0) * D2R, tx = Math.cos(rot), ty = Math.sin(rot), nx = -ty, ny = tx, h = (o && o.h) || 3.5;
+      const alt = [() => rg.call(this, x, y, val, o)];
+      [[12, 10], [12, -10], [18, 14], [18, -14], [26, 6], [26, -6]].forEach(([n, t]) => alt.push(() => this.roughLeader(x, y, x + nx * n + tx * t, y + ny * n + ty * t, val, { h })));
+      this.attempt(alt);
+      return this;
+    };
+    /* рамка допуска формы/расположения с соединительной линией: рамку можно сдвинуть, стрелка остаётся у поверхности */
+    const tl = S.tol;
+    S.tol = function (x, y, cells, o) {
+      if (this._attDepth > 1 || !o || !o.to || (o.via && o.via.length)) return tl.apply(this, arguments);
+      let ret = null;
+      this.attempt([[0, 0], [0, 10], [0, -10], [14, 0], [-14, 0], [14, 10], [-14, 10], [0, 18], [0, -18], [14, -10], [-14, -10]].map(([dx, dy]) => () => { ret = tl.call(this, x + dx, y + dy, cells, o); }));
+      return ret || { w: 0, h: 7 };
+    };
+    /* база: при наложении — длиннее ножка (буква дальше от поверхности) */
+    const dt = S.datum;
+    S.datum = function (x, y, ang, letter, o) {
+      if (this._attDepth > 1) return dt.apply(this, arguments);
+      const L0 = (o && o.len) || 5;
+      this.attempt([L0, L0 + 5, L0 + 10, L0 + 16].map(L => () => dt.call(this, x, y, ang, letter, Object.assign({}, o || {}, { len: L }))));
+      return this;
+    };
     S.dimHalfV = function () { return OPTS.noDims ? this : dHV.apply(this, arguments); };
     S.leader = function (x, y, sx, sy, above, below, o) {
       const isDim = DIMTXT.test(String(above || '')) || DIMTXT.test(String(below || ''));
       if (OPTS.noDims && isDim) return this;
-      if (this._attDepth || (o && (o.dot || o.free))) return ld.apply(this, arguments);
+      if (this._attDepth > 1 || (o && (o.dot || o.free))) return ld.apply(this, arguments);
       const dx = sx - x, dy = sy - y, a = arguments;
       const side = o && o.side, flip = side === 'r' ? 'l' : side === 'l' ? 'r' : side;
-      this.attempt([[1, 1, side], [1.6, 1.6, side], [-1, 1, flip], [1, -1, side], [-1.6, 1.6, flip], [1.6, -1.6, side]].map(([kx, ky, sd]) => () => ld.call(this, x, y, x + dx * kx, y + dy * ky, above, below, Object.assign({}, o || {}, sd ? { side: sd } : {}))));
+      this.attempt([[1, 1, side], [1.6, 1.6, side], [-1, 1, flip], [1, -1, side], [-1.6, 1.6, flip], [1.6, -1.6, side], [2.3, 2.3, side], [-2.3, 2.3, flip], [2.3, -2.3, side], [-1, -1, flip], [-2.3, -2.3, flip]].map(([kx, ky, sd]) => () => ld.call(this, x, y, x + dx * kx, y + dy * ky, above, below, Object.assign({}, o || {}, sd ? { side: sd } : {}))));
       void a;
       return this;
     };

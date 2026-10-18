@@ -776,11 +776,12 @@
       const h = dot(q.pos, feet.up) - feet.bottom; if (seen.some(v => Math.abs(v - h) < 0.5) || (o.skip || []).some(v => Math.abs(v - h) < 0.5)) return;
       seen.push(h);
       const endOn = Math.abs(dot(q.ax, N)) > 0.9;
-      const L = q.segs[q.segs.length - 1].x1, ends = [q.pos, q.pos.map((v, i) => v + q.ax[i] * L)];
-      const pa = endOn ? q.pos : ends.reduce((a, p) => (dot(p, U) < dot(a, U) ? p : a));
-      const xa = dot(pa, U) * k, ya = dot(pa, V) * k;
-      const i = seen.length - 1;
-      sh.attempt([0, 9, 18, 27].map(d => () => sh.dimV(bb.x1, yF, xa, ya, bb.x1 - 12 - 9 * i - d, nf(h, 1))));
+      const L = q.segs[q.segs.length - 1].x1, ends = endOn ? [q.pos] : [q.pos, q.pos.map((v, i) => v + q.ax[i] * L)];
+      // размер — с той стороны вида, к которой ближе конец вала: выносная линия не пересекает изображение
+      const opts = [];
+      ends.forEach(pa => { const xa = dot(pa, U) * k, ya = dot(pa, V) * k, left = xa - bb.x1 <= bb.x2 - xa, i = seen.length - 1;
+        [0, 9, 18, 27].forEach(d => opts.push(left ? () => sh.dimV(bb.x1, yF, xa, ya, bb.x1 - 12 - 9 * i - d, nf(h, 1)) : () => sh.dimV(bb.x2, yF, xa, ya, bb.x2 + 12 + 9 * i + d, nf(h, 1)))); });
+      sh.attempt(opts);
     });
   }
   function sectionDims(S, R, task, k) {
@@ -1062,7 +1063,10 @@
     const mid = ax => A.shafts.reduce((s, q) => s + dot(q.pos, ax), 0) / Math.max(1, A.shafts.length);
     const al = (dRef, kRef, kNew, c) => dRef + c * (kRef - kNew);
     // сначала — раскладки со всеми видами (вид с лапами нужен для установочных размеров), только потом — без третьего вида
-    for (const needE of (V.extra ? [true, false] : [false])) for (const fmt of ['A1']) for (const [k, kt] of SC) for (const [k2] of SC.filter(q => q[0] <= k)) {
+    // масштаб видов: «как в методичке» — главный вид крупнее, неосновные при нехватке места мельче;
+    // «единый» (настройка) — сначала только раскладки, где все виды в одном масштабе, и лишь если такой нет — как в методичке
+    const passes = (C.opts || {}).scaleUniform ? ['u', 'm'] : ['m'];
+    for (const pass of passes) for (const needE of (V.extra ? [true, false] : [false])) for (const fmt of ['A1']) for (const [k, kt] of SC) for (const [k2] of SC.filter(q => pass === 'u' ? q[0] === k : q[0] <= k)) {
       const B = build(k, k2);
       if (needE && !B.E) continue;
       const { S, G2, E } = B;

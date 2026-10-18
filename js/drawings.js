@@ -290,6 +290,7 @@
     if (q.t === 'L') c.a = [q.a[0] + dx, q.a[1] + dy, q.a[2] + dx, q.a[3] + dy];
     else if (q.t === 'C' || q.t === 'A' || q.t === 'T') { c.a = q.a.slice(); c.a[0] += dx; c.a[1] += dy; }
     else if (q.t === 'K') { c.pts = q.pts.map(p => [p[0] + dx, p[1] + dy]); }
+    else if (q.t === 'D') { c.a = q.k === 'H' ? [q.a[0] + dx, q.a[1] + dy, q.a[2] + dx, q.a[3] + dy, q.a[4] + dy] : [q.a[0] + dx, q.a[1] + dy, q.a[2] + dx, q.a[3] + dy, q.a[4] + dx]; }
     else if (q.t === 'H') { c.l = q.l.map((v, i) => v + (i % 2 ? dy : dx)); c.rings = q.rings.map(r => r.map(p => [p[0] + dx, p[1] + dy])); }
     return c;
   }

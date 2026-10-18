@@ -246,10 +246,11 @@
   function* sheetsGen(R, P, T) {
     const nd = !!(T || {}).noDims;   // «без размеров» — для ручной простановки
     const wf = (T || {}).wormFa === '1643' ? '1643' : '3675';   // допуск aw червячной передачи
-    const key = JSON.stringify({ c: codeOf(P, T || {}), s: (T || {}).student, t: (T || {}).teacher, nd, wf });   // основная надпись в геометрию листов не входит — её поля кэш не сбрасывают
+    const su = !!(T || {}).scaleUniform;   // все виды СБ в одном масштабе
+    const key = JSON.stringify({ c: codeOf(P, T || {}), s: (T || {}).student, t: (T || {}).teacher, nd, wf, su });   // основная надпись в геометрию листов не входит — её поля кэш не сбрасывают
     const c = SHEETS.get(R); if (c && c.key === key) return c.v;
     // флаг действует только пока строятся листы (между шагами генератора — снят, чтобы не задеть рисунки записки)
-    const on = () => { if (root.DRWCORE) Object.assign(root.DRWCORE.opts, { noDims: nd, wormFa: wf }); }, off = () => { if (root.DRWCORE) Object.assign(root.DRWCORE.opts, { noDims: false, wormFa: '3675' }); };
+    const on = () => { if (root.DRWCORE) Object.assign(root.DRWCORE.opts, { noDims: nd, wormFa: wf, scaleUniform: su }); }, off = () => { if (root.DRWCORE) Object.assign(root.DRWCORE.opts, { noDims: false, wormFa: '3675', scaleUniform: false }); };
     off(); yield 'Рабочие чертежи деталей'; on();
     const out = [];
     if (root.DRAWINGS && root.DRWASM) {
@@ -318,7 +319,13 @@
     if (d.sh.finalize) d.sh.finalize();
     const r2 = x => Math.round(x * 100) / 100;
     const P = [];
+    // линейные размеры: описание (что измеряется) + их отрезки и текст — запасной вариант, если КОМПАС не примет объект «Размер»
+    const DG = new Map();
+    d.sh.p.forEach(q => { if (q.t === 'D' && q.g !== undefined) DG.set(q.g, { k: q.k, a: q.a.map(r2), t: q.s, p: [] }); });
+    const enc = q => q.t === 'L' ? ['L', r2(q.a[0]), r2(q.a[1]), r2(q.a[2]), r2(q.a[3]), q.s] : q.t === 'C' ? ['C', r2(q.a[0]), r2(q.a[1]), r2(q.a[2]), q.s] : q.t === 'A' ? ['A', r2(q.a[0]), r2(q.a[1]), r2(q.a[2]), r2(q.a[3]), r2(q.a[4]), q.s]
+      : q.t === 'T' ? ['T', r2(q.a[0]), r2(q.a[1]), r2(q.a[2]), r2(q.a[3]), q.s, r2(root.DRWCORE.tw(q.s, q.a[2]))].concat(q.pos ? ['P'] : []) : q.t === 'H' ? ['H', q.l.map(r2)] : null;
     for (const q of d.sh.p) {
+      if (q.g !== undefined && DG.has(q.g)) { const e = enc(q); if (e) DG.get(q.g).p.push(e); continue; }
       if (q.t === 'L') P.push(['L', r2(q.a[0]), r2(q.a[1]), r2(q.a[2]), r2(q.a[3]), q.s]);
       else if (q.t === 'C') P.push(['C', r2(q.a[0]), r2(q.a[1]), r2(q.a[2]), q.s]);
       else if (q.t === 'A') P.push(['A', r2(q.a[0]), r2(q.a[1]), r2(q.a[2]), r2(q.a[3]), r2(q.a[4]), q.s]);
@@ -326,13 +333,31 @@
       else if (q.t === 'H') P.push(['H', q.l.map(r2)]);
     }
     const SPEC = { reduktor_sb: 'spec_reduktor.spw', obshiy_vid: 'spec_privod.spw', rama_sb: 'spec_rama.spw', val_baraban_sb: 'spec_val_baraban.spw' };
-    return { file: d.file, spec: SPEC[d.id] || '', fmt: d.fmt, land: !!d.landscape, code: d.code, name: d.name, material: d.material || '', mass: d.mass || '', scale: d.scale || '', p: P };
+    return { file: d.file, spec: SPEC[d.id] || '', fmt: d.fmt, land: !!d.landscape, code: d.code, name: d.name, material: d.material || '', mass: d.mass || '', scale: d.scale || '', p: P, dims: [...DG.values()] };
   }
   /* спецификации для предпросмотра: листы А4 по ГОСТ 2.106 (форматы документов — как у построенных листов) */
   function specSheets(R, P, T) {
     if (!root.DRWSPEC) return [];
     const SH = sheets(R, P, T), off = offSet(T);
     return specs(R, P, T || {}, { formats: SH.formats }).filter(s => !off.has('c:' + s.file)).flatMap(s => root.DRWSPEC.sheets(s, T || {}));
+  }
+  /* все примитивы листа для вывода (PDF): изображение + рамка и основная надпись */
+  function sheetPrims(d, T) {
+    if (d.sh.finalize) d.sh.finalize();
+    if (d.isSpec) return d.sh.p;
+    return d.sh.p.concat(d.sh.previewFrame(Object.assign({ code: d.code, name: d.name, material: d.material, mass: d.mass, scale: d.scale }, stampInfo(T))));
+  }
+  /* порядок альбома (ЕСКД): общий вид и эскизы → спецификация привода; СБ редуктора со спецификацией; рама; вал барабана; детали.
+     Спецификация — перед своим сборочным документом */
+  function albumOrder(list) {
+    const SPEC_OF = { obshiy_vid: 'spec_privod', reduktor_sb: 'spec_reduktor', rama_sb: 'spec_rama', val_baraban_sb: 'spec_val_baraban' };
+    const specs = list.filter(d => d.isSpec), draws = list.filter(d => !d.isSpec), out = [], used = new Set();
+    const specFor = id => specs.filter(sp => SPEC_OF[id] && sp.specFile.replace(/\.\w+$/, '') === SPEC_OF[id]);
+    const head = ['obshiy_vid', 'eskiz_vo_do', 'eskiz_vo', 'reduktor_sb', 'rama_sb', 'val_baraban_sb'];
+    head.forEach(id => { const d = draws.find(q => q.id === id); if (!d) return; specFor(id).forEach(sp => { out.push(sp); used.add(sp); }); out.push(d); used.add(d); });
+    draws.forEach(d => { if (!used.has(d)) out.push(d); });
+    specs.forEach(sp => { if (!used.has(sp)) out.push(sp); });
+    return out;
   }
   function sheetSVG(d, T, o) {
     if (d.isSpec) return root.DRWCORE.toSVG(d.sh, o || {});   // рамка и основная надпись (форма 2/2а) уже на листе
@@ -492,7 +517,7 @@
     const sp = specs(R, P, T, { formats: SH.formats }).filter(s => !off.has('c:' + s.file));
     if (!M.asm.off) M.asm.bbox = asmBox(M);
     const check = chk ? { clashes: chk.clashes, drawingMismatch: chk.drawingMismatch, lines: (chk.lines || []).map(l => (l.ok ? 'OK ' : '!! ') + l.msg), error: chk.error } : null;
-    return Object.assign({ task: P.task, v: P.v }, stampInfo(T), M, { specs: sp, sheets: sh.map(sheetData), check });
+    return Object.assign({ task: P.task, v: P.v, kdims: T.kompasDims === 'lines' ? 'lines' : 'native' }, stampInfo(T), M, { specs: sp, sheets: sh.map(sheetData), check });
   }
   function py(body, d, run) {
     const K = root.KPY || {};
@@ -571,5 +596,5 @@
     return h;
   }
 
-  root.KOMPAS = { stampInfo, modelCheck, partBox, catalog, offSet, model3d, sheets, sheetsAsync, specSheets, sheetSVG, sheetData, files, hints, specs, model, data, Dxf };
+  root.KOMPAS = { stampInfo, sheetPrims, albumOrder, modelCheck, partBox, catalog, offSet, model3d, sheets, sheetsAsync, specSheets, sheetSVG, sheetData, files, hints, specs, model, data, Dxf };
 })(typeof window !== 'undefined' ? window : globalThis);
