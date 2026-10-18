@@ -116,7 +116,7 @@
       sh.attempt([0, 8, -8].map(d => () => sh.dimH((b.ax - b.D) * k, (b.face) * k, (b.ax + b.D) * k, b.face * k, (y + d) * k, `⌀${nf(2 * b.D)}H7`)));
     });
     const axs = [...new Set(g.S.bosses.filter(b => b.c === 1).map(b => Math.round(b.ax * 10) / 10))].sort((a, b) => a - b);
-    for (let i = 0; i + 1 < axs.length; i++) { const a = axs[i], b = axs[i + 1]; sh.attempt([0, 9].map(d => () => sh.dimH(a * k, by2 * k, b * k, by2 * k, by2 * k + 12 + d, nf(b - a) + '±' + nf(FA(b - a), 3)))); }
+    for (let i = 0; i + 1 < axs.length; i++) { const a = axs[i], b = axs[i + 1]; sh.attempt([0, 9].map(d => () => sh.dimH(a * k, by2 * k, b * k, by2 * k, by2 * k + 12 + d, root.DRWASM.awText(R, b - a)))); }
     // база — плоскость разъёма; перпендикулярность расточек к ней
     sh.datum(bx1 * k + 10, g.ys * k, part === 'base' ? 90 : 270, 'А', { len: 10 });
     vb.forEach(b => sh.attempt([[14, 10], [14, -14], [-34, 10]].map(([dx, dy]) => () => sh.tol((b.ax + b.D) * k + dx, b.face * k + dy, ['perp', '0,03', 'А'], { from: dx > 0 ? 'l' : 'r', to: [(b.ax + b.D) * k, b.face * k] }))));

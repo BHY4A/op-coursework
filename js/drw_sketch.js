@@ -454,7 +454,7 @@
           const tip = oe.dir > 0 ? oe.a2 : oe.a1, base = tip - oe.dir * (oe.lOut || Math.abs(oe.a2 - oe.a1));   // длина выходной ступени
           const A = P(w(tip, -oe.r)), B = P(w(tip, oe.r)), T0 = P(w(base, 0)), T1 = P(w(tip, 0));
           const along = [Math.sign(T1[0] - T0[0]), Math.sign(T1[1] - T0[1])];   // направление к торцу на листе
-          const dTxt = `⌀${nf(2 * oe.r, 1)}m6`, lTxt = nf(Math.abs(tip - base), 0);
+          const dTxt = `⌀${nf(2 * oe.r, 1)}${R.task === 1 ? 'k6' : 'm6'}`, lTxt = nf(Math.abs(tip - base), 0);   // поле допуска — как на СБ редуктора и чертеже вала
           if (Math.abs(A[0] - B[0]) > Math.abs(A[1] - B[1])) sh.attempt([8, 14, 20, 28].map(o => () => sh.dimH(A[0], A[1], B[0], B[1], A[1] + along[1] * o, dTxt)));
           else sh.attempt([8, 14, 20, 28].map(o => () => sh.dimV(A[0], A[1], B[0], B[1], A[0] + along[0] * o, dTxt)));
           const C = [P(w(base, oe.r)), P(w(tip, oe.r))], C2 = [P(w(base, -oe.r)), P(w(tip, -oe.r))];

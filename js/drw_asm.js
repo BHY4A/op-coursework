@@ -725,6 +725,12 @@
 
   /* ---------------------------------------------------------------- размеры и позиции на разрезе */
   const FA = aw => aw <= 120 ? 0.035 : aw <= 180 ? 0.04 : aw <= 250 ? 0.045 : aw <= 315 ? 0.05 : 0.055;
+  /* межосевое расстояние с предельным отклонением: точное значение из расчёта (223,5; 112,5; 196,875), а не округлённое до целого */
+  function awText(R, aw) {
+    const calc = [R.g, R.gB, R.gT, R.gC].filter(g => g && g.aw > 0).map(g => g.aw);
+    const m = calc.find(v => Math.abs(v - aw) < 0.3), v = m !== undefined ? m : Math.round(aw * 10) / 10;
+    return nf(v, 3) + '±' + nf(FA(v), 3);
+  }
   function sectionDims(S, R, task, k) {
     const sh = S.sh, inPlane = S.inPlane;
     const bb0 = sh.geoBox ? sh.geoBox() : sh.bbox(0);
@@ -739,7 +745,7 @@
       for (let i = 0; i + 1 < list.length; i++) {
         const a = list[i], b = list[i + 1];
         const aw = Math.abs(horiz ? (b.o[1] - a.o[1]) : (b.o[0] - a.o[0])) / k;
-        const txt = `${nf(aw, 0)}±${nf(FA(aw), 3)}`;
+        const txt = awText(R, aw);
         if (horiz) { const x = bb0.x1 - 12 - i * 0; sh.attempt([0, 9, 18].map(d => () => sh.dimV(Math.min(a.P(-2, 0)[0], b.P(-2, 0)[0]), a.o[1], Math.min(a.P(-2, 0)[0], b.P(-2, 0)[0]), b.o[1], x - d, txt))); }
         else { const y = bb0.y1 - 12; sh.attempt([0, 9, 18].map(d => () => sh.dimH(a.o[0], Math.min(a.P(-2, 0)[1], a.o[1]), b.o[0], Math.min(b.P(-2, 0)[1], b.o[1]), y - d, txt))); }
       }
@@ -1239,7 +1245,7 @@
       const b0 = bores[0];
       sh.datum(b0.h - b0.D, 0, part === 'base' ? 270 : 90, 'А', { len: 10 });
       bores.slice(1).forEach(b => { const tx = b.h + b.D * 0.7, ty = part === 'base' ? -b.D * 0.71 : b.D * 0.71; sh.attempt([[10, -18], [10, 18], [-30, -18]].map(([dx, dy]) => () => sh.tol(tx + dx, ty + dy, ['par', '0,03', 'А'], { from: dx > 0 ? 'l' : 'r', to: [tx, ty] }))); });
-      for (let i = 0; i + 1 < bores.length; i++) { const a = bores[i], b = bores[i + 1]; sh.attempt([0, 9].map(d => () => sh.dimH(a.h, 0, b.h, 0, (part === 'base' ? yb - 30 : 0) - d - (part === 'base' ? 0 : 26), nf(Math.abs(b.h - a.h) / k, 0) + '±' + nf(FA(Math.abs(b.h - a.h) / k), 3)))); }
+      for (let i = 0; i + 1 < bores.length; i++) { const a = bores[i], b = bores[i + 1]; sh.attempt([0, 9].map(d => () => sh.dimH(a.h, 0, b.h, 0, (part === 'base' ? yb - 30 : 0) - d - (part === 'base' ? 0 : 26), awText(R, Math.abs(b.h - a.h) / k)))); }
     }
     // плоскостность разъёма
     sh.attempt([[-30, 10], [-30, -18], [10, 12]].map(([dx, dy]) => () => sh.tol(hx1 - K + dx, dy, ['flat', '0,05'], { from: dx < 0 ? 'r' : 'l', to: [hx1 - K * 0.4, 0] })));
@@ -1322,7 +1328,7 @@
       callHoles(sM, vM, Um, Vm, Nm, true);
       // диаметры расточек, межосевые расстояния, база А и параллельность осей, шероховатость
       bores.forEach((b, i) => { const x = XM(b.c), y = YM(b.c), r = b.r * k, sg = part === 'base' ? 1 : -1; sM.attempt([6, 14, 22].map(d => () => sM.dimH(x - r, y, x + r, y, y + sg * (d + (i % 2) * 8), `⌀${nf(2 * b.r, 0)}H7`))); });
-      for (let i = 0; i + 1 < bores.length; i++) { const a = bores[i], b = bores[i + 1], aw = Math.abs(dot(b.c, Um) - dot(a.c, Um)); const yOut = part === 'base' ? Math.max(...bores.map(q => YM(q.c) + q.r * k)) + 32 : Math.min(...bores.map(q => YM(q.c) - q.r * k)) - 32; sM.attempt([0, 9, 18].map(d => () => sM.dimH(XM(a.c), YM(a.c), XM(b.c), YM(b.c), yOut + (part === 'base' ? d : -d), nf(aw, 0) + '±' + nf(FA(aw), 3)))); }
+      for (let i = 0; i + 1 < bores.length; i++) { const a = bores[i], b = bores[i + 1], aw = Math.abs(dot(b.c, Um) - dot(a.c, Um)); const yOut = part === 'base' ? Math.max(...bores.map(q => YM(q.c) + q.r * k)) + 32 : Math.min(...bores.map(q => YM(q.c) - q.r * k)) - 32; sM.attempt([0, 9, 18].map(d => () => sM.dimH(XM(a.c), YM(a.c), XM(b.c), YM(b.c), yOut + (part === 'base' ? d : -d), awText(R, aw)))); }
       if (bores.length) {
         const b0 = bores[0], r0 = b0.r * k;
         sM.datum(XM(b0.c) - r0, YM(b0.c), part === 'base' ? 270 : 90, 'А', { len: 10 });
@@ -1486,6 +1492,6 @@
     return out;
   }
 
-  root.DRWASM = { bearingPlaces, housingElev, PLAN, ELEV, splitHeight, housingSheets, housingGeom, asmData, sectionView, sideView, sectionDims, positions, posFinder, asmSheet, RectSet, drawBearing, VIEWS };
+  root.DRWASM = { awText, bearingPlaces, housingElev, PLAN, ELEV, splitHeight, housingSheets, housingGeom, asmData, sectionView, sideView, sectionDims, positions, posFinder, asmSheet, RectSet, drawBearing, VIEWS };
 
 })(typeof window !== 'undefined' ? window : globalThis);
