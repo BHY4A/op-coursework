@@ -807,7 +807,7 @@
     inPlane.forEach(s => {
       // размер поперёк вала в сечении x; xa…xb — участок, в пределах которого размер можно сдвинуть
       const across = (x, r, txt, xa, xb) => {
-        const xs = [x]; if (xa !== undefined) [0.3, 0.7, 0.15, 0.85].forEach(f => xs.push(xa + (xb - xa) * f));
+        const xs = [x]; if (xa !== undefined) [0.3, 0.7, 0.4, 0.6, 0.15, 0.85, 0.25, 0.75].forEach(f => xs.push(xa + (xb - xa) * f)); else [1.5, -1.5, 3, -3].forEach(d => xs.push(x + d));
         const opts = [];
         for (const xx of xs) {
           const p1 = s.P(xx, -r), p2 = s.P(xx, r);
