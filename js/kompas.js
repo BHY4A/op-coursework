@@ -280,9 +280,16 @@
         if (dv) { const code = codeOf(P, T || {}); out.splice(1, 0, Object.assign(dv, { code: `${code} 00.00.00 ВО`, name: dv.name + '\n' + dv.nameSub, material: '', mass: '' })); formats[dv.id] = 'А1'; }
       } catch (e) { console.error(e); }
       try {
-        // эскиз общего вида — только из чисел расчёта (без 3D-модели), для сдачи после компоновки (пп. 1.9–1.10)
-        const ds = root.DRWSKETCH && root.DRWSKETCH.sketchSheet(R, P, T || {}, specs(R, P, T || {}, { formats })[1]);
-        if (ds) { const code = codeOf(P, T || {}); const i = out.findIndex(d => d.id === 'obshiy_vid'); out.splice(i >= 0 ? i + 1 : 1, 0, Object.assign(ds, { code: `${code} 00.00.00 ВО`, name: ds.name + '\n' + ds.nameSub, material: '', mass: '' })); formats[ds.id] = 'А1'; }
+        // эскиз общего вида — только из чисел расчёта (без 3D-модели), для сдачи после компоновки (пп. 1.9–1.10).
+        // Если проверки пп. 1.11–1.13 изменили валы/подшипники/шпонки (R.pre), строятся два эскиза: до и после проверок.
+        const sp1 = specs(R, P, T || {}, { formats })[1], code = codeOf(P, T || {});
+        const list = R.pre ? [[R.pre, { id: 'eskiz_vo_do', file: 'privod_VO_eskiz_do.cdw', nameSub: 'Эскиз общего вида (до проверок)' }], [R, { id: 'eskiz_vo', file: 'privod_VO_eskiz.cdw', nameSub: 'Эскиз общего вида (после проверок)' }]]
+          : [[R, { id: 'eskiz_vo', file: 'privod_VO_eskiz.cdw', nameSub: 'Эскиз общего вида' }]];
+        let at = out.findIndex(d => d.id === 'obshiy_vid') + 1 || 1;
+        list.forEach(([RR, meta]) => {
+          const ds = root.DRWSKETCH && root.DRWSKETCH.sketchSheet(RR, P, T || {}, sp1, meta);
+          if (ds) { out.splice(at++, 0, Object.assign(ds, { code: `${code} 00.00.00 ВО`, name: ds.name + '\n' + ds.nameSub, material: '', mass: '' })); formats[ds.id] = 'А1'; }
+        });
       } catch (e) { console.error(e); }
       det.forEach(d => out.push(d));
       SHEETS.set(R, { key, v: { list: out, formats } });

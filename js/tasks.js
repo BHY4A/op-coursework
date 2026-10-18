@@ -475,14 +475,22 @@
 
   /* Итерационное согласование: при невыполнении проверок изменяются исходные конструктивные решения
      (aw, диаметр выходного конца, длины ступиц, подшипники), и весь расчёт повторяется. В отчёт попадает только итоговый вариант. */
+  const GEAR_ADJ = new Set(['wormMat', 'vsHint', 'awMin']);   // ключи согласования самой передачи (пп. 1.4–1.5)
   function solve(core, P) {
     const A = { two: {} };
-    let R;
+    let R, R0 = null, frozen = false;
     for (let it = 0; it < 40; it++) {
       R = core(P, A);
+      if (!frozen) R0 = R;
+      const snap = JSON.parse(JSON.stringify(A));
       const ch = R.adjust ? R.adjust(A) : false;
       if (!ch) break;
+      // согласование передачи (материал венца, aw по контактной прочности) выполняется до компоновки;
+      // первое изменение валов, подшипников или шпонок — это уже проверки пп. 1.11–1.13
+      if (!frozen) { const keys = new Set(Object.keys(A).concat(Object.keys(snap))); if ([...keys].some(k => JSON.stringify(A[k]) !== JSON.stringify(snap[k]) && !GEAR_ADJ.has(k))) frozen = true; }
     }
+    // компоновка до согласования по проверочным расчётам — для эскиза общего вида «до проверок»
+    if (R0 && R0 !== R) Object.defineProperty(R, 'pre', { value: R0, enumerable: false });
     return R;
   }
   function adjust3(R, A, P) {

@@ -165,7 +165,7 @@
         let o1 = dir > 0 ? Math.max(cf, oLo) : oLo, o2 = dir > 0 ? oHi : Math.min(cf, oHi);
         if (dir > 0 && oLo > cf + 0.5) { const s = sh.S.find(q => sAt(q.x1) > cf + 0.5 && q !== outSeg) || outSeg; if (s.r - outSeg.r >= 4) ends.push({ shaft: si, ax: a, c: sh.o, a1: cf, a2: oLo, r: s.r }); else o1 = cf; }
         if (dir < 0 && oHi < cf - 0.5) { const s = sh.S.slice().reverse().find(q => sAt(q.x0) < cf - 0.5 && q !== outSeg) || outSeg; if (s.r - outSeg.r >= 4) ends.push({ shaft: si, ax: a, c: sh.o, a1: oHi, a2: cf, r: s.r }); else o2 = cf; }
-        ends.push({ shaft: si, ax: a, c: sh.o, a1: o1, a2: o2, r: outSeg.r, out: true, dir });
+        ends.push({ shaft: si, ax: a, c: sh.o, a1: o1, a2: o2, r: outSeg.r, out: true, dir, lOut: outSeg.l });
       });
     });
     // лапы
@@ -338,7 +338,8 @@
         const lo = Math.min(e1[s.ax], e2[s.ax], ...ends.map(e => e.a1)), hi = Math.max(e1[s.ax], e2[s.ax], ...ends.map(e => e.a2));
         if (s.ax === V.d) {
           const c = P(s.o), cap = Lt.caps.filter(q => q.shaft === si).reduce((a, q) => Math.max(a, q.r), 30);
-          sh.line(c[0] - (cap + 6) * k, c[1], c[0] + (cap + 6) * k, c[1], 3).line(c[0], c[1] - (cap + 6) * k, c[0], c[1] + (cap + 6) * k, 3);
+          const e = cap * k + 4;   // центровые выходят за контур на 4 мм листа при любом масштабе
+          sh.line(c[0] - e, c[1], c[0] + e, c[1], 3).line(c[0], c[1] - e, c[0], c[1] + e, 3);
         } else {
           const a = s.o.slice(), b = s.o.slice(); a[s.ax] = lo - 6; b[s.ax] = hi + 6;
           const pa = P(a), pb = P(b); sh.line(pa[0], pa[1], pb[0], pb[1], 3);
@@ -351,7 +352,11 @@
         D.floor.forEach(([x, y]) => { const c = P([x, y, 0]); sh.circle(c[0], c[1], D.dF / 2 * k, 1); sh.line(c[0] - D.dF * k, c[1], c[0] + D.dF * k, c[1], 3).line(c[0], c[1] - D.dF * k, c[0], c[1] + D.dF * k, 3); });
       }
       // позиции
-      const rb = unionBox(Lt.walls), rc = [(rb.lo[0] + rb.hi[0]) / 2, (rb.lo[1] + rb.hi[1]) / 2, rb.lo[2] + (rb.hi[2] - rb.lo[2]) * 0.65];
+      // точка позиции редуктора: выноска идёт вертикально — не по оси вертикального вала и не через середину межосевого размера
+      const rb = unionBox(Lt.walls), avoid = [];
+      Lt.shafts.forEach((q, i) => { if (q.ax === 2) { avoid.push(q.o[0]); const n = Lt.shafts[i + 1]; if (n && n.ax === 2) avoid.push((q.o[0] + n.o[0]) / 2); } });
+      const fx = [0.3, 0.62, 0.45, 0.8, 0.15].map(f => rb.lo[0] + (rb.hi[0] - rb.lo[0]) * f).find(x => avoid.every(a => Math.abs(a - x) > 40)) || rb.lo[0] + (rb.hi[0] - rb.lo[0]) * 0.3;
+      const rc = [fx,  (rb.lo[1] + rb.hi[1]) / 2, rb.lo[2] + (rb.hi[2] - rb.lo[2]) * 0.65];
       items[vw].push({ kind: 'red', pt: P(rc) });
       items[vw].push({ kind: 'motor', pt: P([x0 + Lb * 0.6, vw === 'top' ? -d30 * 0.35 : 0, d30 * 0.2]) });
       items[vw].push({ kind: 'coupling', pt: P([gc + Lc / 4, -Dc * 0.3, Dc * 0.3]) });
@@ -361,8 +366,9 @@
     if (spr) chainDraw(R, Lt, spr, res, items, k, { front: sc.rects('front', k, 'red'), top: sc.rects('top', k, 'red') });
     // надпись «к звёздочке конвейера» ставится после размеров (sketchSheet → dims), чтобы обойти их линии
     const post = () => { if (R.task !== 1) return;
-      const s = Lt.shafts[Lt.outShaft], top = at(s, s.L), sh = res.front.sh, p = [top[0] * k, top[2] * k];
-      sh.attempt([[20, 14], [-20, 14], [24, 6], [-24, 6], [16, 22]].map(([dx, dy]) => () => sh.leader(p[0], p[1] - 2, p[0] + dx, p[1] + dy, 'к звёздочке', 'конвейера', dx < 0 ? { side: 'l' } : undefined)));
+      const s = Lt.shafts[Lt.outShaft], top = at(s, s.L), sh = res.front.sh, oe = Lt.ends.find(e => e.out && e.shaft === Lt.outShaft), r = oe ? oe.r : 20;
+      const p = [(top[0] - r) * k, (top[2] - 12) * k];   // от боковой образующей ниже торца — не через размер ⌀d над торцом
+      sh.attempt([[-20, 10], [-24, 4], [-20, 18], [-30, 12], [20, 14]].map(([dx, dy]) => () => sh.leader(p[0], p[1], p[0] + dx, p[1] + dy, 'к звёздочке', 'конвейера', dx < 0 ? { side: 'l' } : undefined)));
     };
     return { res, items, post };
   }
@@ -405,7 +411,7 @@
   }
 
   /* ---------------- лист: эскиз общего вида */
-  function sketchSheet(R, P, T, drvSpec) {
+  function sketchSheet(R, P, T, drvSpec, meta) {
     const Lt = layout(R); if (!Lt) return null;
     const D = drive(R, Lt);
     return root.DRWDRIVE.compose(R, P, T, drvSpec, {
@@ -432,14 +438,38 @@
           const sv = Lt.shafts;
           for (let i = 0; i + 1 < sv.length; i++) {
             const a = sv[i], c = sv[i + 1]; if (a.ax !== c.ax) continue;
-            if (a.ax === 2) { const pa = [a.o[0] * k, -a.o[1] * k], pc = [c.o[0] * k, -c.o[1] * k]; tp.attempt([1, -1].map(sg => () => tp.dimH(pa[0], pa[1], pc[0], pc[1], pa[1] + sg * 34, nf(Math.abs(a.o[0] - c.o[0]), 1)))); }
+            if (a.ax === 2) { const pa = [a.o[0] * k, -a.o[1] * k], pc = [c.o[0] * k, -c.o[1] * k]; tp.attempt([34, -34, 46, -46, 58, -58].map(off => () => tp.dimH(pa[0], pa[1], pc[0], pc[1], pa[1] + off, nf(Math.abs(a.o[0] - c.o[0]), 1)))); }
             else if (a.ax === 0) { const x = Math.min(a.o[0], c.o[0]) * k, xo = Math.min(Lt.flange.lo[0], ...Lt.feet.map(f => f.lo[0]), ...Lt.walls.map(w => w.lo[0])) * k - 8; tp.attempt([xo, xo - 8, x - 12].map(xd => () => tp.dimV(x, -a.o[1] * k, x, -c.o[1] * k, xd, nf(Math.abs(a.o[1] - c.o[1]), 1)))); }   // слева от корпуса
           }
         }
         // червячная передача: межосевое расстояние на виде спереди (ось червяка — ось колеса)
         if (R.task === 3) { const w = Lt.shafts[1].o; fr.attempt([1, -1].map(sg => () => fr.dimV(w[0] * k, 0, w[0] * k, w[2] * k, w[0] * k + sg * 70, nf(w[2], 1)))); }
+        // присоединительные размеры выходного конца тихоходного вала: ⌀d с полем допуска m6 и длина от крышки до торца
+        const oe = Lt.ends.find(e => e.out && e.shaft === Lt.outShaft);
+        if (oe) {
+          const vw = oe.ax === 2 ? 'front' : 'top', sh = V.res[vw].sh;
+          const Vv = VIEWS[vw], perp = oe.ax === 2 ? 0 : oe.ax === 0 ? Vv.v : 0;
+          const w = (s, p) => { const q = oe.c.slice(); q[oe.ax] = s; q[perp] += p; return q; };
+          const P = q => [q[Vv.u] * k, Vv.vs * q[Vv.v] * k];
+          const tip = oe.dir > 0 ? oe.a2 : oe.a1, base = tip - oe.dir * (oe.lOut || Math.abs(oe.a2 - oe.a1));   // длина выходной ступени
+          const A = P(w(tip, -oe.r)), B = P(w(tip, oe.r)), T0 = P(w(base, 0)), T1 = P(w(tip, 0));
+          const along = [Math.sign(T1[0] - T0[0]), Math.sign(T1[1] - T0[1])];   // направление к торцу на листе
+          const dTxt = `⌀${nf(2 * oe.r, 1)}m6`, lTxt = nf(Math.abs(tip - base), 0);
+          if (Math.abs(A[0] - B[0]) > Math.abs(A[1] - B[1])) sh.attempt([8, 14, 20, 28].map(o => () => sh.dimH(A[0], A[1], B[0], B[1], A[1] + along[1] * o, dTxt)));
+          else sh.attempt([8, 14, 20, 28].map(o => () => sh.dimV(A[0], A[1], B[0], B[1], A[0] + along[0] * o, dTxt)));
+          const C = [P(w(base, oe.r)), P(w(tip, oe.r))], C2 = [P(w(base, -oe.r)), P(w(tip, -oe.r))];
+          const lenDim = (Q, sg) => Math.abs(Q[0][0] - Q[1][0]) > Math.abs(Q[0][1] - Q[1][1])
+            ? () => sh.dimH(Q[0][0], Q[0][1], Q[1][0], Q[1][1], Q[0][1] + sg * 10, lTxt) : () => sh.dimV(Q[0][0], Q[0][1], Q[1][0], Q[1][1], Q[0][0] + sg * 10, lTxt);
+          const sideC = Math.sign((C[0][0] - T0[0]) + (C[0][1] - T0[1])) || 1;
+          sh.attempt([10, 16, 24, 32].flatMap(o => [lenDim(C, sideC * o / 10), lenDim(C2, -sideC * o / 10)]));
+          // высота оси выходного вала над полом (если вал горизонтальный и выше входного)
+          if (oe.ax !== 2 && Math.abs(oe.c[2]) > 1) {
+            const yb = (D.zTop - D.hc) * k, x = D.fx0 * k;   // рядом с высотой оси входного вала, слева
+            fr.attempt([2, 3].map(i => () => fr.dimV(x, yb, oe.c[0] * k, oe.c[2] * k, x - 12 * i, nf(oe.c[2] - (D.zTop - D.hc)))));
+          }
+        }
       }
-    }, { id: 'eskiz_vo', file: 'privod_VO_eskiz.cdw', nameSub: 'Эскиз общего вида' });
+    }, meta || { id: 'eskiz_vo', file: 'privod_VO_eskiz.cdw', nameSub: 'Эскиз общего вида' });
   }
 
   root.DRWSKETCH = { sketchSheet, layout, Scene };

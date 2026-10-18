@@ -9,17 +9,23 @@
   const fmtNum = (x, dig) => { if (x === undefined || x === null || isNaN(x)) return ''; const k = Math.pow(10, dig === undefined ? 2 : dig); return String(Math.round(x * k) / k).replace('.', ','); };
 
   /* ширина текста шрифтом «ГОСТ тип А» (оценка, мм) */
+  /* верхние индексы «⁻¹» и т. п.: в шрифте ГОСТ (и в КОМПАС) таких знаков нет — рисуются отдельной надписью 0,7h над строкой */
+  const SUP = { '⁻': '-', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
+  const SUP_RE = /[⁻⁰¹⁴-⁹]/;
+  function cw(c) {
+    if (SUP[c]) return 0.7 * cw(SUP[c]);
+    if (c === ' ') return 0.38;
+    if (/[.,:;'!|]/.test(c)) return 0.28;
+    if (/[()\[\]\-−]/.test(c)) return 0.36;
+    if (/[0-9]/.test(c)) return 0.52;
+    if (/[A-ZА-ЯЁ⌀×±°√]/.test(c)) return /[ШЩЖМЮФШWM]/.test(c) ? 0.78 : 0.6;
+    if (/[шщжмюфыwm]/.test(c)) return 0.66;
+    return 0.5;
+  }
+  /* ширина текста шрифтом «ГОСТ тип А» (оценка, мм) */
   function tw(s, h) {
     let w = 0;
-    for (const c of String(s)) {
-      if (c === ' ') w += 0.38;
-      else if (/[.,:;'!|]/.test(c)) w += 0.28;
-      else if (/[()\[\]\-−]/.test(c)) w += 0.36;
-      else if (/[0-9]/.test(c)) w += 0.52;
-      else if (/[A-ZА-ЯЁ⌀×±°√]/.test(c)) w += /[ШЩЖМЮФШWM]/.test(c) ? 0.78 : 0.6;
-      else if (/[шщжмюфыwm]/.test(c)) w += 0.66;
-      else w += 0.5;
-    }
+    for (const c of String(s)) w += cw(c);
     // поправка по замерам КОМПАС (ksGetTextLengthFromReference): шрифт ГОСТ курсивом шире оценки в среднем на 25 %
     return w * h * 1.17 + 0.22 * h;
   }
@@ -67,6 +73,24 @@
       if (dv.up !== undefined && dv.lo !== undefined) { q = P(wb + 0.4, h * 0.55); this.text(q[0], q[1], dv.up, { h: h * 0.7, ang }); q = P(wb + 0.4, -h * 0.15); this.text(q[0], q[1], dv.lo, { h: h * 0.7, ang }); }
       else if (dv.up !== undefined) { q = P(wb + 0.4, h * 0.45); this.text(q[0], q[1], dv.up, { h: h * 0.7, ang }); }
       else { q = P(wb + 0.4, -h * 0.1); this.text(q[0], q[1], dv.lo, { h: h * 0.7, ang }); }
+      return this;
+    }
+    if (SUP_RE.test(s)) {
+      // строка с верхним индексом: обычные части и индекс — отдельными надписями (как предельные отклонения)
+      const runs = []; let cur = '', sup = false;
+      for (const ch of s) { const isS = !!SUP[ch]; if (isS !== sup && cur) { runs.push([cur, sup]); cur = ''; } sup = isS; cur += isS ? SUP[ch] : ch; }
+      if (cur) runs.push([cur, sup]);
+      const w = tw(s, h), an = o.anchor || 'lb';
+      const fx = an.includes('c') ? -w / 2 : an.includes('r') ? -w : 0;
+      const fy = an.includes('m') ? -h / 2 : an.includes('t') ? -h : 0;
+      const c = Math.cos(ang * D2R), sn = Math.sin(ang * D2R);
+      const P = (u, v) => [x + (fx + u) * c - (fy + v) * sn, y + (fx + u) * sn + (fy + v) * c];
+      let u = 0;
+      runs.forEach(([t, isS]) => {
+        const hh = isS ? h * 0.7 : h, q = P(u + (isS ? 0.4 : 0), isS ? h * 0.5 : 0);
+        this.text(q[0], q[1], t, { h: hh, ang });
+        let ww = 0; for (const ch of t) ww += cw(ch); u += ww * hh * 1.17 + (isS ? 0.6 : 0);
+      });
       return this;
     }
     const w = tw(s, h), an = o.anchor || 'lb';
