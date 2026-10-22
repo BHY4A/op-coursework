@@ -109,11 +109,31 @@
   }
 
   /* ---------- основное содержание ---------- */
+  /* ссылки на источники [[key|место]], идущие подряд через запятую, — одной группой.
+     T.refs: 'full' — [1, с. 5]; 'num' — [1, 2]; 'none' — без ссылок (список источников всё равно собирается) */
+  const REF_GRP = /(\s*)(\[\[\w+\|[^\]]*\]\](?:,\s*\[\[\w+\|[^\]]*\]\])*)/g, REF_ONE = /\[\[(\w+)\|([^\]]*)\]\]/g;
+  // краткие пометки расчётных модулей: «табл. 8.7 [Ч]» → «табл. 8.7 [2]», «[Ч], с. 141» → «[2, с. 141]»
+  const SHORT = { 'Ч': 'ch', 'М': 'met' };
+  function refsText(s, mode, refNo) {
+    s = s.replace(/\[([ЧМ])\],?\s+(с\.\s*[\d–-]+)/g, (m, k, w) => `[[${SHORT[k]}|${w}]]`).replace(/\[([ЧМ])\]/g, (m, k) => `[[${SHORT[k]}|]]`);
+    const out = s.replace(REF_GRP, (m, sp, grp, at, all) => {
+      const list = [...grp.matchAll(REF_ONE)].map(x => ({ n: refNo(x[1]), w: x[2] }));
+      if (mode === 'num') return sp + '[' + [...new Set(list.map(x => x.n))].join(', ') + ']';
+      if (mode !== 'none') return sp + list.map(x => x.w ? `[${x.n}, ${x.w}]` : `[${x.n}]`).join(', ');
+      if (list.every(x => !x.w)) return '';
+      // без ссылок: «по [[ch|табл. 9.21]]» → «по табл. 9.21», иначе ссылка просто убирается
+      return /(^|[\s(])(по|в|из|согласно|см\.)$/i.test(all.slice(0, at)) ? sp + list.map(x => x.w).join(', ') : '';
+    });
+    return mode === 'none' && out !== s ? out.replace(/\s*[—–]\s*(?=\))/g, '').replace(/\(\s*\)/g, '').replace(/ +([,.;:)])/g, '$1') : out;
+  }
+  /* номер формулы, таблицы, рисунка: сквозной (5) или в пределах раздела (1.5) */
+  const numFmt = (T, sec, n) => T.numSec && sec ? sec + '.' + n : String(n);
   function Ctx(ctx, T) {
-    const st = { eq: 0, tab: 0, fig: 0, refs: [], explained: new Set(), figNums: {}, figRef: new Set() };
+    const st = { eq: 0, tab: 0, fig: 0, sec: '', refs: [], explained: new Set(), figNums: {}, figRef: new Set() };
     st.refNo = k => { let i = st.refs.indexOf(k); if (i < 0) { st.refs.push(k); i = st.refs.length - 1; } return i + 1; };
+    st.num = n => numFmt(T, st.sec, n);
     st.text = (t, sec) => {
-      let s = String(t).replace(/\[\[(\w+)\|([^\]]*)\]\]/g, (m, k, w) => `[${st.refNo(k)}, ${w}]`);
+      let s = refsText(String(t), T.refs || 'full', st.refNo);
       s = s.replace(/\{fig:(\w+)\}/g, (m, id) => { st.figRef.add(id); return st.figNums[id] || '?'; });
       return symHtml(s);
     };
@@ -128,6 +148,8 @@
       switch (it.k) {
         case 'h': {
           const style = it.lvl === 1 ? 'Heading1' : it.lvl === 3 ? 'Heading3' : 'Heading2';
+          const top = String(it.no).split('.')[0];
+          if (top !== st.sec) { st.sec = top; if (T.numSec) st.eq = st.tab = 0; }
           doc.p(it.no + ' ' + it.t, { style });
           break;
         }
@@ -150,7 +172,7 @@
         }
         case 'table': {
           st.tab++;
-          doc.p('Таблица ' + st.tab + ' – ' + plain(it.cap).replace(/\.$/, ''), { style: 'TableCaption' });
+          doc.p('Таблица ' + st.num(st.tab) + ' – ' + plain(it.cap).replace(/\.$/, ''), { style: 'TableCaption' });
           const n = it.head.length, W = doc.textW();
           const first = n > 2 ? Math.round(W * 0.34) : Math.round(W * 0.5);
           const cols = n === 1 ? [W] : [first].concat(new Array(n - 1).fill(Math.floor((W - first) / (n - 1))));
@@ -194,11 +216,12 @@
     if (T.explain && it.d) doc.html(st.text(it.d), { keepNext: true });
     const lines = fitMath(ctx.eqTex(it), ctx);
     st.eq++;
-    const syms = T.explain ? symsIn(it.f || '', it.lhs).filter(k => !st.explained.has(k)) : [];
+    const syms = T.where !== false ? symsIn(it.f || '', it.lhs).filter(k => !st.explained.has(k)) : [];
     lines.forEach((l, k) => {
       const om = ctx.omml(l.t, false, l.size || 28);
       if (k < lines.length - 1) doc.math(om, { keepNext: true });
-      else doc.mathNum(om, st.eq, syms.length > 0);
+      else if (T.eqNum === false) doc.math(om, syms.length ? { keepNext: true } : undefined);
+      else doc.mathNum(om, st.num(st.eq), syms.length > 0);
     });
     if (syms.length) {
       const SYM = M().SYM;
@@ -265,11 +288,15 @@
   }
 
   async function build(ctx, part, T) {
-    const doc = new DOCX.Doc({ codePlain: !!T.codePlain });
+    const doc = new DOCX.Doc({ codePlain: !!T.codePlain, headLine: T.headLine || 'single', line: T.line1 ? 240 : 360 });
     const R = ctx.S.R, P = ctx.S.P;
     const st = Ctx(ctx, T);
     const secs = part === 'all' ? R.sections : R.sections.filter(s => s.tab === part);
-    let n = 0; for (const s of secs) for (const it of s.items) if (it.k === 'fig' && ctx.png[it.id]) st.figNums[it.id] = String(++n);
+    let n = 0, sec = '';
+    for (const s of secs) for (const it of s.items) {
+      if (it.k === 'h') { const top = String(it.no).split('.')[0]; if (top !== sec) { sec = top; if (T.numSec) n = 0; } }
+      else if (it.k === 'fig' && ctx.png[it.id]) st.figNums[it.id] = numFmt(T, sec, ++n);
+    }
     const code = (T.code || ctx.codeDefault()) + ' 00.00.00 ПЗ';
     const SI = root.KOMPAS && root.KOMPAS.stampInfo ? root.KOMPAS.stampInfo(T) : {};
     const stampData = { code, name: (T.topic || ctx.D.TASKS[P.task].title) + '\nПояснительная записка', dev: T.student || '', chk: T.teacher || '', norm: T.normo || '', org: SI.org || ('КНИТУ' + (T.group ? ' ' + T.group : '')), tc: SI.tcontr || '', appr: SI.utv || '', lit: SI.lit || 'У', date: SI.dateDev || '' };
@@ -278,9 +305,9 @@
     let hfMain;
     if (T.frame) {
       const hdr = doc.addHF('header', doc.frameHeader());
-      const end = '<w:p><w:pPr><w:spacing w:after="0" w:line="20" w:lineRule="exact"/></w:pPr></w:p>';
+      const end = '<w:p><w:pPr><w:spacing w:after="0" w:line="20" w:lineRule="exact"/></w:pPr></w:p>';   // 20 твипов — учтено в footerMm
       const f2 = doc.addHF('footer', doc.stamp2(stampData) + end), f2a = doc.addHF('footer', doc.stamp2a(stampData) + end);
-      hfMain = { hdr: { def: hdr, first: hdr }, ftr: { def: f2a, first: part === 'all' ? f2 : f2a }, titlePg: true, footerMm: 5, headerMm: 10 };
+      hfMain = { hdr: { def: hdr, first: hdr }, ftr: { def: f2a, first: part === 'all' ? f2 : f2a }, titlePg: true, footerMm: 5 - 20 / 56.6929, headerMm: 10 };   // низ основной надписи — ровно на линии рамки
     } else {
       const fn = doc.addHF('footer', doc.footerNum());
       hfMain = { ftr: { def: fn, first: fn }, footerMm: 10 };

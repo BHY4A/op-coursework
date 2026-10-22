@@ -112,13 +112,16 @@
     const border = `<w:tblBorders><w:top ${B('single')}/><w:left ${B('single')}/><w:bottom ${B('single')}/><w:right ${B('single')}/><w:insideH ${B('single')}/><w:insideV ${B('single')}/></w:tblBorders>`;
     let x = `<w:tbl><w:tblPr><w:tblW w:w="${cw.reduce((a, b) => a + b, 0)}" w:type="dxa"/><w:jc w:val="center"/>${border}<w:tblLayout w:type="fixed"/><w:tblCellMar><w:left w:w="80" w:type="dxa"/><w:right w:w="80" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid>${cw.map(w => `<w:gridCol w:w="${w}"/>`).join('')}</w:tblGrid>`;
     const size = opt.size || 24;
+    // линия под шапкой: ГОСТ 2.105 требует лишь отделить головку линией — по умолчанию обычная
+    const hk = opt.headLine || this.opt.headLine || 'single';
+    const hl = hk === 'double' ? B('double', 4) : hk === 'thick' ? B('single', 12) : '';
     const cell = (c, k, hdr, last) => {
       const isO = c && typeof c === 'object' && c.omml;
       const segs = isO ? null : this.htmlSegs(String(c === undefined || c === null ? '' : c));
       const content = segs ? this.runs(segs, { size }) : '';
       const al = hdr ? '<w:jc w:val="center"/>' : (opt.align && opt.align[k] ? `<w:jc w:val="${opt.align[k]}"/>` : '');
       const para = isO ? `<w:p><w:pPr><w:pStyle w:val="TableText"/>${al}</w:pPr>${c.omml}</w:p>` : `<w:p><w:pPr><w:pStyle w:val="TableText"/>${al}</w:pPr>${content}</w:p>`;
-      const bb = hdr && last ? `<w:tcBorders><w:bottom ${B('double', 6)}/></w:tcBorders>` : '';
+      const bb = hdr && last && hl ? `<w:tcBorders><w:bottom ${hl}/></w:tcBorders>` : '';
       return `<w:tc><w:tcPr><w:tcW w:w="${cw[k]}" w:type="dxa"/>${bb}<w:vAlign w:val="center"/></w:tcPr>${para}</w:tc>`;
     };
     if (head) x += `<w:tr><w:trPr><w:tblHeader/><w:cantSplit/><w:trHeight w:val="${tw(5)}"/></w:trPr>${head.map((c, k) => cell(c, k, true, true)).join('')}</w:tr>`;
@@ -159,10 +162,11 @@
     const run = o.field ? doc.runs([{ field: o.field, t: o.t || '1', size }]) : doc.runs(String(txt || ''), { size, i: !!o.i, b: !!o.b });
     return `<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/><w:ind w:left="0" w:right="0" w:firstLine="0"/><w:jc w:val="${al}"/></w:pPr>${run}</w:p>`;
   };
-  /* таблица основной надписи: grid — ширины колонок (мм), rows — [{h (мм), cells: [{span, vmerge: 'restart'|'cont', t, o, bTop...}]}] */
+  /* таблица основной надписи: левую, правую и нижнюю линии даёт рамка листа — свои не рисуем, иначе две толстые линии
+     ложатся почти вплотную и выглядят двойной. grid — ширины колонок (мм), rows — [{h (мм), cells: [{span, vmerge: 'restart'|'cont', t, o, bTop...}]}] */
   function stampTable(doc, grid, rows, indentMm) {
     const thick = 'w:val="single" w:sz="12" w:space="0" w:color="000000"', thin = 'w:val="single" w:sz="4" w:space="0" w:color="000000"';
-    let x = `<w:tbl><w:tblPr><w:tblW w:w="${tw(grid.reduce((a, b) => a + b, 0))}" w:type="dxa"/><w:tblInd w:w="${tw(indentMm)}" w:type="dxa"/><w:tblBorders><w:top ${thick}/><w:left ${thick}/><w:bottom ${thick}/><w:right ${thick}/><w:insideH ${thin}/><w:insideV ${thick}/></w:tblBorders><w:tblLayout w:type="fixed"/><w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="20" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/><w:right w:w="20" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid>${grid.map(g => `<w:gridCol w:w="${tw(g)}"/>`).join('')}</w:tblGrid>`;
+    let x = `<w:tbl><w:tblPr><w:tblW w:w="${tw(grid.reduce((a, b) => a + b, 0))}" w:type="dxa"/><w:tblInd w:w="${tw(indentMm)}" w:type="dxa"/><w:tblBorders><w:top ${thick}/><w:left w:val="nil"/><w:bottom w:val="nil"/><w:right w:val="nil"/><w:insideH ${thin}/><w:insideV ${thick}/></w:tblBorders><w:tblLayout w:type="fixed"/><w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="20" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/><w:right w:w="20" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid>${grid.map(g => `<w:gridCol w:w="${tw(g)}"/>`).join('')}</w:tblGrid>`;
     for (const r of rows) {
       x += `<w:tr><w:trPr><w:cantSplit/><w:trHeight w:val="${tw(r.h)}" w:hRule="exact"/></w:trPr>`;
       let col = 0;
