@@ -1,4 +1,4 @@
-/* drw_drive.js — чертёж общего вида привода (00.00.00 ВО): вид спереди и вид сверху.
+/* drw_drive.js — чертёж общего вида привода (00.00.00 ВО): вид спереди, вид слева и вид сверху (план).
    Редуктор изображается по его 3D-модели (силуэт объединения корпуса, крышек подшипников, концов валов, звёздочки);
    двигатель — по размерам каталога АИР; муфта, рама, цепная передача, вал с барабаном — по расчёту. */
 (function (root) {
@@ -26,6 +26,22 @@
       xs.sort((p, q) => p - q);
       for (let i = 0; i + 1 < xs.length; i += 2) this.span(j, xs[i], xs[i + 1]);
     }
+  };
+  Raster.prototype.inside = function (x, y) {
+    const c = this.c, r = this.rows.get(Math.floor(y / c)); if (!r) return false;
+    const i = x / c; return r.some(s => i >= s[0] && i < s[1]);
+  };
+  /* отрезок без частей, закрытых растром (линии невидимого контура на общем виде не показываются) */
+  Raster.prototype.clip = function (x1, y1, x2, y2) {
+    const L = Math.hypot(x2 - x1, y2 - y1), n = Math.max(1, Math.ceil(L / (this.c / 2))), out = [];
+    let a = null;
+    for (let i = 0; i < n; i++) {
+      const t0 = i / n, t1 = (i + 1) / n, tm = (t0 + t1) / 2, vis = !this.inside(x1 + (x2 - x1) * tm, y1 + (y2 - y1) * tm);
+      if (vis && a === null) a = t0;
+      if (!vis && a !== null) { out.push([a, t0]); a = null; }
+    }
+    if (a !== null) out.push([a, 1]);
+    return out.map(([u, v]) => [x1 + (x2 - x1) * u, y1 + (y2 - y1) * u, x1 + (x2 - x1) * v, y1 + (y2 - y1) * v]);
   };
   Raster.prototype.loops = function () {
     const c = this.c, rects = [];
@@ -92,6 +108,7 @@
     });
     const loops = R.loops();
     loops.det = det;
+    loops.raster = R;
     return loops;
   }
 
@@ -225,6 +242,55 @@
         });
       }
     }
+    // ---- вид слева (ГОСТ 2.305: справа от главного вида): смотрим вдоль +fx; ось листа x = −fy, y = fz
+    {
+      const sh = mk(), vS = { ex: fyAx.map(v => -v * k), ey: up.map(v => v * k), ed: [1, 0, 0], ox: 0, oy: zOff * k };
+      const P3 = (fy, fz) => [-fy * k, fz * k];
+      const sil = projectReducer(M, vS, 1.2), RS = sil.raster;
+      sil.forEach(lp => sh.poly(lp, 1));
+      (sil.det || []).forEach(q => q[0] === 'L' ? sh.line(q[1], q[2], q[3], q[4], 1) : sh.circle(q[1], q[2], q[3], 1));
+      // что дальше редуктора от наблюдателя (по fx) — закрыто его силуэтом
+      const fb = res.front.sh.geoBox(), redFx = (fb.x1 + fb.x2) / 2 / k;
+      const seg = (behind, x1, y1, x2, y2, st) => (behind ? RS.clip(x1, y1, x2, y2) : [[x1, y1, x2, y2]]).forEach(q => sh.line(q[0], q[1], q[2], q[3], st));
+      const box = (behind, fy1, z1, fy2, z2, st) => { const a = P3(fy1, z1), b = P3(fy2, z2); [[a[0], a[1], b[0], a[1]], [b[0], a[1], b[0], b[1]], [b[0], b[1], a[0], b[1]], [a[0], b[1], a[0], a[1]]].forEach(q => seg(behind, ...q, st === undefined ? 1 : st)); };
+      const circ = (behind, fy, z, r, st) => { const c = P3(fy, z), n = 48; if (!behind || ![0, 1, 2, 3].some(i => RS.inside(c[0] + r * k * Math.cos(i * Math.PI / 2), c[1] + r * k * Math.sin(i * Math.PI / 2))) && !RS.inside(c[0], c[1])) { sh.circle(c[0], c[1], r * k, st === undefined ? 1 : st); return; } for (let i = 0; i < n; i++) { const a1 = 2 * Math.PI * i / n, a2 = 2 * Math.PI * (i + 1) / n; seg(true, c[0] + r * k * Math.cos(a1), c[1] + r * k * Math.sin(a1), c[0] + r * k * Math.cos(a2), c[1] + r * k * Math.sin(a2), st === undefined ? 1 : st); } };
+      // рама: продольные швеллеры в торец, поперечины сверху, подкладки под двигатель
+      const b2 = F.bc / 2;
+      [F.yL, F.yR].forEach(y => box(false, y - b2, -F.hc, y + b2, 0));
+      box(false, F.yL - b2, -F.hc, F.yR + b2, 0);
+      if (F.cross.some(c => c.top)) box(true, F.yL - b2, 0, F.yR + b2, F.hc);
+      // двигатель (в торец): корпус, кожух вентилятора, лапы, коробка выводов
+      const Lb = (m.l30 || 400) - (m.l1 || 80), d30 = m.d30 || 2 * (m.h || 100) * 0.95, h = m.h || 100, b10 = m.b10 || 160, b11 = m.b11 || b10 + 40;
+      const mBehind = F.mSh + Lb / 2 > redFx, axM = zM0 + h;
+      F.padsM.forEach(p => box(mBehind, F.axY - b11 / 2 - 10, p.z0, F.axY + b11 / 2 + 10, p.z0 + p.t));
+      box(mBehind, F.axY - b11 / 2, zM0, F.axY + b11 / 2, zM0 + Math.max(10, h * 0.14));
+      box(mBehind, F.axY - d30 * 0.3, axM + d30 / 2 - 4, F.axY + d30 * 0.3, zM0 + (m.h31 || h + d30 / 2 + 40));
+      circ(mBehind, F.axY, axM, d30 / 2);
+      // муфта
+      const Dc = cp.D || 120;
+      circ(F.mEnd > redFx, F.axY, axZ, Dc / 2, 1);
+      res.side = { sh, view: vS };
+      items.side = [];
+    }
+    // цепная передача и барабан на виде слева
+    if (sp && spIt && R.chn) {
+      const sh = res.side.sh, RS = null;
+      const c1 = W2F(spIt.pos), r1 = R.chn.De1 / 2, r2 = R.chn.De2 / 2, b = sp.geom.b, a = R.chn.a;
+      const axv = spIt.axes.slice(0, 3), alongFx = Math.abs(axv[0]) > 0.9;
+      const aD = Math.min(a, Math.max(r1 + r2 + 70, 300));
+      const P3 = (fy, fz) => [-fy * k, fz * k];
+      if (alongFx) {
+        // звёздочки видны с торца: окружности и ветви цепи (вторая звёздочка смещена поперёк рамы)
+        const p1 = P3(c1.fy, c1.fz), p2 = P3(c1.fy + aD, c1.fz);
+        [[p1, r1, 1], [p2, r2, 2]].forEach(([p, r, st]) => { sh.circle(p[0], p[1], r * k, st); sh.circle(p[0], p[1], (r - R.chn.t * 0.6) * k, 2); });
+        [1, -1].forEach(sg => sh.line(p1[0], p1[1] + sg * r1 * k, p2[0], p2[1] + sg * r2 * k, 2));
+        if (R.drum) { const D = R.drum.Db; sh.circle(p2[0], p2[1], D / 2 * k, 1); }
+      } else {
+        const p = P3(c1.fy, c1.fz);
+        sh.poly([[p[0] - b / 2 * k, p[1] - r1 * k], [p[0] + b / 2 * k, p[1] - r1 * k], [p[0] + b / 2 * k, p[1] + r1 * k], [p[0] - b / 2 * k, p[1] + r1 * k]], 1);
+      }
+      void RS;
+    }
     // выходной вал задания 1 — к ведущей звёздочке подвесного конвейера
     if (R.task === 1) {
       const o = L.out, top = o.pos.map((v, i) => v + o.ax[i] * o.segs[o.segs.length - 1].x1);
@@ -266,6 +332,9 @@
       if (!p1) continue;
       const p2 = DR.placeGroup(sh, tp.p, { fixX: p1.dx, near: [0, p1.box.y1 - 12 - (tb.y2 - tb.y1) / 2] });
       if (!p2) continue;
+      // вид слева — справа от главного, в проекционной связи (на одной высоте)
+      const sd = V.res.side && V.res.side.sh;
+      if (sd) { const sb = sd.bbox(0); const p3 = DR.placeGroup(sh, sd.p, { fixY: p1.dy, near: [p1.box.x2 + 20 + (sb.x2 - sb.x1) / 2, 0] }); if (!p3) continue; }
       return { id: meta.id, file: meta.file, name: (root.DATA.TASKS[P.task] || {}).title || 'Привод', nameSub: meta.nameSub, scale: kt, fmt: 'A1', landscape: land, sh };
     }
     return null;
@@ -292,6 +361,10 @@
         const h = fl[0];
         tp.attempt([[-14, 14], [-14, -14], [14, -14]].map(([dx, dy]) => () => tp.leader(h.fx * k + Math.sign(dx) * F.dF / 2 * k * 0.7, -h.fy * k + Math.sign(dy) * F.dF / 2 * k * 0.7, h.fx * k + dx, -h.fy * k + dy, `⌀${F.dF}`, `${F.floor.length} отв.`, { side: dx > 0 ? 'r' : 'l' })));
         if (R.chn) { /* межосевое расстояние цепной передачи */ }
+      }
+      if (V.res.side) {
+        const sd = V.res.side.sh, b = sd.geoBox();
+        sd.dimH(b.x1, b.y1, b.x2, b.y1, b.y1 - 14, nf((b.x2 - b.x1) / k) + '*');
       }
     } }, { id: 'obshiy_vid', file: 'privod_VO.cdw', nameSub: 'Чертёж общего вида' });
   }
