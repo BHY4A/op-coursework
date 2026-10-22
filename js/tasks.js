@@ -9,7 +9,7 @@
   const OPT_DEF = {
     sync: 1500, motor: 'auto',
     // червячная передача
-    etaWpre: 0.75, wormMat: 'auto', wormCast: 'П', wormSH: 'met', wormSF: 'met', wormAw: 'ch', wormAwRound: 'std', wormMUp: false, wormSHcheck: 'met', wormSFcheck: 'met',
+    etaWpre: 0.75, wormMat: 'auto', wormCast: 'П', wormSH: 'met', wormSF: 'met', wormAw: 'met', wormAwRound: 'std', wormMUp: false, wormSHcheck: 'met', wormSFcheck: 'met',
     wormGround: true, wormNe: 'simple', xLoad: 'load', wormDeg: 'auto', Cv: 0.85, sH0: 250, kSF: 0.25, fNonTin: 1.5, ZE: Math.sqrt(1.32e5 / (PI * (1 - 0.09))), Kpre: 1.2, z1: 0, q: 0,
     wormStiff: 'met', l1Mode: 'daM2',
     // зубчатые

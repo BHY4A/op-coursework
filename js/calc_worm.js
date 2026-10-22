@@ -88,8 +88,8 @@
     const K = o.Kpre;
     let awr;
     if (O.wormAw === 'met') {
-      awr = 610 * (z2 + q) * Math.cbrt(o.TII * K / (q * Math.pow(o.sH * 1e6, 2))) * 1000;
-      rep.eq({ lhs: 'a_{w}', f: 'K_{a}\\cdot(z_{2}+q)\\cdot \\sqrt[3]{\\dfrac{T_{II}\\cdot K_{H\\beta}}{q\\cdot [\\sigma]_{H}^{2}}}', s: `610\\cdot(${z2}+${nx(q)})\\cdot \\sqrt[3]{\\dfrac{${n(o.TII)}\\cdot ${nx(K)}}{${nx(q)}\\cdot(${n(o.sH)}\\cdot 10^{6})^{2}}}`, v: awr, u: 'мм', cmp: '\\ge', d: 'Межосевое расстояние по формуле методички (Ka = 610; момент в Н·м, напряжение в Па).' });
+      awr = 610 * Math.cbrt(o.TII * K / (q * Math.pow(o.sH, 2)));
+      rep.eq({ lhs: 'a_{w}', f: 'K_{a}\\cdot \\sqrt[3]{\\dfrac{T_{II}\\cdot K_{H\\beta}}{q\\cdot [\\sigma]_{H}^{2}}}', s: `610\\cdot \\sqrt[3]{\\dfrac{${n(o.TII)}\\cdot ${nx(K)}}{${nx(q)}\\cdot ${n(o.sH)}^{2}}}`, v: awr, u: 'мм', cmp: '\\ge', d: 'Межосевое расстояние по формуле методички (Ka = 610; момент в Н·м, напряжение в МПа).', ref: ['met', 'п. 1.4.2'] });
     } else {
       const k = z2 / q;
       awr = (k + 1) * Math.cbrt(Math.pow(170 / (k * o.sH), 2) * o.TII * 1e3 * K);
