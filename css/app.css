@@ -210,3 +210,6 @@ svg.fg g[data-tip]:hover .bx2, svg.fg g[data-tip]:hover .bx, svg.fg rect[data-ti
 .dw-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin: 6px 0 12px; }
 .dw-top .dhint { font-size: 13px; color: var(--muted); }
 @media (max-width: 640px) { .dw-top .btn { width: 100%; white-space: normal; } }
+/* KOMPAS Build — первая строка списка файлов: выделена, чтобы её не пропустили */
+.file-row.builder-row { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+.file-row.builder-row b { color: var(--accent); }
