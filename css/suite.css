@@ -616,3 +616,13 @@ figure.fig .plot > * { animation: suite-fade .3s var(--ease) backwards; }
 @media (max-width: 960px) {
   nav.rail { margin-inline: -16px; padding-inline: 16px; scroll-padding-inline: 16px; }
 }
+
+/* шапка на средних экранах: всё в одну строку, длинный подзаголовок обрезается многоточием */
+@media (min-width: 641px) {
+  .top-in { flex-wrap: nowrap; }
+  .brand > div { min-width: 0; }
+  .brand b, .brand small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .var-ctl, .top .icon-btn, .top .btn { flex: none; }
+  .var-ctl label { white-space: nowrap; }
+}
+@media (min-width: 641px) and (max-width: 1023px) { .var-ctl label { display: none; } }
