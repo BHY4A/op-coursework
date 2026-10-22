@@ -211,7 +211,9 @@
   }
 
   /* ---------------- сцена и видимость: ящики и цилиндры, проекция на вид, удаление невидимых частей */
-  const VIEWS = { front: { u: 0, v: 2, vs: 1, d: 1, near: -1 }, top: { u: 0, v: 1, vs: -1, d: 2, near: 1 } };
+  // вид сверху без зеркального отражения (ГОСТ 2.305): наблюдатель главного вида — со стороны −y, на виде сверху +y — вверх
+  const VIEWS = { front: { u: 0, v: 2, vs: 1, d: 1, near: -1 }, top: { u: 0, v: 1, vs: 1, d: 2, near: 1 } };
+  const SY = VIEWS.top.vs;
   function Scene() { this.o = []; }
   Scene.prototype.box = function (lo, hi, st, tag) { this.o.push({ t: 'b', lo, hi, st: st || 1, tag }); return this; };
   Scene.prototype.cyl = function (ax, c, a1, a2, r, st, tag) { const lo = c.slice(), hi = c.slice(); for (let i = 0; i < 3; i++) { if (i === ax) { lo[i] = Math.min(a1, a2); hi[i] = Math.max(a1, a2); } else { lo[i] = c[i] - r; hi[i] = c[i] + r; } } this.o.push({ t: 'c', ax, c, lo, hi, r, st: st || 1, tag }); return this; };
@@ -381,7 +383,7 @@
     const c1 = { x: spr.c[0], y: spr.c[1], z: spr.c[2] };
     const c2 = alongX ? { x: c1.x, y: c1.y + aD, z: c1.z } : { x: c1.x - aD, y: c1.y, z: c1.z };
     ['front', 'top'].forEach(vw => {
-      const sh = res[vw].sh, pt = q => vw === 'front' ? [q.x * k, q.z * k] : [q.x * k, -q.y * k];
+      const sh = res[vw].sh, pt = q => vw === 'front' ? [q.x * k, q.z * k] : [q.x * k, SY * q.y * k];
       const seesFace = vw === 'front' && !alongX;
       if (seesFace) {
         const p2 = pt(c2); sh.circle(p2[0], p2[1], r2 * k, 2); sh.circle(p2[0], p2[1], (r2 - chn.t * 0.6) * k, 2);
@@ -400,7 +402,7 @@
     });
     if (R.drum && alongX) {
       const dr = R.drum, D = dr.Db, B = dr.Bb, sh = res.top.sh;
-      const p = [c2.x * k, -c2.y * k], sg = -1;
+      const p = [c2.x * k, SY * c2.y * k], sg = -1;
       const xm = p[0] + sg * (dr.ak4 || 100) * k + sg * dr.l4 / 2 * k, yA = p[1], Lw = dr.l4 + 120;
       sh.rect(xm - B / 2 * k, yA - D / 2 * k, xm + B / 2 * k, yA + D / 2 * k, 1);
       sh.line(Math.min(p[0], xm - sg * Lw / 2 * k) - 6, yA, Math.max(p[0], xm + sg * Lw / 2 * k) + 6, yA, 3);
@@ -430,16 +432,17 @@
           const b = tp.geoBox();
           tp.dimV(b.x1, b.y1, b.x1, b.y2, b.x1 - 14, nf((b.y2 - b.y1) / k) + '*');
           const xs = [...new Set(D.floor.map(h => Math.round(h[0])))].sort((p, q) => p - q), ys = [...new Set(D.floor.map(h => Math.round(h[1])))].sort((p, q) => p - q);
-          tp.dimH(xs[0] * k, -ys[ys.length - 1] * k, xs[xs.length - 1] * k, -ys[ys.length - 1] * k, Math.min(b.y1, -ys[ys.length - 1] * k) - 12, nf(xs[xs.length - 1] - xs[0]));
-          tp.dimV(xs[xs.length - 1] * k, -ys[0] * k, xs[xs.length - 1] * k, -ys[ys.length - 1] * k, b.x2 + 12, nf(ys[ys.length - 1] - ys[0]));
+          const yLow = SY > 0 ? ys[0] : ys[ys.length - 1];   // ряд отверстий, что ниже на листе
+          tp.dimH(xs[0] * k, SY * yLow * k, xs[xs.length - 1] * k, SY * yLow * k, Math.min(b.y1, SY * yLow * k) - 12, nf(xs[xs.length - 1] - xs[0]));
+          tp.dimV(xs[xs.length - 1] * k, SY * ys[0] * k, xs[xs.length - 1] * k, SY * ys[ys.length - 1] * k, b.x2 + 12, nf(ys[ys.length - 1] - ys[0]));
           const h = D.floor[0];
-          tp.attempt([[-14, 14], [-14, -14], [14, -14]].map(([dx, dy]) => () => tp.leader(h[0] * k + Math.sign(dx) * D.dF / 2 * k * 0.7, -h[1] * k + Math.sign(dy) * D.dF / 2 * k * 0.7, h[0] * k + dx, -h[1] * k + dy, `⌀${D.dF}`, `${D.floor.length} отв.`, { side: dx > 0 ? 'r' : 'l' })));
+          tp.attempt([[-14, 14], [-14, -14], [14, -14]].map(([dx, dy]) => () => tp.leader(h[0] * k + Math.sign(dx) * D.dF / 2 * k * 0.7, SY * h[1] * k + Math.sign(dy) * D.dF / 2 * k * 0.7, h[0] * k + dx, SY * h[1] * k + dy, `⌀${D.dF}`, `${D.floor.length} отв.`, { side: dx > 0 ? 'r' : 'l' })));
           // межосевые расстояния параллельных валов в плане
           const sv = Lt.shafts;
           for (let i = 0; i + 1 < sv.length; i++) {
             const a = sv[i], c = sv[i + 1]; if (a.ax !== c.ax) continue;
-            if (a.ax === 2) { const pa = [a.o[0] * k, -a.o[1] * k], pc = [c.o[0] * k, -c.o[1] * k]; tp.attempt([34, -34, 46, -46, 58, -58].map(off => () => tp.dimH(pa[0], pa[1], pc[0], pc[1], pa[1] + off, nf(Math.abs(a.o[0] - c.o[0]), 1)))); }
-            else if (a.ax === 0) { const x = Math.min(a.o[0], c.o[0]) * k, xo = Math.min(Lt.flange.lo[0], ...Lt.feet.map(f => f.lo[0]), ...Lt.walls.map(w => w.lo[0])) * k - 8; tp.attempt([xo, xo - 8, x - 12].map(xd => () => tp.dimV(x, -a.o[1] * k, x, -c.o[1] * k, xd, nf(Math.abs(a.o[1] - c.o[1]), 1)))); }   // слева от корпуса
+            if (a.ax === 2) { const pa = [a.o[0] * k, SY * a.o[1] * k], pc = [c.o[0] * k, SY * c.o[1] * k]; tp.attempt([34, -34, 46, -46, 58, -58].map(off => () => tp.dimH(pa[0], pa[1], pc[0], pc[1], pa[1] + off, nf(Math.abs(a.o[0] - c.o[0]), 1)))); }
+            else if (a.ax === 0) { const x = Math.min(a.o[0], c.o[0]) * k, xo = Math.min(Lt.flange.lo[0], ...Lt.feet.map(f => f.lo[0]), ...Lt.walls.map(w => w.lo[0])) * k - 8; tp.attempt([xo, xo - 8, x - 12].map(xd => () => tp.dimV(x, SY * a.o[1] * k, x, SY * c.o[1] * k, xd, nf(Math.abs(a.o[1] - c.o[1]), 1)))); }   // слева от корпуса
           }
         }
         // червячная передача: межосевое расстояние на виде спереди (ось червяка — ось колеса)

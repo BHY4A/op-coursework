@@ -1039,7 +1039,9 @@
     const build = (k1, k2) => {
       const S = mainSec(k1);
       let G2 = null;
-      if (V.side) G2 = sideView(A, R, k2 === k1 ? S : sectionView(A, R, V.main, k2), V.main, V.side, k2, MV);
+      const SBV = (C.opts.views && C.opts.views.sb) || {};
+      if (SBV.second === false) { /* второй вид выключен в настройках */ }
+      else if (V.side) G2 = sideView(A, R, k2 === k1 ? S : sectionView(A, R, V.main, k2), V.main, V.side, k2, MV);
       else if (geo && root.DRWVERT) G2 = root.DRWVERT.topView(A, R, geo, k2);
       else if (V.second) { G2 = sectionView(A, R, V.second, k2, MS && MS.second ? { model: MS.second } : {}); sectionDims(G2, R, R.task, k2); }
       const Nm = cr(V.main.u, V.main.v), cutM = A.shafts.length ? dot(A.shafts[0].pos, Nm) : 0;
@@ -1052,9 +1054,9 @@
       const take = (items, arr) => items.forEach(it => { const p = find(it); if (p && !used.has(p)) { used.add(p); arr.push(Object.assign({ pos: p }, it)); } });
       take(S.items, list);
       if (G2) take(G2.items, list2);
-      const E = MX && V.extra ? modelView(A, R, MX, Fx, V.extra.u, V.extra.v, k2) : null;
+      const E = MX && V.extra && SBV.extra !== false ? modelView(A, R, MX, Fx, V.extra.u, V.extra.v, k2) : null;
       if (E) { take(E.items, listE); feetPlanDims(E.sh, k2, V.extra.u, V.extra.v, FEET, { draw: false }); }
-      if (V.second) { const w = A.wheels.find(q => q.kind === 'wormwheel'); if (w) { const bbm = S.sh.bbox(0); const x = dot(w.pos, V.main.u) * k1; S.sh.cutV(x, bbm.y1 - 2, bbm.y2 + 2, 'Б', 'r'); } }
+      if (V.second && G2) { const w = A.wheels.find(q => q.kind === 'wormwheel'); if (w) { const bbm = S.sh.bbox(0); const x = dot(w.pos, V.main.u) * k1; S.sh.cutV(x, bbm.y1 - 2, bbm.y2 + 2, 'Б', 'r'); } }
       positions(S.sh, list);
       if (G2) positions(G2.sh, list2);
       if (E) positions(E.sh, listE);

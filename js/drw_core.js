@@ -4,7 +4,7 @@
   'use strict';
   const D2R = Math.PI / 180;
   const FONT_K = 1122 / 714;   // кегль шрифта ГОСТ 2.304 тип А по высоте прописной h (cap height 714 из 1122 ед.)
-  const FMT = { A4: [210, 297], A3: [420, 297], A2: [594, 420], A1: [841, 594] };
+  const FMT = { A4: [210, 297], A3: [420, 297], A2: [594, 420], A1: [841, 594], A0: [1189, 841] };
   const r3 = x => Math.round(x * 1000) / 1000;
   const fmtNum = (x, dig) => { if (x === undefined || x === null || isNaN(x)) return ''; const k = Math.pow(10, dig === undefined ? 2 : dig); return String(Math.round(x * k) / k).replace('.', ','); };
 
@@ -1058,7 +1058,10 @@
      7…10 мм между параллельными размерными линиями), полка выноски — дальше или в другую сторону.
      Выбор между ними — через attempt, а после заполнения листа — через repair.
      Режим «без размеров» (DRWCORE.opts.noDims): размеры и выноски с размерами не проставляются — для ручной простановки. */
-  const OPTS = { noDims: false, wormFa: '3675', scaleUniform: false };
+  // views — какие виды строить: vo — общий вид привода (главный всегда; top, left, right, bottom, back),
+  // sb — сборочный чертёж редуктора (главный всегда; second — второй вид/разрез, extra — третий вид)
+  const VIEWS_DEF = { vo: { top: true, left: true, right: false, bottom: false, back: false }, sb: { second: true, extra: true } };
+  const OPTS = { noDims: false, wormFa: '3675', scaleUniform: false, views: JSON.parse(JSON.stringify(VIEWS_DEF)), VIEWS_DEF };
   const DIMTXT = /⌀|^М\d|отв\.|^R\d|×45°|^\d+[,\d]*\*?$/;
   (function () {
     const dH = S.dimH, dV = S.dimV, ld = S.leader, dA = S.dimAng, dHV = S.dimHalfV;

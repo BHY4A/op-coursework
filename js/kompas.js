@@ -247,10 +247,12 @@
     const nd = !!(T || {}).noDims;   // «без размеров» — для ручной простановки
     const wf = (T || {}).wormFa === '1643' ? '1643' : '3675';   // допуск aw червячной передачи
     const su = !!(T || {}).scaleUniform;   // все виды СБ в одном масштабе
-    const key = JSON.stringify({ c: codeOf(P, T || {}), s: (T || {}).student, t: (T || {}).teacher, nd, wf, su });   // основная надпись в геометрию листов не входит — её поля кэш не сбрасывают
+    const DEFV = root.DRWCORE ? root.DRWCORE.opts.VIEWS_DEF : { vo: {}, sb: {} }, tv = (T || {}).views || {};
+    const vw = { vo: Object.assign({}, DEFV.vo, tv.vo || {}), sb: Object.assign({}, DEFV.sb, tv.sb || {}) };   // какие виды строить
+    const key = JSON.stringify({ c: codeOf(P, T || {}), s: (T || {}).student, t: (T || {}).teacher, nd, wf, su, vw });   // основная надпись в геометрию листов не входит — её поля кэш не сбрасывают
     const c = SHEETS.get(R); if (c && c.key === key) return c.v;
     // флаг действует только пока строятся листы (между шагами генератора — снят, чтобы не задеть рисунки записки)
-    const on = () => { if (root.DRWCORE) Object.assign(root.DRWCORE.opts, { noDims: nd, wormFa: wf, scaleUniform: su }); }, off = () => { if (root.DRWCORE) Object.assign(root.DRWCORE.opts, { noDims: false, wormFa: '3675', scaleUniform: false }); };
+    const on = () => { if (root.DRWCORE) Object.assign(root.DRWCORE.opts, { noDims: nd, wormFa: wf, scaleUniform: su, views: vw }); }, off = () => { if (root.DRWCORE) Object.assign(root.DRWCORE.opts, { noDims: false, wormFa: '3675', scaleUniform: false, views: JSON.parse(JSON.stringify(DEFV)) }); };
     off(); yield 'Рабочие чертежи деталей'; on();
     const out = [];
     if (root.DRAWINGS && root.DRWASM) {

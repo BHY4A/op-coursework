@@ -62,7 +62,10 @@
     const nF = Lf > 800 ? 4 : 3;
     const floor = [];
     [yL, yR].forEach(y => { for (let i = 0; i < nF; i++) floor.push({ fx: fx0 + 40 + (Lf - 80) * i / (nF - 1), fy: y }); });
-    return { R, m, no, hc, bc, sc, tc, qm, Lf, Wf, fx0, fx1, yL, yR, axY, redHoles, motHoles, redFoot, cross, padsR, padsM, tr, tm, raise, floor, dF, dRed: (ft.d || 18) + 1, dMot: (m.d10 || 12) + 1, Hin, Hm, mEnd, mSh };
+    // знак ориентации видов (ГОСТ 2.305, без зеркального отражения): +1, если наблюдатель главного вида — со стороны +fy
+    const upW = (H3 && H3.feet && H3.feet.up) || [0, 0, 1], fyW = R.task === 1 ? [0, 0, 1] : [0, 1, 0];
+    const sig = Math.sign(-upW[2] * fyW[1] + upW[1] * fyW[2]) || 1;
+    return { sig, R, m, no, hc, bc, sc, tc, qm, Lf, Wf, fx0, fx1, yL, yR, axY, redHoles, motHoles, redFoot, cross, padsR, padsM, tr, tm, raise, floor, dF, dRed: (ft.d || 18) + 1, dMot: (m.d10 || 12) + 1, Hin, Hm, mEnd, mSh };
   }
 
   function partsOf(F) {
@@ -116,8 +119,9 @@
     // ---- вид сверху
     {
       const sh = new Sheet('A1', true); sh.frame = { x1: -1e5, y1: -1e5, x2: 1e5, y2: 1e5 };
-      const X = x => (x - F.fx0) * k, Y = y => (y - F.yL + F.bc / 2) * k;
-      const b2 = F.bc / 2;
+      // вид сверху: вверх на листе — от наблюдателя главного вида (y листа = sT·fy)
+      const sT = -(F.sig || 1), b2 = F.bc / 2, yLo = sT > 0 ? F.yL - b2 : F.yR + b2;
+      const X = x => (x - F.fx0) * k, Y = y => sT * (y - yLo) * k;
       [F.yL, F.yR].forEach(y => { sh.rect(X(F.fx0), Y(y - b2), X(F.fx1), Y(y + b2), 1); sh.line(X(F.fx0), Y(y + (y === F.yL ? 1 : -1) * (b2 - F.sc)), X(F.fx1), Y(y + (y === F.yL ? 1 : -1) * (b2 - F.sc)), 4); });
       F.cross.forEach(c => c.top ? sh.rect(X(c.x - b2), Y(F.yL - b2), X(c.x + b2), Y(F.yR + b2), 1) : sh.rect(X(c.x - b2), Y(F.yL + b2), X(c.x + b2), Y(F.yR - b2), 1));
       F.padsR.forEach(p => sh.rect(X(p.x1), Y(p.y1), X(p.x2), Y(p.y2), 1));
@@ -126,7 +130,7 @@
       F.redHoles.forEach(h => hole(h, F.dRed)); F.motHoles.forEach(h => hole(h, F.dMot));
       sh.line(X(F.fx0) - 8, Y(F.axY), X(F.fx1) + 8, Y(F.axY), 3);
       // размеры: габарит, отверстия двигателя и редуктора
-      const yb = Y(F.yL - b2);
+      const yb = Y(yLo);
       sh.dimV(X(F.fx1), Y(F.yL - b2), X(F.fx1), Y(F.yR + b2), X(F.fx1) + 12, nf(F.Wf));
       const ry = [...new Set(F.redHoles.map(h => Math.round(h.fy * 10) / 10))].sort((a, b) => a - b);
       const rxs = [...new Set(F.redHoles.map(h => Math.round(h.fx * 10) / 10))].sort((a, b) => a - b);
@@ -135,12 +139,12 @@
       if (ry.length > 1) sh.dimV(X(rxs[0]), Y(ry[0]), X(rxs[0]), Y(ry[ry.length - 1]), X(F.fx0) - 12, nf(ry[ry.length - 1] - ry[0]));
       if (my.length > 1) sh.dimV(X(mxs[mxs.length - 1]), Y(my[0]), X(mxs[mxs.length - 1]), Y(my[1]), X(F.fx1) + 22, nf(my[1] - my[0]));
       const chain = [F.fx0].concat(rxs, mxs);
-      for (let i = 0; i + 1 < chain.length; i++) sh.attempt([0, 8].map(d => () => sh.dimH(X(chain[i]), Y(F.yL - b2), X(chain[i + 1]), Y(F.yL - b2), yb - 12 - d, nf(chain[i + 1] - chain[i]))));
-      sh.attempt([0, 8].map(d => () => sh.dimH(X(F.fx0), Y(F.yL - b2), X(F.fx1), Y(F.yL - b2), yb - 30 - d, nf(F.Lf))));
+      for (let i = 0; i + 1 < chain.length; i++) sh.attempt([0, 8].map(d => () => sh.dimH(X(chain[i]), Y(yLo), X(chain[i + 1]), Y(yLo), yb - 12 - d, nf(chain[i + 1] - chain[i]))));
+      sh.attempt([0, 8].map(d => () => sh.dimH(X(F.fx0), Y(yLo), X(F.fx1), Y(yLo), yb - 30 - d, nf(F.Lf))));
       const call = (h, d, n) => sh.attempt([[12, 12], [-12, 12], [12, -12]].map(([dx, dy]) => () => sh.leader(X(h.fx) + Math.sign(dx) * d / 2 * k * 0.7, Y(h.fy) + Math.sign(dy) * d / 2 * k * 0.7, X(h.fx) + dx, Y(h.fy) + dy, `⌀${d}`, `${n} отв.`, { side: dx > 0 ? 'r' : 'l' })));
       call(F.redHoles[F.redHoles.length - 1], F.dRed, F.redHoles.length); call(F.motHoles[F.motHoles.length - 1], F.dMot, F.motHoles.length);
       // сварные швы: №1 — поперечины к продольным швеллерам, №2 — подкладки
-      const weld = (x, y, tx, ty, t) => sh.leader(x, y, tx, ty, t, '', { side: tx > x ? 'r' : 'l', free: true });
+      const weld = (x, y, tx, ty, t) => { const dx = tx - x, dy = ty - y; sh.attempt([[1, 1], [1, -1], [-1, 1], [-1, -1], [1.6, 1.6], [1.6, -1.6]].map(([a, b]) => () => sh.leader(x, y, x + dx * a, y + dy * b, t, '', { side: dx * a > 0 ? 'r' : 'l', free: true }))); };
       const c0 = F.cross[0];
       weld(X(c0.x + b2), Y(F.yL + b2), X(c0.x + b2) + 14, Y(F.yL + b2) + 16, '№1');
       const pR = F.padsR[F.padsR.length - 1];
@@ -150,18 +154,19 @@
     // ---- вид снизу: отверстия для крепления к полу
     {
       const sh = new Sheet('A1', true); sh.frame = { x1: -1e5, y1: -1e5, x2: 1e5, y2: 1e5 };
-      const X = x => (x - F.fx0) * k, Y = y => (y - F.yL + F.bc / 2) * k;
-      const b2 = F.bc / 2;
+      // вид снизу: вверх на листе — к наблюдателю главного вида (y листа = sig·fy)
+      const sB = F.sig || 1, b2 = F.bc / 2, yLo = sB > 0 ? F.yL - b2 : F.yR + b2;
+      const X = x => (x - F.fx0) * k, Y = y => sB * (y - yLo) * k;
       [F.yL, F.yR].forEach(y => sh.rect(X(F.fx0), Y(y - b2), X(F.fx1), Y(y + b2), 1));
       F.cross.forEach(c => c.top ? [[F.yL + b2, F.yR - b2]].forEach(([a, b]) => sh.rect(X(c.x - b2), Y(a), X(c.x + b2), Y(b), 1)) : sh.rect(X(c.x - b2), Y(F.yL + b2), X(c.x + b2), Y(F.yR - b2), 1));
       F.floor.forEach(h => { sh.circle(X(h.fx), Y(h.fy), F.dF / 2 * k, 1); sh.line(X(h.fx), Y(h.fy) - F.dF * k, X(h.fx), Y(h.fy) + F.dF * k, 3); });
       sh.line(X(F.fx0) - 6, Y(F.yL), X(F.fx1) + 6, Y(F.yL), 3).line(X(F.fx0) - 6, Y(F.yR), X(F.fx1) + 6, Y(F.yR), 3);
-      const xs = F.floor.filter(h => h.fy === F.yL).map(h => h.fx);
+      const xs = F.floor.filter(h => h.fy === (sB > 0 ? F.yL : F.yR)).map(h => h.fx);
       const chain = [F.fx0].concat(xs);
-      for (let i = 0; i + 1 < chain.length; i++) sh.dimH(X(chain[i]), Y(F.yL - b2), X(chain[i + 1]), Y(F.yL - b2), Y(F.yL - b2) - 12, nf(chain[i + 1] - chain[i]));
+      for (let i = 0; i + 1 < chain.length; i++) sh.dimH(X(chain[i]), Y(yLo), X(chain[i + 1]), Y(yLo), Y(yLo) - 12, nf(chain[i + 1] - chain[i]));
       sh.dimV(X(F.fx1), Y(F.yL), X(F.fx1), Y(F.yR), X(F.fx1) + 12, nf(F.yR - F.yL));
       const h = F.floor[0];
-      sh.leader(X(h.fx) + F.dF / 2 * k * 0.7, Y(h.fy) + F.dF / 2 * k * 0.7, X(h.fx) + 12, Y(h.fy) + 14, `⌀${F.dF}`, `${F.floor.length} отв.`);
+      sh.attempt([[1, 1], [1, -1], [-1, -1], [-1, 1]].map(([a, b]) => () => sh.leader(X(h.fx) + a * F.dF / 2 * k * 0.7, Y(h.fy) + b * F.dF / 2 * k * 0.7, X(h.fx) + a * 12, Y(h.fy) + b * 14, `⌀${F.dF}`, `${F.floor.length} отв.`, { side: a > 0 ? 'r' : 'l' })));
       out.bottom = { sh, items: [] };
     }
     void posOf;
@@ -186,11 +191,11 @@
         const pb = V.plan.sh.bbox(0);
         const p2_ = DR.placeGroup(sh, V.plan.sh.p, { fixX: p1.dx, near: [0, p1.box.y1 - 10 - (pb.y2 - pb.y1) / 2] });
         if (!p2_) continue;
+        // обозначение вида «А» и подпись — над видом, вместе с ним (чтобы при раскладке не легли на соседние надписи)
+        if (!V.bottom.titled) { const b0 = V.bottom.sh.bbox(0), cx = (b0.x1 + b0.x2) / 2; V.bottom.sh.text(cx, b0.y2 + 3, 'Отверстия для крепления к полу', { h: 3.5, anchor: 'cb' }); V.bottom.sh.text(cx, b0.y2 + 10, 'А', { h: 7, anchor: 'cb' }); V.bottom.titled = true; }
         const bb = V.bottom.sh.bbox(0);
         const p3 = DR.placeGroup(sh, V.bottom.sh.p, { near: [p2_.box.x2 + 20 + (bb.x2 - bb.x1) / 2, p2_.box.y1 + (bb.y2 - bb.y1) / 2] });
         if (!p3) continue;
-        sh.text((p3.box.x1 + p3.box.x2) / 2, p3.box.y2 + 4, 'А', { h: 7, anchor: 'cb' });
-        sh.text((p3.box.x1 + p3.box.x2) / 2, p3.box.y2 - 2, 'Отверстия для крепления к полу', { h: 3.5, anchor: 'ct' });
         // стрелка взгляда «А» снизу на виде спереди
         const mass = partsOf(F).reduce((a, it) => a + it.mass, 0);
         return { id: 'rama_sb', file: 'rama_SB.cdw', code: `${code} 02.00.00 СБ`, name: 'Рама сварная\nСборочный чертёж', material: '', mass: nf(mass, 0), scale: kt, fmt, landscape: true, sh };
