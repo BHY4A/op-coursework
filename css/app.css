@@ -181,3 +181,10 @@ svg.fg g[data-tip]:hover .bx2, svg.fg g[data-tip]:hover .bx, svg.fg rect[data-ti
 .k-load-t { flex: 1; min-width: 0; }
 .k-bar { display: block; height: 4px; margin-top: 8px; border-radius: 2px; background: var(--line); overflow: hidden; max-width: 420px; }
 .k-bar i { display: block; height: 100%; background: var(--accent); transition: width .35s ease; }
+
+/* плавность: карточки чертежей и просмотр чертежа */
+.dw-card { transition: border-color var(--t-fast) var(--ease), transform var(--t-fast) var(--ease), box-shadow var(--t) var(--ease); }
+.dw-card:hover { transform: translateY(-1px); box-shadow: var(--shadow); }
+.dw-over { animation: suite-fade .2s var(--ease) backwards; }
+.kcat-i { transition: color var(--t-fast) var(--ease); }
+@media (prefers-reduced-motion: reduce) { .dw-card:hover { transform: none; } }

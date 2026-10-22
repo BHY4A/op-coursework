@@ -6,9 +6,10 @@
  *  4) сохранение файлов SUITE.save(name, blob): на обычном сайте — скачивание; внутри артефакта claude.ai —
  *     через окно подтверждения (возможность downloads), т.к. там страница не может скачивать сама;
  *  5) стиль оформления — один на все утилиты и хаб (ключ suite-style, атрибут data-style у <html>).
- *     «Журнал» — исходный стиль, полностью описан в suite.css и ни от чего не зависит. Остальные стили —
- *     пакеты в общем файле styles/styles.css репозитория хаба (с текстурами в styles/tx); файл и шрифты стиля
- *     подгружаются только когда выбран не «Журнал». Каждая утилита в каждом стиле получает свои сюжеты фона.
+ *     Стилей два: «Журнал» — исходный, полностью описан в suite.css и ни от чего не зависит; «Лазурь» — пакет
+ *     в общем файле styles/styles.css репозитория хаба; файл и шрифты подгружаются только когда она выбрана;
+ *  6) плавность: окна и меню открываются и закрываются с короткой анимацией, смена вкладки, темы и стиля —
+ *     мягкий переход (View Transitions, где браузер умеет); при prefers-reduced-motion всё мгновенно.
  * Подключается в <head> обычным (не defer) скриптом; у <html> — атрибут data-app с id текущей утилиты. */
 (function () {
   'use strict';
@@ -22,24 +23,27 @@
     if (t === 'dark' || t === 'light') root.setAttribute('data-theme', t);
   } catch (e) { /* хранилище недоступно — тема по системе */ }
 
+  /* ---------- плавность: короткий перекрёстный переход для смены темы, стиля и т.п. ---------- */
+  var RM = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+  function calm() { return !!(RM && RM.matches); }
+  function morph(fn) {
+    if (!document.startViewTransition || calm() || document.visibilityState === 'hidden') { fn(); return; }
+    try { document.startViewTransition(fn); } catch (e) { fn(); }
+  }
+  /* кнопка темы в каждой утилите и в хабе назначается через onclick — переключение заворачивается в переход */
+  document.addEventListener('click', function (e) {
+    var btn = e.target && e.target.closest ? e.target.closest('#theme') : null;
+    if (!btn || typeof btn.onclick !== 'function' || !document.startViewTransition || calm()) return;
+    e.stopImmediatePropagation(); e.preventDefault();
+    var h = btn.onclick; morph(function () { h.call(btn, e); });
+  }, true);
+
   /* ---------- стиль оформления ---------- */
-  var SKEY = 'suite-style', SVER = '202610170723';
+  var SKEY = 'suite-style', SVER = '202610220800';
   var STYLES = [
-    { id: 'journal', name: 'Журнал', sub: 'Лабораторный журнал: бумага, штамп, чертёжная точность', sw: 'linear-gradient(135deg,#fbfcfd 0 56%,#dfe5ea 56%)' },
-    { id: 'azure', name: 'Лазурь', sub: 'Глянец и стекло, небо со световыми лентами', fonts: 'PT+Mono&family=PT+Sans:ital,wght@0,400;0,700;1,400',
-      sw: 'radial-gradient(circle at 32% 30%,#fff 0 9%,rgba(255,255,255,.3) 13%,transparent 15%),linear-gradient(180deg,#1f7fd6,#9fd4f6 62%,#f2fbff)' },
-    { id: 'aquarelle', name: 'Акварель', sub: 'Размывы пигмента, коллаж, брызги туши', fonts: 'Oswald:wght@400;500;600&family=Spectral:ital,wght@0,400;0,600;1,400&family=PT+Mono',
-      sw: 'radial-gradient(circle at 28% 34%,#7f9fa3 0,transparent 52%),radial-gradient(circle at 74% 68%,#b0583a 0,transparent 50%),radial-gradient(circle at 70% 20%,#c99a4e 0,transparent 45%),#e8e1d2' },
-    { id: 'glare', name: 'Засветка', sub: 'Выжженная плёнка, двоение, кадры-сплиты', fonts: 'Oswald:wght@400;500;600;700&family=Roboto+Condensed:ital,wght@0,400;0,500;0,700;1,500',
-      sw: 'linear-gradient(transparent 62%,#4e5e4e 62% 64%,transparent 64%),linear-gradient(90deg,transparent 46%,#f7f4ea 46% 52%,transparent 52%),linear-gradient(180deg,#c9e2d2,#f4efd6 60%,#e9d9a8)' },
-    { id: 'neon', name: 'Неон', sub: 'Закат восьмидесятых, неоновые рамки', fonts: 'Rubik+Mono+One&family=Press+Start+2P&family=Roboto+Condensed:ital,wght@0,400;0,700;1,700',
-      sw: 'radial-gradient(circle at 50% 62%,#ffd34d 0 16%,#ff2fa8 27%,transparent 29%),linear-gradient(180deg,#12041e,#3b0a5c 45%,#b0177f 62%,#12041e 63%)' },
-    { id: 'ether', name: 'Эфир', sub: 'Закат в сетке, окна ретро-ОС, сигнал с кассеты', fonts: 'Dela+Gothic+One&family=M+PLUS+Rounded+1c:wght@400;700;800&family=IBM+Plex+Mono:wght@400;500',
-      sw: 'repeating-linear-gradient(0deg,transparent 0 3px,#ff32bb 3px 4px) 0 100%/100% 38% no-repeat,radial-gradient(circle at 50% 62%,#fff27a 0 14%,#ff6fb5 22%,transparent 23%),linear-gradient(180deg,#bfe9ff,#ffd9ec 55%,#ffb3d9 62%,#ffe6f3 62%)' },
-    { id: 'glass', name: 'Стекло', sub: 'Слои стекла, мягкий цветной свет', fonts: 'Onest:wght@400;500;600;700&family=Unbounded:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600',
-      sw: 'radial-gradient(circle at 22% 22%,#8fb8ff,transparent 60%),radial-gradient(circle at 82% 34%,#ffc4a2,transparent 58%),#eef0f5' },
-    { id: 'graphite', name: 'Графит', sub: 'Точечная сетка, свечение, строгие числа', fonts: 'Geologica:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600',
-      sw: 'radial-gradient(circle,rgba(255,255,255,.28) 1px,transparent 1.6px) 0 0/6px 6px,radial-gradient(circle at 50% 0,#3f74b0,transparent 70%),#08090c' }
+    { id: 'journal', name: 'Журнал', sw: 'linear-gradient(135deg,#fbfcfd 0 56%,#dfe5ea 56%)' },
+    { id: 'azure', name: 'Лазурь', fonts: 'PT+Mono&family=PT+Sans:ital,wght@0,400;0,700;1,400',
+      sw: 'radial-gradient(circle at 32% 30%,#fff 0 9%,rgba(255,255,255,.3) 13%,transparent 15%),linear-gradient(180deg,#1f7fd6,#9fd4f6 62%,#f2fbff)' }
   ];
   var BYID = {}; STYLES.forEach(function (s) { BYID[s.id] = s; });
   var STY_HREF = (cur === 'hub' ? '' : '../') + 'styles/styles.css?v=' + SVER;
@@ -59,7 +63,7 @@
   }
   function setStyle(id) {
     if (!BYID[id]) return;
-    var done = function () { root.setAttribute('data-style', id); curStyle = id; window.dispatchEvent(new CustomEvent('suite:style', { detail: id })); };
+    var done = function () { morph(function () { root.setAttribute('data-style', id); curStyle = id; window.dispatchEvent(new CustomEvent('suite:style', { detail: id })); }); };
     try { localStorage.setItem(SKEY, id); } catch (e) { /* ignore */ }
     if (BYID[id].fonts) ensureLink(null, fontHref(BYID[id]), id);
     if (id === 'journal') { done(); return; }
@@ -136,12 +140,12 @@
     pop.className = 'suite-pop'; pop.id = 'style-pop'; pop.hidden = true;
     pop.setAttribute('role', 'menu'); pop.setAttribute('aria-label', 'Стиль оформления');
     function render() {
-      pop.innerHTML = '<div class="suite-h"><span>Стиль оформления</span><small class="suite-note">Светлая и тёмная тема — кнопка рядом</small></div>' +
+      pop.innerHTML = '<div class="suite-h"><span>Стиль оформления</span></div>' +
         STYLES.map(function (s) {
           var on = s.id === curStyle;
           return '<button type="button" class="suite-it' + (on ? ' cur' : '') + '" role="menuitemradio" aria-checked="' + on + '" data-style-id="' + s.id + '">' +
-            '<span class="suite-sw" style="background:' + s.sw + '"></span><span class="suite-t"><b>' + s.name + '</b><small>' + s.sub + '</small></span>' +
-            (on ? '<em>выбран</em>' : (s.id === 'journal' ? '<em class="dim">исходный</em>' : '')) + '</button>';
+            '<span class="suite-sw" style="background:' + s.sw + '"></span><span class="suite-t"><b>' + s.name + '</b></span>' +
+            (on ? '<em>выбран</em>' : '') + '</button>';
         }).join('');
     }
     render(); document.body.appendChild(pop);
@@ -203,6 +207,22 @@
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', a11y); else a11y();
 
+  /* ---------- смена вкладки: новый лист мягко проявляется (перерисовка того же этапа — без анимации) ---------- */
+  function sheetMotion() {
+    var main = document.getElementById('main');
+    if (!main || !window.MutationObserver) return;
+    var tabOf = function () { var a = document.querySelector('nav.rail a[aria-current="page"]'); return a ? a.getAttribute('data-tab') : null; };
+    var last = tabOf();
+    new MutationObserver(function () {
+      var t = tabOf(); if (t === last) return;
+      var first = last === null; last = t;
+      var sh = main.querySelector('.sheet');
+      if (first || !sh || calm()) return;
+      sh.classList.remove('sheet-in'); void sh.offsetWidth; sh.classList.add('sheet-in');
+    }).observe(main, { childList: true });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', sheetMotion); else sheetMotion();
+
   /* ---------- сообщения и сохранение файлов ---------- */
   var toastT = 0;
   function toast(t) {
@@ -233,5 +253,5 @@
     }, function () { plainSave(name, blob); });
   }
 
-  window.SUITE = { KEY: KEY, APPS: APPS, icon: icon, save: save, toast: toast, STYLES: STYLES, setStyle: setStyle, style: function () { return curStyle; } };
+  window.SUITE = { KEY: KEY, morph: morph, APPS: APPS, icon: icon, save: save, toast: toast, STYLES: STYLES, setStyle: setStyle, style: function () { return curStyle; } };
 })();
