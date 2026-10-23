@@ -149,7 +149,7 @@ if __name__ == '__main__':
       'ОТЛАДОЧНЫЙ АРХИВ утилиты «Основы проектирования» (версия ' + VERSION + ') — прогон нескольких вариантов в КОМПАС-3D v25',
       '',
       'Папки:',
-      ...list.map(x => `  ${dirOf(x.task, x.v)} — № ${x.no} по списку: задание ${x.task}, вариант ${x.v} (${x.title})`),
+      ...list.map(x => `  ${x.dir} — № ${x.no} по списку: задание ${x.task}, вариант ${x.v} (${x.title})`),
       '',
       'Как запустить:',
       '  1. Распакуйте архив в путь без кириллицы, например C:\\KPDEBUG\\',
@@ -167,8 +167,9 @@ if __name__ == '__main__':
       ''].join('\r\n');
   }
 
-  /* list: [{ no, task, v }]; computeFor(no) → { R, P }; T — данные титульного листа */
-  async function build(list, computeFor, T, onProgress) {
+  /* list: [{ no, task, v, O?, T?, suf?, name? }] — O/T: сочетание настроек (js/opt_combos.js), suf — к имени папки;
+     computeFor(no, O) → { R, P }; T — настройки чертежей и данные титульного листа */
+  async function build(list, computeFor, T0, onProgress) {
     const zip = new root.JSZip(), top = 'OP_KP_DEBUG/';
     const done = [];
     for (let i = 0; i < list.length; i++) {
@@ -176,18 +177,19 @@ if __name__ == '__main__':
       if (onProgress) onProgress(i, list.length, x);
       await new Promise(r => setTimeout(r, 0));
       let R, P;
-      try { ({ R, P } = computeFor(x.no)); } catch (e) { console.error(e); zip.file(top + dirOf(x.task, x.v) + '/ОШИБКА_РАСЧЁТА.txt', String(e && e.stack || e)); continue; }
+      const T = Object.assign({}, T0, x.T || {}), dir = dirOf(x.task, x.v) + (x.suf || '');
+      try { ({ R, P } = computeFor(x.no, x.O)); } catch (e) { console.error(e); zip.file(top + dir + '/ОШИБКА_РАСЧЁТА.txt', String(e && e.stack || e)); continue; }
       const files = root.KOMPAS.files(R, P, T, { debug: true });
-      for (const f of files) zip.file(top + dirOf(P.task, P.v) + '/' + f.path, f.gen());
+      for (const f of files) zip.file(top + dir + '/' + f.path, f.gen());
       // самопроверка листов по ГОСТ (привязка обозначений, надписи на линиях, центровые линии)
       if (root.DRWLINT) {
         try {
           const rows = [];
-          for (const d of root.KOMPAS.sheets(R, P, {}).list) { if (d.sh.finalize) d.sh.finalize(); for (const i of root.DRWLINT.lint(d.sh)) rows.push(`${d.file}\t${i.sev}\t${i.rule}\t${i.n > 1 ? i.n + '× ' : ''}${i.msg}\t${i.at ? i.at.join(';') : ''}`); }
-          zip.file(top + dirOf(P.task, P.v) + '/lint.txt', rows.length ? rows.join('\r\n') : 'замечаний нет');
-        } catch (e) { zip.file(top + dirOf(P.task, P.v) + '/lint.txt', 'ошибка проверки: ' + e); }
+          for (const d of root.KOMPAS.sheets(R, P, T).list) { if (d.sh.finalize) d.sh.finalize(); for (const i of root.DRWLINT.lint(d.sh)) rows.push(`${d.file}\t${i.sev}\t${i.rule}\t${i.n > 1 ? i.n + '× ' : ''}${i.msg}\t${i.at ? i.at.join(';') : ''}`); }
+          zip.file(top + dir + '/lint.txt', rows.length ? rows.join('\r\n') : 'замечаний нет');
+        } catch (e) { zip.file(top + dir + '/lint.txt', 'ошибка проверки: ' + e); }
       }
-      done.push(Object.assign({}, x, { title: root.DATA.TASKS[P.task].short, dir: dirOf(P.task, P.v) }));
+      done.push(Object.assign({}, x, { title: root.DATA.TASKS[P.task].short + (x.name ? ' — ' + x.name : ''), dir }));
     }
     zip.file(top + '00_run_debug.py', RUN_DEBUG_PY);
     zip.file(top + '01_install_pywin32.bat', bat(['@echo off', 'chcp 65001 >nul', 'echo Установка pywin32...', 'where py >nul 2>nul && (py -3 -m pip install --upgrade pywin32 pillow) || (python -m pip install --upgrade pywin32 pillow)', 'echo.', 'echo Готово. Если выше ошибка "не является внутренней или внешней командой" - установите Python с python.org с галочкой "Add python.exe to PATH".', 'pause']));

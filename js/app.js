@@ -792,12 +792,14 @@
       return `<div class="dbg-g"><b>Задание ${t} — ${esc(D.TASKS[t].short)}</b> <button class="btn sm" data-dbgt="${t}">все</button><div>${nos.map(no => { const v = D.byListNo(no).v; return `<label class="dbg-c"><input type="checkbox" data-dbgno="${no}"${[4, 12, 22].includes(no) ? ' checked' : ''}> № ${no} (вар. ${v})</label>`; }).join('')}</div></div>`;
     }).join('');
     return `<h2 id="dbg">7. Отладка: прогон нескольких вариантов в КОМПАС</h2>
-      <div class="note">Скрытое меню (включается и выключается сочетанием Ctrl+Shift+D). Сначала отметьте варианты, затем скачайте отладочный exe или архив: в оба попадут <b>только отмеченные</b> варианты, с настройками по умолчанию.</div>
+      <div class="note">Скрытое меню (включается и выключается сочетанием Ctrl+Shift+D). Сначала отметьте варианты и, если нужно, сочетания настроек, затем скачайте отладочный exe или архив: в оба попадут <b>только отмеченные</b> варианты и сочетания.</div>
       <h3>Шаг 1. Варианты</h3>
       <p><button class="btn sm" data-dbgp="all">Все 26</button> <button class="btn sm" data-dbgp="3">По одному на задание (№ 4, 12, 22)</button> <button class="btn sm" data-dbgp="cur">Только текущий (№ ${S.P.listNo})</button> <button class="btn sm" data-dbgp="none">Снять все</button> <span id="dbgn" class="hint"></span></p>
       ${rows}
       <p class="hint">Настройки чертежей — текущие с этой страницы (раздел 5): ${esc(dbgSettings())}. Исходные данные вариантов — по умолчанию.</p>
-      <p><label class="dbg-c"><input type="checkbox" id="dbgmx"> Добавить ключевые сочетания настроек на текущем варианте (№ ${S.P.listNo}): все форматы листов А4–А0 и «все виды в одном масштабе» наоборот — ещё 5 прогонов</label></p>
+      <h3>Шаг 1б. Сочетания настроек (необязательно)</h3>
+      <p class="hint">Каждое сочетание — отдельный прогон отмеченного варианта, в котором изменена одна настройка: то, что пользователь может выбрать иначе, чем по умолчанию. Значение по умолчанию уже входит в основной прогон.</p>
+      <p>${[['calc', 'Методики расчёта (раздел 3): частота двигателя, u цепи, a<sub>w</sub>, числа зубьев, момент на тихоходном валу, [σ]<sub>H</sub> червячного колеса и все остальные'], ['motors', 'Двигатели: каждый подходящий из списка «Двигатель» (750–3000 мин⁻¹, мощнее расчётного)'], ['consts', 'Константы методики: КПД, [τ], запас прочности, K<sub>б</sub>, [σ]<sub>см</sub>, наклон цепи и др. — на краях диапазона'], ['drw', 'Настройки чертежей: форматы А4–А0, один масштаб, обозначения отрезками']].map(([k, t]) => `<label class="dbg-c" style="display:block"><input type="checkbox" data-dbgc="${k}"> ${t}</label>`).join('')}</p>
       <h3>Шаг 2. Скачать — выберите один способ</h3>
       <div class="opt"><div class="opt-t"><b>Отладочный KOMPAS Build (.exe) — рекомендуется</b><span>Python не нужен. В окне уже отмечены спецификации, чертежи и калибровка эмулятора, 3D выключено (его можно включить). Варианты идут подряд, журнал подробный. В конце в папке результатов появится <b>debug_logs.zip</b> — его и пришлите. Время: калибровка ≈ 5 мин, затем ≈ 1 мин на вариант (все 26 — около получаса); с 3D — 5–15 мин на вариант.</span></div><div class="opt-c"><button class="btn primary" id="dbgexe">${dlIcon()} KOMPAS-Build-debug.exe</button></div></div>
       <div class="opt"><div class="opt-t"><b>Архив с макросами и bat (.zip)</b><span>Нужен свой Python с pywin32. Строит всё, включая 3D, PNG-снимки и DXF-копии листов; в конце — <b>debug_для_отправки.zip</b>. Время: 5–15 мин на вариант, все 26 — несколько часов.</span></div><div class="opt-c"><button class="btn" id="dbgzip">${dlIcon()} OP_KP_DEBUG.zip</button></div></div>
@@ -815,20 +817,28 @@
   function bindDebug(main) {
     if (!dbgOn() || !$('#dbgzip', main)) return;
     const boxes = () => $$('[data-dbgno]', main);
-    const cnt = () => { const n = boxes().filter(c => c.checked).length; $('#dbgn', main).textContent = `Отмечено вариантов: ${n} из 26`; };
-    boxes().forEach(c => c.addEventListener('change', cnt)); cnt();
+    // прогоны: каждый отмеченный вариант с настройками по умолчанию + выбранные сочетания (js/opt_combos.js)
+    const jobsOf = T0 => {
+      const sel = {}; $$('[data-dbgc]', main).forEach(c => { sel[c.dataset.dbgc] = c.checked; });
+      const any = Object.values(sel).some(Boolean), out = [];
+      boxes().filter(c => c.checked).forEach(c => {
+        const no = +c.dataset.dbgno, d = D.byListNo(no);
+        out.push({ no, task: d.task, v: d.v, T: T0, suf: '' });
+        if (any && window.OPT_COMBOS) window.OPT_COMBOS(no, sel).forEach(x => out.push({ no, task: d.task, v: d.v, O: x.O, T: Object.assign({}, T0, x.T || {}), suf: '_' + x.key, name: x.name }));
+      });
+      return out;
+    };
+    const cnt = () => {
+      const n = boxes().filter(c => c.checked).length, j = jobsOf({}).length, h = (5 + j) / 60;
+      $('#dbgn', main).textContent = `Отмечено вариантов: ${n} из 26` + (j > n ? `, прогонов с сочетаниями: ${j} — в КОМПАС ≈ ${h < 1.5 ? Math.round(h * 60) + ' мин' : Math.round(h) + ' ч'}` : '');
+    };
+    [...boxes(), ...$$('[data-dbgc]', main)].forEach(c => c.addEventListener('change', cnt)); cnt();
     $$('[data-dbgt]', main).forEach(b => b.onclick = () => boxes().forEach(c => { if (D.byListNo(+c.dataset.dbgno).task === +b.dataset.dbgt) c.checked = true; }) || cnt());
     $$('[data-dbgp]', main).forEach(b => b.onclick = () => { const m = b.dataset.dbgp; boxes().forEach(c => { const no = +c.dataset.dbgno; c.checked = m === 'all' ? true : m === 'none' ? false : m === 'cur' ? no === S.P.listNo : [4, 12, 22].includes(no); }); cnt(); });
     $('#dbgexe', main).onclick = async () => {
       const btn = $('#dbgexe', main), st = $('#dbgst', main);
       const T0 = JSON.parse(JSON.stringify(S.T || {}));
-      const jobs = boxes().filter(c => c.checked).map(c => ({ no: +c.dataset.dbgno, T: T0, suf: '' }));
-      if ($('#dbgmx', main) && $('#dbgmx', main).checked) {
-        // ключевые сочетания настроек чертежей на текущем варианте: все форматы листов и «один масштаб» наоборот
-        const sf = T0.sheetFmt || 'A1';
-        ['A4', 'A3', 'A2', 'A1', 'A0'].filter(f => f !== sf).forEach(f => jobs.push({ no: S.P.listNo, T: Object.assign({}, T0, { sheetFmt: f }), suf: '_' + f }));
-        jobs.push({ no: S.P.listNo, T: Object.assign({}, T0, { scaleUniform: !T0.scaleUniform }), suf: T0.scaleUniform ? '_scale_free' : '_scale_one' });
-      }
+      const jobs = jobsOf(T0);
       if (!jobs.length) { st.textContent = 'Отметьте хотя бы один вариант.'; return; }
       btn.disabled = true;
       const workers = [];
@@ -860,7 +870,7 @@
               if (done === jobs.length) resolve(); else run(w);
             };
             w.onerror = e => reject(new Error(e.message || 'сбой фонового потока'));
-            w.postMessage({ id, no: jobs[id].no, T: jobs[id].T, cal: id === 0 });   // калибровка — только в первой папке
+            w.postMessage({ id, no: jobs[id].no, O: jobs[id].O, T: jobs[id].T, cal: id === 0 });   // калибровка — только в первой папке
           };
           for (let k = 0; k < nW; k++) {
             const w = new Worker('js/dbg_worker.js' + (ver ? '?' + ver : ''));
@@ -880,12 +890,12 @@
     };
     $('#dbgzip', main).onclick = async () => {
       const btn = $('#dbgzip', main), st = $('#dbgst', main);
-      const list = boxes().filter(c => c.checked).map(c => Object.assign({ no: +c.dataset.dbgno }, D.byListNo(+c.dataset.dbgno)));
+      const list = jobsOf({}).map(j => Object.assign({}, D.byListNo(j.no), j, { T: j.T }));
       if (!list.length) { st.textContent = 'Отметьте хотя бы один вариант.'; return; }
       btn.disabled = true;
       try {
-        const blob = await window.KPDEBUG.build(list, no => { const P = fresh(no); return { P, R: compute(P) }; }, S.T, (i, n, x) => { st.textContent = x ? `Расчёт № ${x.no} (${i + 1} из ${n})…` : 'Упаковка архива…'; });
-        downloadBlob('OP_KP_DEBUG.zip', blob); st.textContent = `Готово: вариантов — ${list.length}.`;
+        const blob = await window.KPDEBUG.build(list, (no, O) => { const P = fresh(no); Object.assign(P.O, O || {}); return { P, R: compute(P) }; }, S.T, (i, n, x) => { st.textContent = x ? `Расчёт № ${x.no} (${i + 1} из ${n})…` : 'Упаковка архива…'; });
+        downloadBlob('OP_KP_DEBUG.zip', blob); st.textContent = `Готово: прогонов — ${list.length}.`;
       } catch (e) { console.error(e); st.textContent = 'Ошибка: ' + e.message; } finally { btn.disabled = false; }
     };
   }

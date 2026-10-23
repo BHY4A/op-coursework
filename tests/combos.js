@@ -1,9 +1,10 @@
 'use strict';
-/* Сочетания настроек: каждый вариант с другими расчётными настройками (двигатель, передаточное число цепи, методики)
-   и настройками чертежей (формат, масштаб видов, отрезки вместо объектов). Пользователь может выбрать любое из них —
+/* Сочетания настроек: каждый вариант с каждой настройкой, которую можно поменять в утилите, — все методики расчёта,
+   все подходящие двигатели, константы методики на краях диапазона и настройки чертежей (js/opt_combos.js). Пользователь может выбрать любое из них —
    листы и макрос КОМПАС должны строиться без сбоев и без лишних наложений.
-   node tests/combos.js [варианты | all] [--quick] [--no-emu]
-   --quick — по два сочетания на вариант (по кругу), иначе все. Для каждого сочетания: tests/variant.js (листы, линтер)
+   node tests/combos.js [варианты | all] [--quick] [--no-emu] [--only подстрока]
+   --only — только сочетания, в названии которых есть подстрока (например, --only двигатель).
+   --quick — по три сочетания на вариант (по кругу), иначе все (≈1500, несколько часов). Для каждого сочетания: tests/variant.js (листы, линтер)
    и эмулятор КОМПАС (tests/kompas_emu.js). Ошибки и сбои — код выхода 1; замечания линтера сверх варианта по умолчанию — в сводке. */
 const path = require('path'), os = require('os'), { execFile } = require('child_process');
 const { load } = require('./load.js');
@@ -12,27 +13,10 @@ const args = process.argv.slice(2);
 const sel = (args[0] && !args[0].startsWith('--') ? args[0] : 'all').toLowerCase();
 const vars = sel === 'all' ? Array.from({ length: 26 }, (_, i) => i + 1) : sel.split(',').map(Number);
 const quick = args.includes('--quick'), emu = !args.includes('--no-emu');
+const only = args.includes('--only') ? args[args.indexOf('--only') + 1] : null;
 
-function combos(no) {
-  const task = ctx.TASKS_CALC.defaults(no).task, out = [];
-  const O = (o, name) => out.push({ name, O: o });
-  const T = (t, name) => out.push({ name, T: t });
-  O({ sync: 1000 }, 'двигатель 1000 мин⁻¹');
-  O({ sync: 3000 }, 'двигатель 3000 мин⁻¹');
-  if (task !== 1) { O({ uChain: 2 }, 'u цепи 2'); O({ uChain: 3 }, 'u цепи 3'); }
-  if (task !== 3) { O({ awRow: 1 }, 'aw — 1-й ряд'); O({ zMode: 'sum' }, 'z через zΣ'); }
-  if (task === 3) { O({ wormAw: 'ch' }, 'aw червячной по Чернавскому'); O({ wormSH: 'ch' }, '[σ]H по таблицам [Ч]'); }
-  if (task === 6) O({ awT6: 'pin' }, 'aw по моменту шестерни');
-  if (task === 1) O({ t1Coup: 'scheme' }, 'T2Т по схеме');
-  else O({ FmMode: 'gost' }, 'Fм по ГОСТ 16162');
-  O({ autoFix: false }, 'без автосогласования');
-  O({ sync: 1000, wKey: task === 1 ? 'net' : 'met', keyExact: true }, 'двигатель 1000 + шпонки иначе');
-  T({ sheetFmt: 'A2' }, 'листы А2');
-  T({ sheetFmt: 'A0' }, 'листы А0');
-  T({ scaleUniform: true }, 'виды в одном масштабе');
-  T({ kompasDims: 'lines' }, 'обозначения отрезками');
-  return out;
-}
+// все сочетания — из js/opt_combos.js (их же предлагает отладочный KOMPAS Build на сайте)
+const combos = no => ctx.OPT_COMBOS(no);
 
 const run = (file, a) => new Promise(res => execFile(process.execPath, [path.join(__dirname, file), ...a], { maxBuffer: 64 << 20, timeout: 900000 },
   (err, stdout, stderr) => res({ err, stdout: String(stdout), stderr: String(stderr) })));
@@ -40,8 +24,8 @@ const run = (file, a) => new Promise(res => execFile(process.execPath, [path.joi
 (async () => {
   const jobs = [];
   vars.forEach((no, i) => {
-    const all = combos(no);
-    const pick = quick ? [all[(2 * i) % all.length], all[(2 * i + 1) % all.length]] : all;
+    const all = combos(no).filter(c => !only || c.name.includes(only) || c.key.startsWith(only));
+    const pick = quick ? [0, 1, 2].map(k => all[(3 * i + k) % all.length]) : all;
     pick.forEach(c => jobs.push({ no, c }));
   });
   // замечания линтера по умолчанию — для сравнения
