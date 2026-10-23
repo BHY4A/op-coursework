@@ -112,10 +112,11 @@
       for (const sg of [1, -1]) v.line(xs, sg * Rai, xb, sg * Rae, 1);
       v.line(xs, -Rai, xs, Rai, 1);
       v.line(xb, -Rae, xb, Rae, 1);
-      const xa = xs - (xs - apex) * 0.45;
+      // образующие делительного конуса — к вершине (для угла δ); если лист иначе тесен — коротким выступом, угол δ — в таблице параметров
+      const xa = info.noApex ? xs - 6 / k : xs - (xs - apex) * 0.45;
       for (const sg of [1, -1]) v.line(xa, sg * g.d / 2 * (xa - apex) / (xb - apex), xb + 2 / k, sg * (g.d / 2) * (xb + 2 / k - apex) / (xb - apex), 3);
     }
-    v.line((bi ? Math.min(bi.xs - (bi.xs - bi.apex) * 0.45, 0) : 0) - 5 / k, 0, L + 5 / k, 0, 3);
+    v.line((bi ? Math.min(info.noApex ? bi.xs - 6 / k : bi.xs - (bi.xs - bi.apex) * 0.45, 0) : 0) - 5 / k, 0, L + 5 / k, 0, 3);
     segs.forEach(s => {
       if (!s.gear || isBev(s)) return;
       for (const sg of [1, -1]) {
@@ -186,7 +187,7 @@
       sh.attempt([() => sh.dimV(X(xb), Y(-Rae), X(xb), Y(Rae), X(xb), `⌀${nf(g.da, 2)}h11`, { textY: Y(0) + 2 }), () => sh.dimV(X(xb), Y(-Rae), X(xb), Y(Rae), X(xb), `⌀${nf(g.da, 2)}h11`, { out: 'above' })]);
       sh.attempt([8, 14, 20, 26].map(d => () => sh.dimV(X(xs), Y(-Rai), X(xs), Y(Rai), X(xs) - d, `⌀${nf(2 * Rai, 1)}*`)));
       // угол делительного конуса: над осью или под ней (вершина — точка пересечения образующей с осью)
-      if (X(apex) > f.x1 + 8) sh.attempt([0.75, 0.55, 0.95, 0.4].flatMap(q => [[0, g.delta], [-g.delta, 0]].map(([a1, a2]) => () => sh.dimAng(X(apex), Y(0), a1, a2, Math.max(16, (xs - apex) * k * q), deg(g.delta)))));
+      if (!info.noApex && X(apex) > f.x1 + 8) sh.attempt([0.75, 0.55, 0.95, 0.4].flatMap(q => [[0, g.delta], [-g.delta, 0]].map(([a1, a2]) => () => sh.dimAng(X(apex), Y(0), a1, a2, Math.max(16, (xs - apex) * k * q), deg(g.delta)))));
       const ux = Math.cos(g.delta * D2R), uy = Math.sin(g.delta * D2R), nx = -uy, ny = ux;
       const p1 = [X(xs), Y(Rai)], p2 = [X(xb), Y(Rae)];
       sh.attempt([8, 14, 20].map(off => () => sh.dimAligned(p1, p2, nx, ny, off, nf(g.b, 1), g.delta)));
@@ -387,9 +388,10 @@
     const plan = [];
     // формат — из настройки (по умолчанию А1); масштаб — наибольший стандартный, при котором изображение помещается
     for (const fmt of C.fmts()) for (const [kk] of C.scales(4)) plan.push([fmt, kk]);
-    for (const [fmt, k] of plan) {
+    // вал-шестерня коническая: сначала с углом δ у вершины конуса; не помещается — без него (δ есть в таблице параметров)
+    for (const [fmt, k] of plan) for (const noApex of (segs.some(isBev) ? [false, true] : [false])) {
       const tmp = new Sheet('A1', true); tmp.frame = { x1: -5000, y1: -5000, x2: 5000, y2: 5000 };
-      const M = shaftMain(tmp, segs, 0, 0, k, info);
+      const M = shaftMain(tmp, segs, 0, 0, k, noApex ? Object.assign({}, info, { noApex }) : info);
       const mb = tmp.bbox(0);
       for (const ttPos of ['stamp', 'left']) {
         const sh = new Sheet(fmt, true);
