@@ -6,42 +6,57 @@
   * размеры элементов обозначений — из DXF, выгруженных КОМПАС 25 (стрелка 5 мм, выход выносной линии 2 мм,
     надпись размера на 2,1 мм над линией, рамка допуска 10 мм, ячейка знака 7,6 мм, ячейка текста = ширина + 5 мм,
     пустая ячейка 10 мм, рамка базы 10×10, полка выноски = 2 + ширина + 2, номер позиции на 1 мм над полкой);
-  * правила размещения — из справки SDK (IDimensionParams.TextPos — от первой/второй выносной линии) и из журналов
-    настоящих прогонов (угол шероховатости 90° — знак стоит прямо; таблица по умолчанию — ширины из Add; рамка допуска — 4 ячейки).
-Чего модель не знает (помечено «гипотеза»): точный зазор надписи при ручном TextPos, раскладка шероховатости на выноске,
-формы знаков. Для таких мест эмулятор проверяет только, что вызовы допустимы, а не что КОМПАС нарисует ровно так."""
+  * правила размещения — из калибровки на настоящем КОМПАС 25 (журнал отладки, 60_calibrate.py → cal.json, сверка — calcmp.py):
+    ширина символов и габарит надписей, авторазмещение надписи размера, знак шероховатости на выноске, размер с обрывом,
+    линия разреза; и из журналов настоящих прогонов (таблица по умолчанию — ширины из Add; рамка допуска — 4 ячейки).
+Чего модель не знает (помечено «гипотеза»): ручное размещение надписи размера (КОМПАС уводит её на полку), место надписи
+углового размера, формы знаков. Для таких мест эмулятор проверяет только, что вызовы допустимы, а не что КОМПАС нарисует ровно так."""
 import math, os, json
 
 EMU = None
-# журнал КОМПАС 25 (пробный размер 100…120, «88888888»): TextPos +30 — правый край габарита на 6,3 мм дальше 130 + ширина надписи;
-# TextPos −30 — надпись не слева (левый край — 93,2: стрелка снаружи и продолжение линии 6,8 мм), т. е. отрицательный TextPos не принят (гипотеза: как 0)
-GAP_TEXTPOS = 5.8
+# ширина символов шрифта «GOST type A» в КОМПАС 25, доли высоты (калибровка: 44 надписи h 2,5…7, ошибка подгонки до 0,4 мм при h 7):
+# ширина надписи = h · (0,371 + Σ по символам); чего в калибровке не было — оценка по похожим символам
+KW = {'1': 0.418, ' ': 0.227, ',': 0.227, '.': 0.227, ':': 0.227, ';': 0.227, "'": 0.227, '!': 0.227, '|': 0.227,
+      '/': 0.736, '-': 0.642, '−': 0.642, '–': 0.642, '—': 0.9, '⌀': 0.564, '∅': 0.564, '(': 0.36, ')': 0.36, '[': 0.36, ']': 0.36,
+      '×': 0.6, '±': 0.6, '°': 0.4, '√': 0.6, '*': 0.5, '+': 0.633, '=': 0.633}
+KW_DIGIT, KW_UPPER, KW_LOWER, KW_BASE = 0.633, 0.668, 0.678, 0.371
 
 
 def tw(s, h):
-    """Ширина надписи шрифтом «ГОСТ тип А» — та же оценка, что в утилите (drw_core.tw); КОМПАС пишет так же (медиана 0,99 по журналу)."""
+    """Ширина надписи так, как её считает КОМПАС 25 (габарит текста; калибровка на листе — см. KW)."""
     SUP = '⁻⁰¹²³⁴⁵⁶⁷⁸⁹'
-    w = 0.0
+    if not s:
+        return 0.0
+    w = KW_BASE
     for c in str(s):
         if c in SUP:
-            w += 0.7 * 0.52
-        elif c == ' ':
-            w += 0.38
-        elif c in ".,:;'!|":
-            w += 0.28
-        elif c in '()[]-−':
-            w += 0.36
+            w += 0.7 * KW_DIGIT
+        elif c in KW:
+            w += KW[c]
         elif c.isdigit():
-            w += 0.52
-        elif c in 'ШЩЖМЮФWM':
-            w += 0.78
-        elif c.isupper() or c in '⌀∅×±°√':
-            w += 0.6
-        elif c in 'шщжмюфыwm':
-            w += 0.66
+            w += KW_DIGIT
+        elif c.isupper():
+            w += KW_UPPER
         else:
-            w += 0.5
-    return w * h * 1.17 + 0.22 * h if s else 0.0
+            w += KW_LOWER
+    return w * h
+
+
+# габарит надписи по высоте (калибровка КОМПАС 25, h 2,5…7): от y − (0,317h − 0,5) до y + 1,159h + 0,6 — над базовой линией (y)
+def t_lo(h):
+    return 0.317 * h - 0.5
+
+
+def t_hi(h):
+    return 1.159 * h + 0.6
+
+
+# надпись линейного размера: верх габарита — на 6,167 мм над размерной линией при h 3,5 (Height = 5,167), т. е. база на 1,51 мм выше линии
+DIM_TB = 6.167 - t_hi(3.5)
+# продолжение размерной линии за стрелку, вынесенную наружу (калибровка: 5 мм; DXF давал 6,8 — с выступом выносной линии)
+DIM_EXT = 5.0
+# надпись, что не помещается между выносными линиями, КОМПАС ставит снаружи у первой точки: 5 мм от неё, линия — ещё на 2 мм за надпись
+DIM_OUT, DIM_OUT_TAIL = 5.0, 2.0
 
 
 # ---------------------------------------------------------------- база объектов
@@ -140,10 +155,13 @@ class TextLine(Impl):
         return max(hs) if hs else dflt
 
     def width(self, dflt=3.5):
-        w = 0.0
+        w, n = 0.0, 0
         for i in self.items:
             h = float(i.p['Height']) or dflt
-            w += tw(str(i.p['Str']), h)
+            if str(i.p['Str']):
+                # запас КОМПАС (KW_BASE) — один на строку, а не на каждый компонент
+                w += tw(str(i.p['Str']), h) - (KW_BASE * h if n else 0.0)
+                n += 1
         return w
 
 
@@ -220,10 +238,19 @@ def arrow(x, y, ang, ln=5.0):
 def prim_box(q):
     if q[0] == 'L':
         return (min(q[1], q[3]), min(q[2], q[4]), max(q[1], q[3]), max(q[2], q[4]))
-    if q[0] in ('C', 'A'):
+    if q[0] == 'C':
         return (q[1] - q[3], q[2] - q[3], q[1] + q[3], q[2] + q[3])
+    if q[0] == 'A':
+        # дуга от a1 к a2 против часовой стрелки: концы и попавшие в неё точки на осях
+        a1, a2 = q[4] % 360.0, q[5] % 360.0
+        span = (a2 - a1) % 360.0 or 360.0
+        angs = [a1, a1 + span] + [k * 90.0 for k in range(-4, 9) if a1 < k * 90.0 < a1 + span]
+        xs = [q[1] + q[3] * math.cos(math.radians(a)) for a in angs]
+        ys = [q[2] + q[3] * math.sin(math.radians(a)) for a in angs]
+        return (min(xs), min(ys), max(xs), max(ys))
     if q[0] == 'T':
-        pts = [rot(u, v, q[5]) for u, v in ((0, 0), (q[6], 0), (q[6], q[4]), (0, q[4]))]
+        lo, hi = -t_lo(q[4]), t_hi(q[4])
+        pts = [rot(u, v, q[5]) for u, v in ((0, lo), (q[6], lo), (q[6], hi), (0, hi))]
         xs = [q[1] + p[0] for p in pts]
         ys = [q[2] + p[1] for p in pts]
         return (min(xs), min(ys), max(xs), max(ys))
@@ -356,7 +383,8 @@ class LineDimension(DObj):
         return self.text_wh()[0]
 
     def g_Height(self):
-        return self.text_wh()[1]
+        # калибровка КОМПАС 25: 5,167 при h 3,5 — высота габарита надписи
+        return 1.476 * self.text_wh()[1]
 
     def geom(self):
         P = self.p
@@ -372,24 +400,26 @@ class LineDimension(DObj):
         lo, hi = min(a1, a2), max(a1, a2)
         d = 1.0 if a2 >= a1 else -1.0
         out = P['ArrowPos'] == 1
-        if int(P['TextType']) == 0 or int(P['TextPos']) <= 0:
+        ext = DIM_EXT if out else 0.0
+        if int(P['TextType']) != 0:
+            # калибровка КОМПАС 25: при ручном размещении TextPos читается как 0, а надпись уходит на полку за размер
+            # (габарит длиннее на 25–100 мм); как именно — не снято, здесь — полка у второй выносной линии
+            self.emu.note('размер «%s»: ручное размещение надписи (TextType = 1) — КОМПАС 25 выносит надпись на полку' % self.label())
+            t0 = hi + 6.0
+            t1 = t0 + w
+            dl0, dl1 = lo - ext, t1 + 25.0 - w
+        elif hi - lo >= w + 10.0:
+            # надпись по центру (гипотеза порога: между стрелками остаётся место на две стрелки)
             t0 = (a1 + a2) / 2.0 - w / 2.0
+            t1 = t0 + w
+            dl0, dl1 = lo - ext, hi + ext
         else:
-            # журнал КОМПАС 25: новый TextPos у уже построенного размера (после первого Update) применяется не так, как у нового —
-            # в эмуляторе он просто не меняется: варианты TextPos надо пробовать новыми размерами
-            if self.ref and getattr(self, 'tp0', None) is not None:
-                tp = self.tp0
-            else:
-                tp = self.tp0 = int(P['TextPos'])
-            if tp > 0:
-                n = a1 + d * (tp + GAP_TEXTPOS)
-                t0 = n if d > 0 else n - w
-            else:
-                n = a2 - d * (-tp + GAP_TEXTPOS)
-                t0 = n - w if d > 0 else n
-        t1 = t0 + w
-        ext = 6.8 if out else 0.0
-        dl0, dl1 = min(lo - ext, t0 - (0.5 if t0 < lo else 0)), max(hi + ext, t1 + (0.5 if t1 > hi else 0))
+            # не помещается: снаружи у первой точки привязки (калибровка — X1 левее X2; для X1 правее — гипотеза: справа)
+            t0 = a1 - DIM_OUT - w if d > 0 else a1 + DIM_OUT
+            t1 = t0 + w
+            dl0, dl1 = min(lo - ext, t0 - DIM_OUT_TAIL), max(hi + ext, t1 + DIM_OUT_TAIL)
+        # чтение после Update: X3 (Y3) — начало надписи вдоль размера
+        P['X3' if H else 'Y3'] = round(t0, 3)
         sb1 = 1.0 if bd >= b1 else -1.0
         sb2 = 1.0 if bd >= b2 else -1.0
         segs = [(a1, b1, a1, bd + 2 * sb1), (a2, b2, a2, bd + 2 * sb2), (dl0, bd, dl1, bd)]
@@ -398,10 +428,10 @@ class LineDimension(DObj):
             pr.append(L(s[0], s[1], s[2], s[3]) if H else L(s[1], s[0], s[3], s[2]))
         if H:
             pr += arrow(lo, bd, 0 if out else 180) + arrow(hi, bd, 180 if out else 0)
-            pr.append(T(t0, bd + 2.11, self.label(), h, 0, w))
+            pr.append(T(t0, bd + DIM_TB, self.label(), h, 0, w))
         else:
             pr += arrow(bd, lo, 90 if out else 270) + arrow(bd, hi, 270 if out else 90)
-            pr.append(T(bd - 2.11, t0, self.label(), h, 90, w))
+            pr.append(T(bd - DIM_TB, t0, self.label(), h, 90, w))
         return pr
 
     def label(self):
@@ -412,31 +442,61 @@ class LineDimension(DObj):
 
 
 class BreakLineDimension(LineDimension):
+    """Размер с обрывом. Калибровка КОМПАС 25 (25 проб, надпись «⌀40k6»):
+    (X1, Y1) — точка привязки, (X2, Y2) задаёт направление выносной линии e; после Update() X2, Y2 — проекция (X3, Y3) на эту линию,
+    размерная линия — через неё перпендикулярно e, стрелка там же. Сторона линии n = (e.y, −e.x), если (X3, Y3) на выносной линии
+    (тогда X3 читается как X2 + 5n); иначе — сторона, где (X3, Y3): если до неё не меньше ширины надписи + 7 мм, линия идёт до неё
+    и надпись на ней (у стрелки — гипотеза), а если ближе — линия продолжается и за стрелку на ширину + 7 мм, надпись там.
+    Надпись — «над» линией по направлению чтения (габарит от 0,9 до 6,17 мм от линии), с 6 мм от стрелки."""
     IFACES = ('IBreakLineDimension', 'IDimensionText', 'IDimensionParams', 'IDimension2D')
 
     def geom(self):
         P = self.p
-        x1, y1, x2, y2, x3, y3 = P['X1'], P['Y1'], P['X2'], P['Y2'], P['X3'], P['Y3']
-        nx, ny = x3 - x1, y3 - y1
-        nl = math.hypot(nx, ny)
+        x1, y1, x3, y3 = P['X1'], P['Y1'], P['X3'], P['Y3']
+        if not getattr(self, 'br_e', None):
+            ex, ey = P['X2'] - x1, P['Y2'] - y1
+            el = math.hypot(ex, ey)
+            if el < 1e-6:
+                self.emu.err('размер с обрывом: (X2, Y2) совпадает с (X1, Y1) — нет направления выносной линии')
+                return False
+            self.br_e = (ex / el, ey / el)
+        ex, ey = self.br_e
+        t = (x3 - x1) * ex + (y3 - y1) * ey
+        px, py = x1 + ex * t, y1 + ey * t
+        P['X2'], P['Y2'] = round(px, 3), round(py, 3)
+        nx, ny = ey, -ex
+        off = (x3 - px) * nx + (y3 - py) * ny
         w, h = self.text_wh()
-        if nl < 0.5:
-            # (X3, Y3) у самой точки привязки: КОМПАС кладёт размер горизонтально (журнал КОМПАС 25: сдвиг на 0,01 и 1 мм поперёк — горизонтальная линия)
-            return [L(x1, y1, x1 + w + 5, y1)] + arrow(x1, y1, 180) + [T(x1 + 5, y1 + 2.11, self.label(), h, 0, w)]
-        # размерная линия — через точку привязки (стрелка) и (X3, Y3), до проекции (X2, Y2) (гипотеза по тому же журналу)
-        ux, uy = nx / nl, ny / nl
-        t2 = max((x2 - x1) * ux + (y2 - y1) * uy, nl)
-        ex, ey = x1 + ux * t2, y1 + uy * t2
-        ang = math.degrees(math.atan2(uy, ux))
-        if ang > 90.01:
-            ang -= 180
-        elif ang <= -90:
-            ang += 180
-        pr = [L(x1, y1, ex, ey)] + arrow(x1, y1, math.degrees(math.atan2(-uy, -ux)))
-        ca, sa = math.cos(math.radians(ang)), math.sin(math.radians(ang))
-        d = 5 + 1 + w / 2
-        mx, my = x1 + ux * d, y1 + uy * d
-        pr.append(T(mx - ca * w / 2 - sa * 2.11, my - sa * w / 2 + ca * 2.11, self.label(), h, ang, w))
+        need = w + 7.0
+        if abs(off) < 0.01:
+            sx, sy, far = nx, ny, None
+            P['X3'], P['Y3'] = round(px + 5 * nx, 3), round(py + 5 * ny, 3)
+        elif abs(off) >= need:
+            (sx, sy), far = ((nx, ny) if off > 0 else (-nx, -ny)), abs(off)
+        else:
+            (sx, sy), far = ((-nx, -ny) if off > 0 else (nx, ny)), None
+        ln = far if far else need
+        pr = [L(px, py, px + sx * ln, py + sy * ln)]
+        if far is None and abs(off) >= 0.01:
+            pr.append(L(px, py, x3, y3))
+        # выносная линия от точки привязки — с выходом 2 мм за размерную; при нулевой длине — только выход (поворот стороны на −90°)
+        if abs(t) > 0.5:
+            sg = 1.0 if t > 0 else -1.0
+            pr.append(L(x1, y1, px + ex * sg * 2, py + ey * sg * 2))
+        else:
+            pr.append(L(px, py, px + sy * 2, py - sx * 2))
+        ang = math.degrees(math.atan2(sy, sx))
+        ar = ang
+        while ar > 90.01:
+            ar -= 180
+        while ar <= -89.99:
+            ar += 180
+        same = abs(((ang - ar) + 180) % 360 - 180) < 1
+        ca, sa = math.cos(math.radians(ar)), math.sin(math.radians(ar))
+        st = 6.0 if same else 6.0 + w            # левый край надписи по направлению чтения
+        bx, by = px + sx * st, py + sy * st
+        bx, by = bx - sa * DIM_TB, by + ca * DIM_TB
+        pr.append(T(bx, by, self.label(), h, ar, w))
         return pr
 
 
@@ -447,12 +507,24 @@ class AngleDimension(LineDimension):
     def geom(self):
         P = self.p
         xc, yc, r, a1, a2 = P['Xc'], P['Yc'], P['Radius'], P['Angle1'], P['Angle2']
+        # калибровка КОМПАС 25: выносных линий от вершины нет (габарит — дуга и надпись); надпись — вдоль дуги снаружи у середины
+        # (гипотеза: по 16 пробам надпись сдвинута к одной из сторон до 2–4 мм, правило не снято)
         pr = [('A', xc, yc, abs(r), a1, a2, 2)]
-        pr += [L(xc, yc, xc + r * math.cos(math.radians(a)), yc + r * math.sin(math.radians(a))) for a in (a1, a2)]
         w, h = self.text_wh()
-        am = math.radians((a1 + a2) / 2.0)
-        tx, ty = xc + (r + 2) * math.cos(am), yc + (r + 2) * math.sin(am)
-        pr.append(T(tx - w / 2, ty, self.label(), h, 0, w))
+        am = (a1 + a2) / 2.0
+        ar = am - 90.0
+        while ar > 90.01:
+            ar -= 180
+        while ar <= -89.99:
+            ar += 180
+        ca, sa = math.cos(math.radians(ar)), math.sin(math.radians(ar))
+        cx, cy = xc + (r + 0.9 + t_lo(h)) * math.cos(math.radians(am)), yc + (r + 0.9 + t_lo(h)) * math.sin(math.radians(am))
+        # «верх» надписи — наружу от дуги
+        up = (-sa, ca)
+        if up[0] * math.cos(math.radians(am)) + up[1] * math.sin(math.radians(am)) < 0:
+            cx, cy = xc + (r + 0.9 + t_hi(h)) * math.cos(math.radians(am)), yc + (r + 0.9 + t_hi(h)) * math.sin(math.radians(am))
+        P['X3'], P['Y3'] = round(cx - ca * w / 2, 3), round(cy - sa * w / 2, 3)
+        pr.append(T(cx - ca * w / 2, cy - sa * w / 2, self.label(), h, ar, w))
         return pr
 
 
@@ -563,7 +635,7 @@ class Rough(DObj, Branchs):
         tl = [l for l in _txt_attr(self, 'RoughParamText').lines if l.g_Str()]
         h = tl[0].height() if tl else 3.5
         Hh, t = 8.5, math.tan(math.radians(30))
-        w = (tl[0].width() + 1.6) if tl else 0.0
+        w = (tl[0].width() + 1.36) if tl else 0.0
         r = a - 90
         def P(u, v):
             q = rot(u, v, r)
@@ -572,21 +644,36 @@ class Rough(DObj, Branchs):
         pr = [L(pL[0], pL[1], x, y, 1), L(x, y, pR[0], pR[1], 1)]
         if w:
             pr.append(L(pR[0], pR[1], pE[0], pE[1], 1))
-            tp = P(Hh * t + 0.8, Hh - h - 0.8)
-            pr.append(T(tp[0], tp[1], tl[0].g_Str(), h, r, w - 1.6))
+            # калибровка КОМПАС 25: надпись — в пределах высоты знака (верх габарита — 8,5 мм)
+            tp = P(Hh * t + 0.68, Hh - t_hi(h) - 0.01)
+            pr.append(T(tp[0], tp[1], tl[0].g_Str(), h, r, w - 1.36))
         return pr
 
     def geom(self):
         P = self.p
-        x0, y0 = P['X0'], P['Y0']
         bx, by = P['BranchX0'], P['BranchY0']
-        if abs(bx) + abs(by) > 1e-6 and P['LeaderLength'] > 0:
-            # с выноской (гипотеза): знак прямо в (X0, Y0), выноска от него к (BranchX0, BranchY0) со стрелкой
-            pr = self.sign(x0, y0, 90)
-            pr.append(L(x0, y0, bx, by))
-            pr += arrow(bx, by, math.degrees(math.atan2(by - y0, bx - x0)))
+        if abs(bx) + abs(by) > 1e-6:
+            # с выноской (калибровка КОМПАС 25, «Ra 1,6» h 3,5): после Update() Y0 читается на 10 мм выше заданного, длину и угол выноски
+            # КОМПАС считает сам — от (BranchX0, BranchY0) к (X0, Y0); знак на полке в (X0, Y0): полка длиной ширина + 11,34 мм
+            # вправо (ShelfDirection 1) или влево, верх знака — на 8,5 мм над полкой
+            if not getattr(self, 'rl_up', False):
+                P['Y0'] += 10.0
+                self.rl_up = True
+            x0, y0 = P['X0'], P['Y0']
+            P['LeaderLength'] = round(math.hypot(x0 - bx, y0 - by), 3)
+            P['LeaderAngle'] = round(math.degrees(math.atan2(y0 - by, x0 - bx)) % 360.0, 3)
+            P['ShelfX'], P['ShelfY'] = x0, y0
+            P['Angle'] = 90.0
+            tl = [l for l in _txt_attr(self, 'RoughParamText').lines if l.g_Str()]
+            h = tl[0].height() if tl else 3.5
+            w = tl[0].width() if tl else 0.0
+            sw = (w + 11.34) * (-1 if int(P['ShelfDirection']) == -1 else 1)
+            # стрелка у поверхности в габарит КОМПАС не входит (выноска вертикально — габарит ровно по X0)
+            pr = [L(bx, by, x0, y0), L(x0, y0, x0 + sw, y0), L(x0, y0 + 8.5, x0 + sw, y0 + 8.5, 1)]
+            if tl:
+                pr.append(T(min(x0, x0 + sw) + 7.0, y0 + 8.5 - t_hi(h), tl[0].g_Str(), h, 0, w))
             return pr
-        return self.sign(x0, y0, P['Angle'])
+        return self.sign(P['X0'], P['Y0'], P['Angle'])
 
 
 class Table(Impl):
@@ -862,16 +949,24 @@ class CutLine(DObj):
         if len(self.pts) < 2:
             self.emu.err('ICutLine: меньше двух точек')
             return False
+        # калибровка КОМПАС 25 (6 проб, буква h 5): штрих у каждого конца — по направлению крайнего отрезка, вместе с буквой
+        # выходит на 14,6 мм за конец (у верхнего конца вертикальной линии буква над штрихом — 18 мм); стрелка — 15 мм в сторону взгляда
+        # (у горизонтальной линии буква над стрелкой — 16,5 мм). ArrowPos: TRUE — стрелки слева по направлению ломаной (справка SDK)
         (x1, y1), (x2, y2) = self.pts[0], self.pts[-1]
-        L_ = math.hypot(x2 - x1, y2 - y1) or 1.0
-        ux, uy = (x2 - x1) / L_, (y2 - y1) / L_
-        # ArrowPos: TRUE — стрелки слева по направлению ломаной (справка SDK)
-        nx, ny = (-uy, ux) if self.p['ArrowPos'] else (uy, -ux)
+        (xa, ya), (xb, yb) = self.pts[1], self.pts[-2]
         pr = []
-        for (px, py), sg, ext in (((x1, y1), -1, 8.6), ((x2, y2), 1, 11.8)):
-            ex, ey = px + sg * ux * ext, py + sg * uy * ext
-            pr.append(L(px, py, ex, ey, 1))
-            pr.append(L(px, py, px + nx * 15, py + ny * 15, 2))
+        for (px, py), (qx, qy) in (((x1, y1), (xa, ya)), ((x2, y2), (xb, yb))):
+            dl = math.hypot(px - qx, py - qy) or 1.0
+            ox, oy = (px - qx) / dl, (py - qy) / dl          # наружу от конца
+            ext = 14.57 + (3.4 if oy > 0.9 else 0.22 if oy < -0.9 else 0.0)
+            pr.append(L(px, py, px + ox * ext, py + oy * ext, 1))
+        L_ = math.hypot(x2 - x1, y2 - y1) or 1.0
+        for (px, py), (qx, qy), first in (((x1, y1), (xa, ya), True), ((x2, y2), (xb, yb), False)):
+            dl = math.hypot(qx - px, qy - py) or 1.0
+            ux, uy = ((qx - px) / dl, (qy - py) / dl) if first else ((px - qx) / dl, (py - qy) / dl)
+            nx, ny = (-uy, ux) if self.p['ArrowPos'] else (uy, -ux)
+            ac = 15.0 + (1.53 if abs(uy) < 0.1 and ny > 0 else 0.0)
+            pr.append(L(px, py, px + nx * ac, py + ny * ac, 2))
         return pr
 
 
@@ -953,7 +1048,9 @@ class DrawingText(DObj):
         for i, ln in enumerate(self.text.lines):
             if ln.g_Str():
                 h = ln.height()
-                pr.append(T(x, y - i * (h + 1.5), ln.g_Str(), h, self.p['Angle'], ln.width()))
+                # калибровка КОМПАС 25: габарит текста API7 на 0,5 мм ниже, чем у текста API5 с той же точкой (h 3,5: −1,11…+4,06)
+                bx, by = rot(0.0, -0.5 - i * (h + 1.5), self.p['Angle'])
+                pr.append(T(x + bx, y + by, ln.g_Str(), h, self.p['Angle'], ln.width()))
         return pr
 
 

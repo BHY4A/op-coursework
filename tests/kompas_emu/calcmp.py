@@ -1,18 +1,21 @@
 # -*- coding: utf-8 -*-
 """Сверка эмулятора с настоящим КОМПАС по калибровке.
-   python3 calcmp.py РЕАЛЬНЫЙ_cal.json [ЭМУЛЯТОР_cal.json] [--all]
+   python3 calcmp.py РЕАЛЬНЫЙ_cal.json [ЭМУЛЯТОР_cal.json] [--all] [--rev=КОММИТ] [--g=ГРУППА] [--save=ФАЙЛ]
    Калибровочный макрос (60_calibrate.py) ставит одни и те же пробы в одном и том же порядке, поэтому записи сравниваются по номеру.
    Без второго файла макрос прогоняется в эмуляторе заново. Печатает по группам, сколько проб совпало по габариту (±0,3 мм),
-   и худшие расхождения: что задано, что получил КОМПАС, что выдал эмулятор."""
+   и худшие расхождения: что задано, что получил КОМПАС, что выдал эмулятор.
+   --rev — макрос калибровки из того коммита (js/kompas_py.js), каким снят журнал КОМПАС, а модель — текущая:
+   так старый журнал сверяется с новым эмулятором после того, как пробы калибровки поменялись."""
 import json, os, sys, subprocess, tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
-def emu_cal():
+def emu_cal(rev=None):
     ROOT = os.path.dirname(os.path.dirname(HERE))
     tmp = tempfile.mkdtemp(prefix='kcal-')
-    js = ("const {load}=require('./tests/load.js');const ctx=load('.');const TC=ctx.TASKS_CALC;const P=TC.defaults(4),R=TC['task'+P.task](P);"
+    old = ("require('vm').runInContext(require('child_process').execSync('git show %s:js/kompas_py.js',{maxBuffer:1<<28}).toString(),ctx);" % rev) if rev else ''
+    js = ("const {load}=require('./tests/load.js');const ctx=load('.');" + old + "const TC=ctx.TASKS_CALC;const P=TC.defaults(4),R=TC['task'+P.task](P);"
           "const f=ctx.KOMPAS.files(R,P,{},{debug:true}).find(f=>f.path==='60_calibrate.py');require('fs').writeFileSync(%s,f.gen());"
           % json.dumps(os.path.join(tmp, '60_calibrate.py')))
     subprocess.run(['node', '-e', js], cwd=ROOT, check=True)
@@ -30,7 +33,14 @@ def dev(a, b):
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith('--')]
     real = json.load(open(args[0], encoding='utf-8'))['rec']
-    emu = json.load(open(args[1] if len(args) > 1 else emu_cal(), encoding='utf-8'))['rec']
+    rev = next((a.split('=', 1)[1] for a in sys.argv[1:] if a.startswith('--rev=')), None)
+    ef = args[1] if len(args) > 1 else emu_cal(rev)
+    sv = next((a.split('=', 1)[1] for a in sys.argv[1:] if a.startswith('--save=')), None)
+    if sv:
+        import shutil
+        shutil.copy(ef, sv)
+    only = next((a.split('=', 1)[1] for a in sys.argv[1:] if a.startswith('--g=')), None)
+    emu = json.load(open(ef, encoding='utf-8'))['rec']
     if len(real) != len(emu):
         print('ВНИМАНИЕ: проб в КОМПАС %d, в эмуляторе %d — макрос калибровки изменился, сверка по номеру неточна' % (len(real), len(emu)))
     groups = {}
@@ -39,6 +49,8 @@ def main():
         groups.setdefault(r['g'], []).append((d, i, r, e))
     bad_total = 0
     for g, rows in groups.items():
+        if only and g != only:
+            continue
         bad = [x for x in rows if x[0] > 0.3]
         bad_total += len(bad)
         print('%-14s совпало %3d из %3d' % (g, len(rows) - len(bad), len(rows)))
