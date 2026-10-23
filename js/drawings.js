@@ -748,10 +748,11 @@
         const tx = X(sd * faceX), ty = Y(faceY), att = tx + sd * dx, top = Y(kind === 'bevel' ? rTip : P.rmax) + dy;
         sh.tol(att - (sd > 0 ? 3.5 : 0), Math.max(ty + 8, top), ['perp', tFace, base], { from: 'b', fx: sd > 0 ? 3.5 : 0, via: [[att, ty]], to: [tx, ty] }); });
       // рамка сбоку от торца, выноска горизонтально (когда над венцом проходят выносные линии диаметров)
-      const fy1 = kind === 'bevel' ? P.bevel.Be[1] : (P.rr || P.rmax * 0.9), fy2 = rh;
+      // по торцу ступицы (он есть всегда в плоскости ±hb; торец венца у червячного колеса и др. — в другой плоскости)
+      const fy1 = kind === 'bevel' ? P.bevel.Be[1] : rh, fy2 = kind === 'bevel' ? rh : rb + (P.kb || 0);
       const Wf = 7 + [tFace, base].reduce((a, c) => a + tw(c, 3.5) + 3, 0);
       for (const sd of kind === 'bevel' ? [1] : [1, -1]) for (const t of [0.5, 0.3, 0.7, 0.15, 0.85]) for (const dx of [5, 9, 14]) opts.push(() => {
-        const tx = X(sd * faceX), ty = Y(fy1 + (fy2 - fy1) * t);
+        const tx = kind === 'bevel' ? X(sd * faceX) : X(sd > 0 ? xr : xl), ty = Y(fy1 + (fy2 - fy1) * t);
         const sx = sd > 0 ? tx + dx : tx - dx;   // via в точке начала: выноска строго горизонтальна (рамку не сдвигать)
         sh.tol(sd > 0 ? sx : sx - Wf, ty - 3.5, ['perp', tFace, base], { from: sd > 0 ? 'l' : 'r', via: [[sx, ty]], to: [tx, ty] }); });
       sh.attempt(opts);
