@@ -10,6 +10,7 @@
  *     в общем файле styles/styles.css репозитория хаба; файл и шрифты подгружаются только когда она выбрана;
  *  6) плавность: окна и меню открываются и закрываются с короткой анимацией, смена вкладки, темы и стиля —
  *     мягкий переход (View Transitions, где браузер умеет); при prefers-reduced-motion всё мгновенно.
+ *  7) оглавление: ссылки на разделы-настройки (section.set) получают класс set — значок шестерёнки.
  * Подключается в <head> обычным (не defer) скриптом; у <html> — атрибут data-app с id текущей утилиты. */
 (function () {
   'use strict';
@@ -39,7 +40,7 @@
   }, true);
 
   /* ---------- стиль оформления ---------- */
-  var SKEY = 'suite-style', SVER = '202610220800';
+  var SKEY = 'suite-style', SVER = '202610222330';
   var STYLES = [
     { id: 'journal', name: 'Журнал', sw: 'linear-gradient(135deg,#fbfcfd 0 56%,#dfe5ea 56%)' },
     { id: 'azure', name: 'Лазурь', fonts: 'PT+Mono&family=PT+Sans:ital,wght@0,400;0,700;1,400',
@@ -83,7 +84,7 @@
     { id: 'sapr-labs', name: 'Электропривод · ЛР 1–6', sub: 'Расчёт и моделирование ЭП с регуляторами', color: '#0a5aa8' },
     { id: 'krrs-robot', name: 'Робот-балансир · LQR', sub: 'Модель, пространство состояний, LQR', color: '#5a3ea8' },
     { id: 'op-coursework', name: 'Основы проектирования · КП', sub: 'Расчёт привода и файлы для КОМПАС-3D', color: '#0b6e62' },
-    { id: 'eco-pdv', name: 'Промышленная экология · ПДВ', sub: 'Задачи 1.1–1.6: выбросы, ПДВ, ущерб', color: '#557313' }
+    { id: 'eco-pdv', name: 'Промышленная экология · ПДВ', sub: 'Задачи 1.1–1.8: выбросы, ПДВ, ущерб', color: '#557313' }
   ];
   function icon(a, size) {
     return '<span class="suite-ic" style="--c:' + a.color + '"><svg width="' + size + '" height="' + size + '" viewBox="0 0 32 32" aria-hidden="true">' + G[a.id] + '</svg></span>';
@@ -223,6 +224,24 @@
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', sheetMotion); else sheetMotion();
 
+  /* ---------- оглавление: разделы-настройки (section.set) отмечаются значком, как и в самом листе ---------- */
+  function markSetToc() {
+    Array.prototype.forEach.call(document.querySelectorAll('a[data-toc]'), function (a) {
+      var t = document.getElementById(a.getAttribute('data-toc'));
+      a.classList.toggle('set', !!(t && t.closest('.set')));
+    });
+  }
+  var stQ = 0;
+  function queueSetToc() { if (stQ) return; stQ = requestAnimationFrame(function () { stQ = 0; markSetToc(); }); }
+  function setToc() {
+    var rail = document.getElementById('rail');
+    if (!window.MutationObserver) return;
+    if (rail) new MutationObserver(queueSetToc).observe(rail, { childList: true });
+    new MutationObserver(queueSetToc).observe(document.body, { childList: true });
+    queueSetToc();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', setToc); else setToc();
+
   /* ---------- сообщения и сохранение файлов ---------- */
   var toastT = 0;
   function toast(t) {
@@ -253,5 +272,12 @@
     }, function () { plainSave(name, blob); });
   }
 
-  window.SUITE = { KEY: KEY, morph: morph, APPS: APPS, icon: icon, save: save, toast: toast, STYLES: STYLES, setStyle: setStyle, style: function () { return curStyle; } };
+  /* превью переключателя «Сверка с ручным расчётом» — одинаковое во всех утилитах; f — формула этой утилиты, mine — «ваше» значение */
+  function chkEx(f, mine) {
+    var box = function (lbl, body, on) { return '<div class="ex' + (on ? ' on' : '') + '"><div class="ex-h">' + lbl + (on ? '<span>сейчас</span>' : '') + '</div><div class="ex-b">' + body + '</div></div>'; };
+    var ff = '<div class="ex-f">' + f + '</div>';
+    return '<div class="opt-ex">' + box('Выключено', ff, true) + box('Включено', ff + '<div class="ex-chk">Ваше значение <i>' + mine + '</i> <b>✓ совпадает</b></div>', false) + '</div>';
+  }
+
+  window.SUITE = { KEY: KEY, chkEx: chkEx, morph: morph, APPS: APPS, icon: icon, save: save, toast: toast, STYLES: STYLES, setStyle: setStyle, style: function () { return curStyle; } };
 })();

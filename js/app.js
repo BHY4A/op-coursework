@@ -27,7 +27,7 @@
     org: 'МИНОБРНАУКИ РОССИИ\nФедеральное государственное бюджетное образовательное учреждение\nвысшего образования\n«Казанский национальный исследовательский технологический университет»\n(ФГБОУ ВО «КНИТУ»)',
     dept: 'ОКПМ', discipline: 'Основы проектирования', topic: '', group: '', student: '', teacher: '', normo: '', city: 'Казань', year: String(new Date().getFullYear()),
     code: '', logo: true, explain: true, watermark: true, frame: true, readable: true, codePlain: true, listings: false, intro: true,
-    eqNum: true, numSec: false, where: true, refs: 'full', headLine: 'single', line1: false
+    eqNum: true, numSec: false, where: true, refs: 'num', headLine: 'single', line1: false
   };
   const KEY = { st: 'op-state', auto: 'op-autosave', slots: 'op-slots', title: 'op-title', check: 'op-check', theme: 'op-theme' };
   const lsGet = k => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } };
@@ -242,20 +242,51 @@
     wKey: { vals: [['met', 'd<sub>расч</sub> = 0,9d'], ['net', 'W с учётом паза']], show: R => { const c = (R.ch2 || R.ch1).secs.find(s => s.si !== undefined) || (R.ch2 || R.ch1).secs[0]; return [`вал II: σ<sub>экв</sub> = ${fnum(c.se)} / [σ] = ${fnum(c.allow)} МПа`]; } },
     keyExact: { vals: [[false, '4,4T/(d·h·l<sub>р</sub>)'], [true, '2T/(d(h−t₁)l<sub>р</sub>)']], show: R => R.keys.slice(0, 3).map(k => `${esc(k.title.split('—')[1] || k.title)}: σ<sub>см</sub> = ${fnum(k.s)} МПа`) },
     FmMode: { vals: [['gost', 'ГОСТ 16162'], ['met', '(0,2…0,5)·2T/D₀']], show: R => [`F<sub>м</sub> = ${fnum(R.Fm || 0)} Н`] },
-    awT6: { vals: [['pin', 'Момент шестерни'], ['met', 'Момент колеса']], show: R => [`aw.б = ${fnum(R.gB.aw)} мм, aw.т = ${fnum(R.gT.aw)} мм`, `σH.т = ${fnum(R.cT.sH)} МПа`] },
+    awT6: { vals: [['met', 'Момент колеса'], ['pin', 'Момент шестерни']], show: R => [`aw.б = ${fnum(R.gB.aw)} мм, aw.т = ${fnum(R.gT.aw)} мм`, `σH.т = ${fnum(R.cT.sH)} МПа`] },
     wormSHcheck: { vals: [['met', 'Методичка'], ['ch', 'Чернавский (4.23)']], show: R => [`σH = ${fnum(R.st.sigH)} / [σH] = ${fnum(R.ck.sH)} МПа`, `aw = ${fnum(R.g.aw)} мм`] },
-    t1Coup: { vals: [['scheme', 'T<sub>2Т</sub> = T<sub>в</sub>'], ['met', 'T<sub>2Т</sub> = T<sub>в</sub>/η<sub>м</sub>']], show: R => [`T<sub>2Т</sub> = ${fnum(R.K.T2T)} Н·м, T<sub>1Б</sub> = ${fnum(R.K.T1B)} Н·м`] },
+    t1Coup: { vals: [['met', 'T<sub>2Т</sub> = T<sub>в</sub>/η<sub>м</sub>'], ['scheme', 'T<sub>2Т</sub> = T<sub>в</sub>']], show: R => [`T<sub>2Т</sub> = ${fnum(R.K.T2T)} Н·м, T<sub>1Б</sub> = ${fnum(R.K.T1B)} Н·м`] },
+    autoFix: { vals: [[true, 'Включено (как в методичке)'], [false, 'Выключено']], cur: () => S.P.O.autoFix !== false, show: R => { let bad = 0; for (const s of R.sections) for (const it of s.items) if (it.k === 'check' && !it.ok) bad++; return R.summary.slice(1).map(([k, v]) => `${esc(k)}: ${v}`).concat(bad ? `не выполняется проверок: ${bad}` : 'все проверки выполняются'); } },
     Fm1: { vals: [[false, 'Нет'], [true, 'Да']], show: R => { const c = R.ch1.secs[0]; return [`R<sub>A</sub> = ${fnum(R.B1.RA)} Н, R<sub>B</sub> = ${fnum(R.B1.RB)} Н`, `σ<sub>экв</sub> = ${fnum(c.se)} МПа`]; } }
   };
   function pvHtml(key) {
-    const d = PV[key], cur = S.P.O[key] === undefined ? (key === 'dec' ? S.P.dec : undefined) : S.P.O[key];
+    const d = PV[key], cur = d.cur ? d.cur() : S.P.O[key] === undefined ? (key === 'dec' ? S.P.dec : undefined) : S.P.O[key];
     const items = d.vals.map(([v, l]) => {
       const on = String(v) === String(cur);
       const R = on ? S.R : altR({ [key]: v });
       const body = R ? d.show(R).map(exF).join('') : exF('расчёт с этой настройкой не выполняется');
-      return `<div class="ex${on ? ' on' : ''}"><div class="ex-h"><span>${l}</span>${on ? '<span>сейчас</span>' : ''}</div><div class="ex-b">${body}</div></div>`;
+      return `<div class="ex${on ? ' on' : ''}"><div class="ex-h">${l}${on ? '<span>сейчас</span>' : ''}</div><div class="ex-b">${body}</div></div>`;
     });
     return `<div class="ex-multi" style="--n:${items.length}">${items.join('')}</div>`;
+  }
+  /* превью настроек записки: как выглядит лист при каждом значении (DPV[key] = { vals: [[значение, подпись]], page: значение => html }) */
+  const DEQ = 'F<sub>t2</sub> = 2·10³·T<sub>II</sub>/d<sub>2</sub> = 2·10³·412/250 = 3296 Н';
+  const dPaper = (inner, cls) => `<div class="ex-paper${cls ? ' ' + cls : ''}">${inner}</div>`;
+  const dFig = cap => `<svg viewBox="0 0 300 100" preserveAspectRatio="none"><rect x="70" y="14" width="160" height="72" fill="none" stroke="#7d8996"/><circle cx="120" cy="50" r="22" fill="none" stroke="#7d8996"/><circle cx="190" cy="50" r="14" fill="none" stroke="#7d8996"/><path d="M60 50H240" stroke="#7d8996" stroke-dasharray="6 3 1 3"/></svg><p class="cap">${cap}</p>`;
+  const DPV = {
+    frame: { vals: [[false, 'Без рамки'], [true, 'С рамкой (ГОСТ 2.104)']], page: v => v ? dPaper(`<p>…расчёт тихоходного вала.</p><div class="ex-stamp"><span>Изм.</span><span>Лист</span><span>${esc(S.T.code || codeDefault())} 00.00.00 ПЗ</span><span>7</span></div>`, 'framed') : dPaper('<p>…расчёт тихоходного вала.</p><p class="foot">7</p>') },
+    logo: { vals: [[false, 'Без логотипа'], [true, 'С логотипом']], page: v => dPaper(`${v ? '<b class="ex-logo">КНИТУ</b>' : ''}<p>МИНОБРНАУКИ РОССИИ</p><p>Федеральное государственное бюджетное образовательное учреждение высшего образования</p><p>«Казанский национальный исследовательский технологический университет»</p>`, 'title') },
+    explain: { vals: [[false, 'Только формулы'], [true, 'С пояснениями']], page: v => dPaper(`${v ? '<p>Окружная сила на колесе определяется передаваемым моментом и делительным диаметром:</p>' : ''}<div class="ex-math">${DEQ}</div>`) },
+    where: { vals: [[false, 'Без расшифровки'], [true, 'С «где …» (как в методичке)']], page: v => dPaper(`<div class="ex-math">F<sub>t2</sub> = 2·10³·T<sub>II</sub>/d<sub>2</sub></div>${v ? '<p class="where">где T<sub>II</sub> – момент на тихоходном валу, Н·м; d<sub>2</sub> – делительный диаметр колеса, мм.</p>' : ''}`) },
+    eqNum: { vals: [[false, 'Без номеров'], [true, 'С номерами']], page: v => dPaper(`<div class="ex-math">${DEQ}${v ? '<span class="ex-no">(12)</span>' : ''}</div>`) },
+    numSec: { vals: [[false, 'Сквозная (как в методичке)'], [true, 'По разделам']], page: v => dPaper(`<div class="ex-math">${DEQ}<span class="ex-no">${v ? '(3.4)' : '(12)'}</span></div><p class="cap">Таблица ${v ? '3.2' : '5'} – Параметры зацепления</p><p class="cap">Рисунок ${v ? '3.1' : '4'} – Схема сил в зацеплении</p>`) },
+    refs: { vals: [['num', '[1] (как в методичке)'], ['full', '[1, с. 5]'], ['none', 'Без ссылок']], page: v => dPaper(`<p>Коэффициент нагрузки принимаем K<sub>Hβ</sub> = 1,1${v === 'num' ? ' [1]' : v === 'full' ? ' [1, с. 32]' : ''}.</p>`) },
+    headLine: { vals: [['single', 'Одинарная'], ['double', 'Двойная'], ['thick', 'Толстая']], page: v => dPaper(`<table class="ex-tt ${v}"><thead><tr><th>Параметр</th><th>Значение</th></tr></thead><tbody><tr><td>a<sub>w</sub>, мм</td><td>160</td></tr></tbody></table>`) },
+    line1: { vals: [[false, '1,5 (как в методичке)'], [true, '1,0']], page: v => dPaper('<p>Привод предназначен для передачи вращения от электродвигателя к рабочему органу через редуктор и открытую передачу.</p>', v ? 'lh10' : 'lh15') },
+    watermark: { vals: [[false, 'Без подложки'], [true, 'С подложкой']], page: v => dPaper(`${dFig('Рисунок 4 – Эскизная компоновка редуктора')}${v ? '<div class="ex-wm"><b>Замените рисунком из КОМПАС</b><span>Что вставить: эскизная компоновка редуктора.</span><span>Откуда: сборка «Редуктор», вид сверху.</span></div>' : ''}`, 'fig') },
+    readable: { vals: [[false, 'Обычный перенос'], [true, 'Блок целиком']], page: v => { const brk = '<div class="ex-brk"><span>разрыв страницы</span></div>'; return v ? dPaper(`<p>…конец предыдущего расчёта.</p><p class="gap">свободное место</p>${brk}<p>Окружная сила на колесе:</p><div class="ex-math">${DEQ}</div>`) : dPaper(`<p>…конец предыдущего расчёта.</p><p>Окружная сила на колесе:</p>${brk}<div class="ex-math">${DEQ}</div>`); } },
+    listings: { vals: [[false, 'Без листингов'], [true, 'С листингами']], page: v => dPaper(`<p class="h">Список использованных источников</p><p class="cap">1. Чернавский С. А. Курсовое проектирование деталей машин…</p>${v ? '<p class="h">Приложение Г. Листинги макросов КОМПАС</p><pre>import pythoncom\nfrom win32com.client import Dispatch</pre>' : ''}`) },
+    codePlain: { vals: [[false, 'Courier New'], [true, 'Times New Roman']], page: v => dPaper(`<pre class="${v ? 'serif' : 'mono'}">kompas = Dispatch("Kompas.Application.7")\napp.Visible = True</pre>`) }
+  };
+  function dpvHtml(key) {
+    const d = DPV[key], cur = S.T[key] === undefined ? T_DEF[key] : S.T[key];
+    const items = d.vals.map(([v, l]) => { const on = String(v) === String(cur); return `<div class="ex${on ? ' on' : ''}"><div class="ex-h">${l}${on ? '<span>сейчас</span>' : ''}</div><div class="ex-b">${d.page(v)}</div></div>`; });
+    return items.length === 2 ? items.join('') : `<div class="ex-multi" style="--n:${items.length}">${items.join('')}</div>`;
+  }
+  function refreshDpv(key) { const el = $(`.opt-ex[data-dpv="${key}"]`); if (el && DPV[key]) el.innerHTML = dpvHtml(key); }
+  /* строка настройки записки — с превью листа, как в остальных утилитах */
+  function docRow(title, desc, ctl) {
+    const key = (ctl.match(/data-t?key="(\w+)"/) || [])[1];
+    return optRow(title, desc, ctl, null, key && DPV[key] ? dpvHtml(key) : '').replace('<div class="opt-ex">', `<div class="opt-ex" data-dpv="${key}">`);
   }
   async function fillPv() {
     for (const el of $$('.opt-ex[data-pv]')) {
@@ -404,10 +435,10 @@
           <div class="opts">
             ${optRow('Синхронная частота двигателя', 'Чернавский рекомендует 1500 или 1000 мин⁻¹: при 3000 мин⁻¹ трудно получить большое передаточное число, двигатели 750 мин⁻¹ тяжелы и громоздки.', seg('O', 'sync', O.sync, [[1500, '1500'], [1000, '1000'], [3000, '3000']], 'num'), 'sync')}
             ${isT(1) ? '' : optRow('Передаточное отношение цепи', 'Назначается из интервала 1,5…3,5; от него зависят передаточное число редуктора и размеры передач.', seg('O', 'uChain', O.uChain, [[2, '2'], [2.5, '2,5'], [3, '3']], 'num'), 'uChain')}
-            ${optRow('Автоматическое согласование', 'Если проверка не выполняется, увеличить размеры и пересчитать (как требует методичка: «увеличить aw, длину ступицы, поставить две шпонки»).', seg('O', 'autoFix', O.autoFix !== false, [[true, 'Включено'], [false, 'Выключено']], 'bool'))}
+            ${optRow('Автоматическое согласование', 'Если проверка не выполняется, увеличить размеры и пересчитать (как требует методичка: «увеличить aw, длину ступицы, поставить две шпонки»).', seg('O', 'autoFix', O.autoFix !== false, [[true, 'Включено'], [false, 'Выключено']], 'bool'), 'autoFix')}
           </div>
         </section>
-        <section class="dsec">
+        <section class="dsec set set-calc" data-set="настройки расчёта">
           <h2>3. Методика расчёта</h2>
           <p class="dlead">Где методичка допускает разные подходы или содержит ошибку, можно выбрать вариант. Под каждой настройкой — как меняется результат.</p>
           <div class="opts">
@@ -420,12 +451,12 @@
             ${isT(3) ? optRow('Число циклов нагружения', 'Эквивалентное число циклов по графику нагрузки (показатели 4 и 9, Чернавский с. 60) или без учёта графика.', seg('O', 'wormNe', O.wormNe, [['simple', 'Без графика'], ['load', 'По графику']], 'str'), 'wormNe') : ''}
             ${isT(1) || isT(6) ? optRow('Ряд межосевых расстояний ГОСТ 2185-66', '1-й ряд предпочтителен; при «оба ряда» берётся ближайшее большее из обоих.', seg('O', 'awRow', O.awRow, [[0, 'Оба ряда'], [1, '1-й ряд']], 'num'), 'awRow') : ''}
             ${isT(1) || isT(6) ? optRow('Числа зубьев цилиндрических колёс', 'По методичке: z₁ = 2a<sub>w</sub>/(m(u+1)), z₂ = u·z₁. Вариант через суммарное число зубьев сохраняет стандартное a<sub>w</sub>.', seg('O', 'zMode', O.zMode, [['met', 'Методичка'], ['sum', 'Через zΣ']], 'str'), 'zMode') : ''}
-            ${isT(1) ? optRow('Момент на тихоходном валу', 'В методичке T<sub>2Т</sub> = T<sub>в</sub>/η<sub>м</sub>, хотя по схеме звёздочка стоит прямо на тихоходном валу и муфта в приводе одна (у двигателя). По умолчанию — по схеме: T<sub>2Т</sub> = T<sub>в</sub>. КПД муфты в η<sub>общ</sub> в обоих случаях — в первой степени.', seg('O', 't1Coup', O.t1Coup || 'scheme', [['scheme', 'По схеме'], ['met', 'Как в методичке']], 'str'), 't1Coup') : ''}
+            ${isT(1) ? optRow('Момент на тихоходном валу', 'В методичке T<sub>2Т</sub> = T<sub>в</sub>/η<sub>м</sub>, хотя по схеме звёздочка стоит прямо на тихоходном валу и муфта в приводе одна (у двигателя). По умолчанию — как в методичке; «По схеме» — T<sub>2Т</sub> = T<sub>в</sub>. КПД муфты в η<sub>общ</sub> в обоих случаях — в первой степени.', seg('O', 't1Coup', O.t1Coup || 'met', [['met', 'Как в методичке'], ['scheme', 'По схеме']], 'str'), 't1Coup') : ''}
             ${isT(1) ? optRow('Сила от муфты на быстроходном валу', 'В методичке задания 1 при расчёте быстроходного вала консольная сила от муфты не учитывается.', seg('O', 'Fm1', !!O.Fm1, [[false, 'Не учитывать'], [true, 'Учитывать']], 'bool'), 'Fm1') : ''}
             ${optRow('Сечение со шпоночным пазом', isT(1) ? 'Методичка задания 1: расчётный диаметр уменьшают на 10 %.' : 'Методичка заданий 3 и 6: моменты сопротивления с учётом паза W = πd³/32 − bt₁(d − t₁)²/(2d).', seg('O', 'wKey', O.wKey, [['met', 'd<sub>расч</sub> = 0,9d'], ['net', 'W с учётом паза']], 'str'), 'wKey')}
             ${optRow('Расчёт шпонок на смятие', 'Приближённая формула (глубина врезания 0,45h) или уточнённая с t₁.', seg('O', 'keyExact', !!O.keyExact, [[false, 'Приближённо'], [true, 'Уточнённо']], 'bool'), 'keyExact')}
             ${isT(1) ? '' : optRow('Консольная сила от муфты', 'Методичка: F<sub>м</sub> = (0,2…0,5)·2T<sub>расч</sub>/D<sub>0</sub>, D<sub>0</sub> — у выбранной муфты (раздел 2). Альтернатива — ГОСТ 16162 (Чернавский с. 141): 50√T или 80√T.', seg('O', 'FmMode', O.FmMode, [['met', 'Методичка'], ['gost', 'ГОСТ 16162']], 'str'), 'FmMode')}
-            ${isT(6) ? optRow('Момент в формуле межосевого расстояния', 'В методичке задания 6 в формулу a<sub>w</sub> (с u, а не u²) подставлен момент на колесе — это завышает a<sub>w</sub> в ∛u раз. По умолчанию — момент на шестерне, как в методичке задания 1 (равносильно формуле (3.7) Чернавского).', seg('O', 'awT6', O.awT6 || 'pin', [['pin', 'Момент шестерни'], ['met', 'Момент колеса']], 'str'), 'awT6') : ''}
+            ${isT(6) ? optRow('Момент в формуле межосевого расстояния', 'В методичке задания 6 в формулу a<sub>w</sub> (с u, а не u²) подставлен момент на колесе — это завышает a<sub>w</sub> в ∛u раз. По умолчанию — как в методичке задания 6; альтернатива — момент на шестерне, как в методичке задания 1 (равносильно формуле (3.7) Чернавского).', seg('O', 'awT6', O.awT6 || 'met', [['met', 'Момент колеса'], ['pin', 'Момент шестерни']], 'str'), 'awT6') : ''}
             ${isT(3) ? optRow('Проверка червячной передачи на контактную выносливость', 'Методичка: σ<sub>H</sub> = Z<sub>E</sub>Z<sub>h</sub>√(F<sub>t2</sub>K<sub>HV</sub>K<sub>Hβ</sub>/(d<sub>2</sub>b<sub>2</sub>cos γ)), K<sub>Hβ</sub> — из п. 1.4.2. Альтернатива — формула (4.23) Чернавского с K<sub>β</sub> по табл. 4.6.', seg('O', 'wormSHcheck', O.wormSHcheck || 'met', [['met', 'Методичка'], ['ch', 'Чернавский']], 'str'), 'wormSHcheck') : ''}
           </div>
           <details class="adv"><summary>Константы методики</summary><div class="in">
@@ -454,7 +485,7 @@
             <p class="dhint">Размеры пальцев и втулок МУВП (D<sub>0</sub>, z, d<sub>п</sub>, l<sub>вт</sub>, C) берутся автоматически для выбранного типоразмера по ГОСТ 21424 (в табл. 11.5 Чернавского и табл. 1 ГОСТ 21424-93 их нет — источник указан в записке). Поля выше нужны, только если руководитель даёт другие значения.</p>
           </div></details>
         </section>
-        <section class="dsec">
+        <section class="dsec set set-rep" data-set="настройки отчёта">
           <h2>4. Отчёт и файлы</h2>
           <h3>Титульный лист и основная надпись</h3>
           <div class="form-grid fg4">
@@ -472,19 +503,19 @@
           <p class="dhint">Шифр документов: «${esc(S.T.code || codeDefault())} 00.00.00 ПЗ» — пояснительная записка, «… 01.00.00 СБ» — редуктор, «… 02.00.00 СБ» — рама, «… 01.00.NN» — детали редуктора. Поле можно изменить.</p>
           <h3>Оформление записки</h3>
           <div class="opts">
-            ${optRow('Рамка с основной надписью', 'По ГОСТ 2.104: на первом листе «Содержание» — форма 2 (40 мм), на остальных — форма 2а (15 мм). Без рамки — номер страницы внизу по центру (КНИТУ 2023).', sw('frame'))}
-            ${optRow('Логотип КНИТУ', 'Над шапкой титульного листа.', sw('logo'))}
-            ${optRow('Пояснения к формулам', 'Перед формулой — абзац о том, что считается и зачем.', sw('explain'))}
-            ${optRow('Расшифровка обозначений «где …»', 'Под формулой — значения новых символов с единицами.', sw('where'))}
-            ${optRow('Номера формул', '(1), (2)… у правого края строки. Выключено — формулы без номеров.', sw('eqNum'))}
-            ${optRow('Нумерация формул, таблиц и рисунков', 'Сквозная — 1, 2, 3…; в пределах раздела — 1.1, 1.2, 2.1… (ГОСТ 2.105 допускает обе).', seg('T', 'numSec', !!S.T.numSec, [[false, 'Сквозная'], [true, 'По разделам']], 'bool'))}
-            ${optRow('Ссылки на источники в тексте', 'С местом — [1, с. 5]; только номер — [1]; без ссылок — убираются из текста, список источников остаётся.', seg('T', 'refs', S.T.refs || 'full', [['full', '[1, с. 5]'], ['num', '[1]'], ['none', 'Нет']], 'str'))}
-            ${optRow('Линия под шапкой таблицы', 'ГОСТ 2.105 требует только отделить шапку линией — обычно одинарной. Двойная или утолщённая — если так принято у преподавателя.', seg('T', 'headLine', S.T.headLine || 'single', [['single', 'Одинарная'], ['double', 'Двойная'], ['thick', 'Толстая']], 'str'))}
-            ${optRow('Межстрочный интервал', 'Основной текст записки; обычно требуется полуторный.', seg('T', 'line1', !!S.T.line1, [[false, '1,5'], [true, '1,0']], 'bool'))}
-            ${optRow('Подложка на рисунках', '«Замените рисунком из КОМПАС» — что вставить и откуда взять (какой файл, вид, разрез).', sw('watermark'))}
-            ${optRow('Улучшение читаемости', 'Не разрывать формулу с поясняющим абзацем, таблицы и подписи рисунков между страницами.', sw('readable'))}
-            ${optRow('Листинги макросов КОМПАС в приложении', 'Тексты Python-макросов — приложением к записке.', sw('listings'))}
-            ${optRow('Шрифт программного кода', 'Для листингов в приложении.', seg('T', 'codePlain', !!S.T.codePlain, [[true, 'Times New Roman'], [false, 'Courier New']], 'bool'))}
+            ${docRow('Рамка с основной надписью', 'По ГОСТ 2.104: на первом листе «Содержание» — форма 2 (40 мм), на остальных — форма 2а (15 мм). Без рамки — номер страницы внизу по центру (КНИТУ 2023).', sw('frame'))}
+            ${docRow('Логотип КНИТУ', 'Над шапкой титульного листа.', sw('logo'))}
+            ${docRow('Пояснения к формулам', 'Перед формулой — абзац о том, что считается и зачем.', sw('explain'))}
+            ${docRow('Расшифровка обозначений «где …»', 'Под формулой — значения новых символов с единицами.', sw('where'))}
+            ${docRow('Номера формул', '(1), (2)… у правого края строки. Выключено — формулы без номеров.', sw('eqNum'))}
+            ${docRow('Нумерация формул, таблиц и рисунков', 'Сквозная — 1, 2, 3…; в пределах раздела — 1.1, 1.2, 2.1… (ГОСТ 2.105 допускает обе).', seg('T', 'numSec', !!S.T.numSec, [[false, 'Сквозная'], [true, 'По разделам']], 'bool'))}
+            ${docRow('Ссылки на источники в тексте', 'Только номер — [1], как в примере методички; с местом — [1, с. 5]; без ссылок — убираются из текста, список источников остаётся.', seg('T', 'refs', S.T.refs || 'num', [['num', '[1]'], ['full', '[1, с. 5]'], ['none', 'Нет']], 'str'))}
+            ${docRow('Линия под шапкой таблицы', 'ГОСТ 2.105 требует только отделить шапку линией — обычно одинарной. Двойная или утолщённая — если так принято у преподавателя.', seg('T', 'headLine', S.T.headLine || 'single', [['single', 'Одинарная'], ['double', 'Двойная'], ['thick', 'Толстая']], 'str'))}
+            ${docRow('Межстрочный интервал', 'Основной текст записки; обычно требуется полуторный.', seg('T', 'line1', !!S.T.line1, [[false, '1,5'], [true, '1,0']], 'bool'))}
+            ${docRow('Подложка на рисунках', '«Замените рисунком из КОМПАС» — что вставить и откуда взять (какой файл, вид, разрез).', sw('watermark'))}
+            ${docRow('Улучшение читаемости', 'Не разрывать формулу с поясняющим абзацем, таблицы и подписи рисунков между страницами.', sw('readable'))}
+            ${docRow('Листинги макросов КОМПАС в приложении', 'Тексты Python-макросов — приложением к записке.', sw('listings'))}
+            ${docRow('Шрифт программного кода', 'Для листингов в приложении.', seg('T', 'codePlain', !!S.T.codePlain, [[true, 'Times New Roman'], [false, 'Courier New']], 'bool'))}
           </div>
           <h3>Скачать</h3>
           <div class="dl-grid"><button class="btn primary dl-all" data-docx="all">${dlIcon()} Пояснительная записка (.docx)</button>${[['kin', 'Раздел 1.1–1.2'], ['mat', 'Материалы'], ['gear', 'Передачи'], ['shaft', 'Валы и корпус'], ['check', 'Проверки'], ['other', 'Смазка, муфта']].map(([t, l]) => `<button class="btn" data-docx="${t}">${dlIcon()} ${l}</button>`).join('')}</div>
@@ -492,7 +523,7 @@
           <div class="dact"><button class="btn" id="zip-all">${dlIcon()} Архив записки и файлов КОМПАС (.zip)</button></div>
           <p class="dhint">Архив: записка целиком и по разделам (Word), файлы для КОМПАС-3D и рисунки SVG.</p>
         </section>
-        <section class="dsec">
+        <section class="dsec set set-saves" data-set="сохранения">
           <h2>5. Сохранения</h2>
           <p class="dlead">Текущее состояние запоминается автоматически; отдельно ведётся автосохранение. Чтобы держать несколько наборов (свой вариант и вариант одногруппника), сохраните их в слоты.</p>
           <div class="opts slots" id="slots">${slotsHtml()}</div>
@@ -522,11 +553,11 @@
       $$('button', g).forEach(x => x.setAttribute('aria-checked', String(x === b)));
       if (g.dataset.scope === 'P') { S.P[g.dataset.key] = v; const y = window.scrollY; recompute(); window.scrollTo(0, y); }
       else if (g.dataset.scope === 'O') { S.P.O[g.dataset.key] = v; const y = window.scrollY; recompute(); window.scrollTo(0, y); }
-      else { S.T[g.dataset.key] = v; saveT(); }
+      else { S.T[g.dataset.key] = v; saveT(); refreshDpv(g.dataset.key); }
     });
     $('#reset-var').onclick = () => { const keep = { dec: S.P.dec }; S.P = Object.assign(fresh(S.P.listNo, S.P.task, S.P.v), keep); recompute(); };
     $('#go-kin').onclick = () => go('kin');
-    $$('#main [data-tkey]').forEach(el => el.addEventListener('change', () => { S.T[el.dataset.tkey] = el.type === 'checkbox' ? el.checked : el.value; saveT(); }));
+    $$('#main [data-tkey]').forEach(el => el.addEventListener('change', () => { S.T[el.dataset.tkey] = el.type === 'checkbox' ? el.checked : el.value; saveT(); refreshDpv(el.dataset.tkey); }));
     $$('#main [data-docx]').forEach(b => b.onclick = () => makeDocx(b.dataset.docx, b));
     $$('.var-table tr[data-v]').forEach(tr => tr.onclick = () => setTV(S.P.task, +tr.dataset.v));
     fillPv();
@@ -711,7 +742,7 @@
     main.innerHTML = `<article class="sheet">
       <header class="sheet-head"><div><div class="eyebrow">Курсовой проект · раздел ${meta.no}</div><h1>${esc(TAB_TITLE[tab] || meta.t)}</h1><p class="lead">${esc(leadText(tab))}</p></div>${stamp(tab)}</header>
       <div class="sheet-body rep"><div class="kpis">${kpis()}</div><p class="calc-hint">${ICON_COPY} у каждой формулы копирует её в формате MathML — в Word вставляется редактируемое уравнение (Ctrl+V). «TeX» копирует LaTeX. Ссылки в квадратных скобках: [М] — методичка, [Ч] — Чернавский, [АИР] — каталог двигателей.</p>
-        <div class="opts chk-bar"><div class="opt"><div class="opt-t"><b>Сверка с ручным расчётом</b><span id="chk-sum">${CHK.on ? '' : 'Под каждой формулой появится поле для вашего значения: утилита сравнит его и подскажет причину расхождения — округление, другой двигатель, другая формула методики или ошибка в подстановке.'}</span></div><div class="opt-c" style="display:flex;gap:10px;align-items:center">${CHK.on ? '<button class="btn" id="chk-clr">Очистить</button>' : ''}<label class="sw"><input type="checkbox" id="chk-on" ${CHK.on ? 'checked' : ''}><span class="track" aria-hidden="true"></span><span class="sr">Сверка</span></label></div></div></div>
+        <div class="opts chk-bar"><div class="opt"><div class="opt-t"><b>Сверка с ручным расчётом</b><span id="chk-sum">${CHK.on ? '' : 'Под каждой формулой появится поле для вашего значения: утилита сравнит его и подскажет причину расхождения — округление, другой двигатель, другая формула методики или ошибка в подстановке.'}</span></div><div class="opt-c" style="display:flex;gap:10px;align-items:center">${CHK.on ? '<button class="btn" id="chk-clr">Очистить</button>' : ''}<label class="sw"><input type="checkbox" id="chk-on" ${CHK.on ? 'checked' : ''}><span class="track" aria-hidden="true"></span><span class="sr">Сверка</span></label></div>${CHK.on || !window.SUITE || !SUITE.chkEx ? '' : SUITE.chkEx('T<sub>I</sub> = 9550·P<sub>I</sub>/n<sub>I</sub> = ' + fnum(S.R.K.TI || S.R.K.T1B) + ' Н·м', fnum(S.R.K.TI || S.R.K.T1B))}</div></div>
         ${tab === 'kin' ? motorAuditHtml() : ''}${body}
         <div style="display:flex;justify-content:space-between;gap:8px;margin-top:22px;flex-wrap:wrap">${k > 1 ? `<button class="btn" data-go="${TABS[k - 1].id}">← ${esc(TABS[k - 1].short)}</button>` : '<span></span>'}${k < TABS.length - 1 ? `<button class="btn" data-go="${TABS[k + 1].id}">${esc(TABS[k + 1].short)} →</button>` : ''}</div>
       </div></article>`;

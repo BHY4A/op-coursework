@@ -133,7 +133,7 @@
     st.refNo = k => { let i = st.refs.indexOf(k); if (i < 0) { st.refs.push(k); i = st.refs.length - 1; } return i + 1; };
     st.num = n => numFmt(T, st.sec, n);
     st.text = (t, sec) => {
-      let s = refsText(String(t), T.refs || 'full', st.refNo);
+      let s = refsText(String(t), T.refs || 'num', st.refNo);
       s = s.replace(/\{fig:(\w+)\}/g, (m, id) => { st.figRef.add(id); return st.figNums[id] || '?'; });
       return symHtml(s);
     };

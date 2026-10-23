@@ -626,3 +626,66 @@ figure.fig .plot > * { animation: suite-fade .3s var(--ease) backwards; }
   .var-ctl label { white-space: nowrap; }
 }
 @media (min-width: 641px) and (max-width: 1023px) { .var-ctl label { display: none; } }
+
+/* ---------- настройки — заметные панели ----------
+   Разделы «Методика расчёта», «Отчёт и файлы» и «Сохранения» на вкладке «Исходные данные» (section.dsec.set,
+   data-set — подпись справа вверху), переключатель сверки на этапах (.chk-bar) и вкладка «Исходные данные»
+   в колонке этапов (значок шестерёнки) выделены одинаково: акцентная кромка слева, лёгкая подложка цвета акцента. */
+:root {
+  --ico-gear: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3Cpath d='M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z'/%3E%3C/svg%3E");
+  --ico-sliders: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6'/%3E%3C/svg%3E");
+  --ico-doc: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'/%3E%3Cpath d='M14 2v6h6M16 13H8M16 17H8M10 9H8'/%3E%3C/svg%3E");
+  --ico-save: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z'/%3E%3Cpath d='M17 21v-8H7v8M7 3v5h8'/%3E%3C/svg%3E");
+  --set-edge: color-mix(in srgb, var(--accent) 32%, var(--line));
+  --set-bg: color-mix(in srgb, var(--accent) 6%, var(--sheet));
+}
+.data-page .dsec.set { margin-top: 20px; padding: 4px 18px 14px; border: 1px solid var(--set-edge); border-left: 4px solid var(--accent); border-radius: calc(var(--r) + 2px); background: var(--set-bg); }
+.data-page .dsec.set + .dsec.set { margin-top: 14px; }
+.data-page .dsec.set > h2 { flex-wrap: wrap; row-gap: 6px; }
+.data-page .dsec.set > h2::before { content: ""; flex: none; width: 20px; height: 20px; background: var(--accent); -webkit-mask: var(--ico-gear) center / contain no-repeat; mask: var(--ico-gear) center / contain no-repeat; }
+.data-page .dsec.set-calc > h2::before { -webkit-mask-image: var(--ico-sliders); mask-image: var(--ico-sliders); }
+.data-page .dsec.set-rep > h2::before { -webkit-mask-image: var(--ico-doc); mask-image: var(--ico-doc); }
+.data-page .dsec.set-saves > h2::before { -webkit-mask-image: var(--ico-save); mask-image: var(--ico-save); }
+.data-page .dsec.set { position: relative; }
+.data-page .dsec.set[data-set] > h2 { padding-right: 180px; }
+.data-page .dsec.set[data-set]::before { content: attr(data-set); position: absolute; z-index: 1; top: 20px; right: 18px; padding: 5px 9px; border: 1px solid var(--set-edge); border-radius: 999px; background: var(--sheet); color: var(--accent); font: 600 10.5px/1 var(--f-body); text-transform: uppercase; letter-spacing: .08em; pointer-events: none; }
+.data-page .dsec.set .opts, .data-page .dsec.set details.adv { background: var(--sheet); }
+.data-page .dsec.set .fld input, .data-page .dsec.set .fld textarea { background: var(--sheet); }
+.chk-bar { border-color: var(--set-edge); border-left: 4px solid var(--accent); background: var(--set-bg); }
+.chk-bar .opt-t b { display: flex; align-items: center; gap: 8px; }
+.chk-bar .opt-t b::before { content: ""; flex: none; width: 16px; height: 16px; background: var(--accent); -webkit-mask: var(--ico-gear) center / contain no-repeat; mask: var(--ico-gear) center / contain no-repeat; }
+/* колонка этапов: «Исходные данные» — со значком шестерёнки вместо кружка, разделы-настройки в оглавлении — с ним же */
+.rail a[data-tab="data"] .no { font-size: 0; display: flex; align-items: center; justify-content: center; gap: 6px; }
+.rail a[data-tab="data"] .no::before { content: ""; flex: none; width: 20px; height: 20px; background: currentColor; -webkit-mask: var(--ico-gear) center / contain no-repeat; mask: var(--ico-gear) center / contain no-repeat; }
+.rail a[data-tab="data"] .t::after { content: "настройки"; display: inline-block; margin-left: 7px; padding: 3px 6px; border: 1px solid var(--set-edge); border-radius: 999px; color: var(--accent); font: 600 9.5px/1 var(--f-body); text-transform: uppercase; letter-spacing: .07em; vertical-align: 2px; }
+.rail-toc a.set .tn, .toc-pop a.set .tn { display: inline-flex; align-items: center; gap: 3px; color: var(--accent); }
+.rail-toc a.set .tn::after, .toc-pop a.set .tn::after { content: ""; width: 10px; height: 10px; background: currentColor; -webkit-mask: var(--ico-gear) center / contain no-repeat; mask: var(--ico-gear) center / contain no-repeat; }
+@media (max-width: 960px) {
+  .rail a[data-tab="data"] .no::before { width: 15px; height: 15px; }
+}
+@media (max-width: 640px) {
+  .data-page .dsec.set { padding: 2px 12px 12px; border-left-width: 3px; }
+  .data-page .dsec.set[data-set] > h2 { padding-right: 0; }
+  .data-page .dsec.set[data-set]::before { position: static; display: inline-block; margin: 12px 0 -4px; }
+}
+
+/* превью настроек отчёта: номер формулы, интервал, рамка с основной надписью, шапка таблицы, сверка */
+.ex-paper .ex-math .ex-no { float: right; font-style: normal; }
+.ex-paper.lh15 p { line-height: 1.85; }
+.ex-paper.lh10 p { line-height: 1.2; }
+.ex-paper.fs12 { font-size: 11.5px; }
+.ex-paper p.where { text-indent: 0; text-align: left; }
+.ex-paper p.toc { text-indent: 0; text-align: left; margin: 0; }
+.ex-paper p.toc.off { color: #9aa5b1; text-decoration: line-through; }
+.ex-paper p.foot { text-indent: 0; text-align: center; font-size: 11px; margin: 8px 0 0; }
+.ex-paper.framed { border: 1.5px solid #1b232c; border-radius: 0; margin-left: 12px; padding-bottom: 0; }
+.ex-stamp { display: grid; grid-template-columns: 1fr 1fr 3fr 1fr; margin: 8px -14px 0 auto; width: 78%; border-top: 1.5px solid #1b232c; border-left: 1.5px solid #1b232c; font: 10px/1.4 var(--f-body); color: #1b232c; }
+.ex-stamp span { padding: 2px 4px; border-right: 1px solid #1b232c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ex-stamp span:last-child { border-right: 0; }
+.ex-paper table.ex-tt { width: 100%; border-collapse: collapse; font-size: 12px; margin: 2px 0 4px; }
+.ex-paper table.ex-tt th, .ex-paper table.ex-tt td { border: 1px solid #1b232c; padding: 2px 5px; text-align: center; font-weight: 400; }
+.ex-paper table.ex-tt.double thead th { border-bottom: 3px double #1b232c; }
+.ex-paper table.ex-tt.thick thead th { border-bottom: 2.5px solid #1b232c; }
+.ex-chk { display: flex; align-items: center; gap: 8px; margin-top: 6px; font: 12px/1.3 var(--f-body); color: var(--muted); }
+.ex-chk i { font-style: normal; display: inline-block; min-width: 64px; padding: 3px 7px; border: 1px solid var(--line-strong); border-radius: 4px; background: var(--sheet); font-family: var(--f-mono); color: var(--fg); }
+.ex-chk b { color: var(--ok, #1f7a3a); font-weight: 600; }
