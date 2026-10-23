@@ -185,8 +185,9 @@
     if (bi) {
       const { g, Rae, Rai, xs, xb, apex } = bi;
       sh.attempt([() => sh.dimV(X(xb), Y(-Rae), X(xb), Y(Rae), X(xb), `⌀${nf(g.da, 2)}h11`, { textY: Y(0) + 2 }), () => sh.dimV(X(xb), Y(-Rae), X(xb), Y(Rae), X(xb), `⌀${nf(g.da, 2)}h11`, { out: 'above' })]);
-      sh.attempt([() => sh.dimV(X(xs), Y(-Rai), X(xs), Y(Rai), X(xs) - 8, `⌀${nf(2 * Rai, 1)}*`), () => sh.dimV(X(xs), Y(-Rai), X(xs), Y(Rai), X(xs) - 14, `⌀${nf(2 * Rai, 1)}*`)]);
-      if (X(apex) > f.x1 + 8) sh.attempt([0.75, 0.55, 0.95].map(q => () => sh.dimAng(X(apex), Y(0), 0, g.delta, Math.max(16, (xs - apex) * k * q), deg(g.delta))));
+      sh.attempt([8, 14, 20, 26].map(d => () => sh.dimV(X(xs), Y(-Rai), X(xs), Y(Rai), X(xs) - d, `⌀${nf(2 * Rai, 1)}*`)));
+      // угол делительного конуса: над осью или под ней (вершина — точка пересечения образующей с осью)
+      if (X(apex) > f.x1 + 8) sh.attempt([0.75, 0.55, 0.95, 0.4].flatMap(q => [[0, g.delta], [-g.delta, 0]].map(([a1, a2]) => () => sh.dimAng(X(apex), Y(0), a1, a2, Math.max(16, (xs - apex) * k * q), deg(g.delta)))));
       const ux = Math.cos(g.delta * D2R), uy = Math.sin(g.delta * D2R), nx = -uy, ny = ux;
       const p1 = [X(xs), Y(Rai)], p2 = [X(xb), Y(Rae)];
       sh.attempt([8, 14, 20].map(off => () => sh.dimAligned(p1, p2, nx, ny, off, nf(g.b, 1), g.delta)));
@@ -234,7 +235,7 @@
             const xm = s.x0 + s.l * t, tx = X(xm), ty = fr.bevel ? Y(bi.Rai + (bi.Rae - bi.Rai) * t) : Y(s.r);
             for (const sx of [0, -W / 2 - 4, W / 2 + 4]) opts.push(() => {
               const x1 = tx - W / 2 + sx, att = Math.min(Math.max(tx, x1 + 3), x1 + W - 3);
-              const via = Math.abs(att - tx) > 0.5 ? [[att, fy - 4], [tx, fy - 4]] : [];
+              const via = Math.abs(att - tx) > 0.5 ? [[att, fy - 4], [tx, fy - 4]] : [[tx, fy]];   // выноска строго отвесная (рамку не сдвигать наискось)
               sh.tol(x1, fy, fr.cells, { from: 'b', fx: att - x1, via, to: [tx, ty + 0.2] });
             });
           }
@@ -713,7 +714,7 @@
       const txs = kind === 'bevel' ? [rT[0]] : (xFlat !== null ? [xFlat, -xFlat] : [0.4, 0, -0.4, 0.7, -0.7].map(t => t * (P.hb - P.cr)));
       const opts = [];
       for (const dy of [0, 7, 14, 21]) for (const xm of txs) for (const fx of [3.5, Wr / 2, Wr - 3.5]) opts.push(() => {
-        const tx = X(xm), ty = kind === 'bevel' ? Y(rT[1]) : Y(P.rmax); sh.tol(tx - fx, fy0 + dy, ['rrun', tRun, base], { from: 'b', fx, via: [], to: [tx, ty + 0.2] }); });
+        const tx = X(xm), ty = kind === 'bevel' ? Y(rT[1]) : Y(P.rmax); sh.tol(tx - fx, fy0 + dy, ['rrun', tRun, base], { from: 'b', fx, via: [[tx, fy0 + dy]], to: [tx, ty + 0.2] }); });
       sh.attempt(opts);
     }
     const faceX = kind === 'bevel' ? P.bevel.xB : P.hb, faceY = kind === 'bevel' ? (P.bevel.Be[1] + rh) / 2 : (P.rr ? (P.rr + P.rmax) / 2 : P.rmax * 0.8);

@@ -321,6 +321,79 @@
       }
       if (!changed) break;
     }
+    moved += this.repairPairs(recs);
+    return moved;
+  };
+  /* перестановка парами: два обозначения, которые мешают друг другу, перебирают сочетания своих вариантов
+     (по одному каждое сдвинуться не может — второе стоит на единственном свободном месте первого) */
+  S.repairPairs = function (recs, maxCombos) {
+    const P = this.p, lim = maxCombos || 6000;
+    let moved = 0;
+    const alive = r => { const own = new Set(r.prims); let c = 0; for (const q of P) if (own.has(q)) c++; return c === r.prims.length; };
+    for (let pass = 0; pass < 3; pass++) {
+      let changed = false;
+      for (const r of recs) {
+        if (!alive(r)) continue;
+        const ownR = new Set(r.prims);
+        const restR = P.filter(q => !ownR.has(q));
+        if (!this.conflicts(r.prims, restR)) continue;
+        // соседи по конфликту — обозначения, с которыми r пересекается
+        // и те, что занимают места других вариантов r (сдвинув их, r встанет без наложений)
+        const cand = recs.filter(s => s !== r && alive(s) && s.fns.length * r.fns.length <= lim);
+        const hits = new Map(cand.map(s => [s, this.conflicts(r.prims, s.prims) + this.conflicts(s.prims, r.prims) > 0 ? 1000 : 0]));
+        {
+          P.length = 0; restR.forEach(q => P.push(q));
+          this._attDepth = (this._attDepth || 0) + 1;
+          try {
+            for (let i = 0; i < r.fns.length; i++) {
+              const i0 = P.length; r.fns[i]();
+              const a = P.slice(i0); P.length = i0;
+              const blk = cand.filter(s => this.conflicts(a, s.prims) + this.conflicts(s.prims, a) > 0);
+              if (blk.length && blk.length <= 2) blk.forEach(s => hits.set(s, hits.get(s) + 1));
+            }
+          } finally { this._attDepth--; }
+          r.prims.forEach(q => P.push(q));
+        }
+        const mates = cand.filter(s => hits.get(s) > 0).sort((u, v) => hits.get(v) - hits.get(u)).slice(0, 8);
+        if (globalThis.RDBG) { const nm = x => ((x.prims.find(q => q.t === 'T') || {}).s || '?'); const rt = nm(r); if (rt.includes(globalThis.RDBG)) {
+          console.error('REC', rt, 'opts', r.fns.length, 'cur', this.conflicts(r.prims, restR), 'mates', mates.map(m => nm(m) + ':' + hits.get(m) + '/' + m.fns.length).join(', '));
+          P.length = 0; restR.forEach(q => P.push(q)); this._attDepth = (this._attDepth || 0) + 1;
+          for (let i = 0; i < r.fns.length; i++) { const i0 = P.length; r.fns[i](); const a = P.slice(i0); P.length = i0; const n = this.conflicts(a, restR); const blk = cand.filter(s => this.conflicts(a, s.prims) + this.conflicts(s.prims, a) > 0).map(nm); console.error('  opt', i, n, blk.join(' | ')); }
+          this._attDepth--; r.prims.forEach(q => P.push(q)); } }
+        for (const s of mates) {
+          if (!alive(r) || !alive(s)) continue;
+          const own = new Set(r.prims.concat(s.prims));
+          const rest = P.filter(q => !own.has(q));
+          const score = (a, b) => this.conflicts(a, rest) + this.conflicts(b, rest.concat(a)) + this.conflicts(a, b);
+          const cur = score(r.prims, s.prims);
+          if (!cur) continue;
+          let best = null, bn = cur;
+          P.length = 0; rest.forEach(q => P.push(q));
+          this._attDepth = (this._attDepth || 0) + 1;
+          try {
+            outer: for (let i = 0; i < r.fns.length; i++) {
+              const i0 = P.length; r.fns[i]();
+              const a = P.slice(i0);
+              const ca = this.conflicts(a, rest);
+              if (ca >= bn) { P.length = i0; continue; }
+              for (let j = 0; j < s.fns.length; j++) {
+                const j0 = P.length; s.fns[j]();
+                const b = P.slice(j0); P.length = j0;
+                const n = ca + this.conflicts(b, P) + this.conflicts(a, b);
+                if (n < bn) { bn = n; best = [i, j]; if (!n) { P.length = i0; break outer; } }
+              }
+              P.length = i0;
+            }
+            if (best) {
+              let i0 = P.length; r.fns[best[0]](); r.prims = P.slice(i0);
+              i0 = P.length; s.fns[best[1]](); s.prims = P.slice(i0);
+              moved++; changed = true;
+            } else { r.prims.forEach(q => P.push(q)); s.prims.forEach(q => P.push(q)); }
+          } finally { this._attDepth--; }
+        }
+      }
+      if (!changed) break;
+    }
     return moved;
   };
   S.textRect = textRect;
@@ -545,7 +618,11 @@
     this.p[this.p.length - 1].ex = this.p[this.p.length - 2].ex = 1;
     const q1 = [p1[0] + nx * off, p1[1] + ny * off], q2 = [p2[0] + nx * off, p2[1] + ny * off];
     this.line(q1[0], q1[1], q2[0], q2[1], 2); this.arrow(q1[0], q1[1], 180 + a); this.arrow(q2[0], q2[1], a);
-    this.text((q1[0] + q2[0]) / 2 + nx * 0.8, (q1[1] + q2[1]) / 2 + ny * 0.8, text, { h, ang: ta === undefined ? a : ta, anchor: 'cb' });
+    // надпись — параллельно размерной линии (читаемо: угол в (−90°, 90°]), с внешней стороны линии
+    let ar = a; while (ar > 90) ar -= 180; while (ar <= -90) ar += 180;
+    void ta;
+    const upOut = -Math.sin(ar * D2R) * nx + Math.cos(ar * D2R) * ny >= 0;
+    this.text((q1[0] + q2[0]) / 2 + nx * 0.8, (q1[1] + q2[1]) / 2 + ny * 0.8, text, { h, ang: ar, anchor: upOut ? 'cb' : 'ct' });
     // для КОМПАС — «Линейный размер» с ориентацией параллельно объекту
     const pg = 'al' + (++TGSEQ);
     for (let i = i0; i < this.p.length; i++) this.p[i].pg = pg;
@@ -1118,6 +1195,7 @@
     wrapAnn('dimH', (x1, y1, x2, y2, yd, t, o) => [ext(o, 'noExt1') ? [x1, y1] : null, ext(o, 'noExt2') ? [x2, y2] : null].filter(Boolean), 5);
     wrapAnn('dimV', (x1, y1, x2, y2, xd, t, o) => [ext(o, 'noExt1') ? [x1, y1] : null, ext(o, 'noExt2') ? [x2, y2] : null].filter(Boolean), 5);
     wrapAnn('dimAng', () => [], 5);
+    wrapAnn('dimAligned', (p1, p2) => [p1, p2], 5);
     wrapAnn('dimHalfV', (x, y1) => [[x, y1]], 3);
     wrapAnn('leader', (x, y, sx, sy, ab, be, o) => (o && o.dot ? [] : [[x, y]]), 4);
     wrapAnn('rough', (x, y) => [[x, y]], 2);
