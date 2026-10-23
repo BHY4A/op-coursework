@@ -871,24 +871,17 @@
       for (let i = 1; i < n; i++) slots[i] = Math.max(slots[i], slots[i - 1] + gapAfter(i - 1));
       const over = slots[n - 1] - hi; if (over > 0) for (let i = n - 1; i >= 0; i--) slots[i] = Math.min(slots[i], (i === n - 1 ? hi : slots[i + 1] - stepMin));
       for (let i = 0; i < n; i++) slots[i] = Math.max(slots[i], lo + i * stepMin);
+      // каждая позиция — с вариантами: полка на своём месте ряда, сдвиг вдоль ряда, второй/третий ряд дальше от вида,
+      // противоположная или боковая сторона. Выбирается вариант, у которого линия-выноска не пересекает размеры,
+      // другие выноски и надписи (ГОСТ 2.109 п. 7.6); номера по возможности остаются в одном ряду
+      const at = (sd2, slot, off) => sd2 === 't' ? [slot, bb.y2 + off, 'r'] : sd2 === 'b' ? [slot, bb.y1 - off, 'r'] : sd2 === 'l' ? [bb.x1 - off, slot, 'l'] : [bb.x2 + off, slot, 'r'];
+      const other = wide ? (sd === 't' ? ['b', 'l', 'r'] : ['t', 'l', 'r']) : (sd === 'l' ? ['r', 't', 'b'] : ['l', 't', 'b']);
       arr.forEach((it, i) => {
-        const off = 14;
-        let sx, sy, side;
-        if (sd === 't') { sx = slots[i]; sy = bb.y2 + off; side = 'r'; }
-        else if (sd === 'b') { sx = slots[i]; sy = bb.y1 - off; side = 'r'; }
-        else if (sd === 'l') { sx = bb.x1 - off; sy = slots[i]; side = 'l'; }
-        else { sx = bb.x2 + off; sy = slots[i]; side = 'r'; }
-        // группа крепёжных деталей — общая выноска, номера позиций столбиком (ГОСТ 2.109-73, п. 4.18)
-        const ns = String(it.pos).split('/'), w = Math.max(...ns.map(q => tw(q, 7))) + 2, dir = sd === 'b' ? -1 : 1;
-        const ex = side === 'r' ? sx + w : sx - w;
-        const i0 = sh.p.length, pg = 'p' + (++PGSEQ);
-        sh.line(it.pt[0], it.pt[1], sx, sy, 2);
-        sh.dot(it.pt[0], it.pt[1], 0.8);
-        ns.forEach((q, j) => { const yy = sy + dir * 9 * j; sh.line(sx, yy, ex, yy, 2); sh.text(side === 'r' ? sx + 1 : ex + 1, yy + 2, q, { h: 7, pos: true }); });
-        if (ns.length > 1) sh.line(sx, sy, sx, sy + dir * 9 * (ns.length - 1), 2);
-        // для КОМПАС — объект «Обозначение позиции» (линия-выноска с точкой, номера на полках); отрезки выше — запасной вариант
-        for (let i = i0; i < sh.p.length; i++) sh.p[i].pg = pg;
-        sh.p.push({ t: 'D', k: 'P', a: [it.pt[0], it.pt[1], sx, sy], ns, side, dir, h: 7, pg });
+        const ns = String(it.pos).split('/'), opts = [];
+        const mk = (sd2, slot, off) => () => { const [sx, sy, side] = at(sd2, slot, off); sh.posMark(it.pt[0], it.pt[1], sx, sy, ns, side, sd2 === 'b' ? -1 : 1, 'p' + (++PGSEQ)); };
+        for (const off of [14, 26, 38]) for (const dv of [0, 6, -6, 12, -12, 18, -18, 27, -27]) opts.push(mk(sd, slots[i] + dv, off));
+        for (const sd2 of other) { const kp = sd2 === 't' || sd2 === 'b' ? it.pt[0] : it.pt[1]; for (const off of [14, 26]) for (const dv of [0, 8, -8, 16, -16]) opts.push(mk(sd2, kp + dv, off)); }
+        sh.attempt(opts);
       });
     });
   }

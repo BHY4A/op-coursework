@@ -296,8 +296,16 @@
     return c;
   }
   /* разместить готовую группу примитивов (нарисованную у начала координат) на листе без наложений */
+  /* габарит набора примитивов */
+  function primsBox(sh, prims) {
+    let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+    for (const q of prims) { const b = primBox(sh, q); if (!b) continue; x1 = Math.min(x1, b.x1); y1 = Math.min(y1, b.y1); x2 = Math.max(x2, b.x2); y2 = Math.max(y2, b.y2); }
+    return { x1, y1, x2, y2 };
+  }
   function placeGroup(sh, prims, o) {
     o = o || {};
+    // заведомо не помещается — без перестановки обозначений (она дорогая и габарит почти не меняет)
+    { const b = primsBox(sh, prims), f = sh.frame; if (b.x2 - b.x1 > (f.x2 - f.x1) * 1.08 || b.y2 - b.y1 > (f.y2 - f.y1) * 1.08) return null; }
     if (prims && prims._sh && prims._sh.repair && !prims._sh._repaired) { prims._sh.repair(); prims._sh._repaired = true; }
     const boxes = prims.map(q => primBox(sh, q)).filter(Boolean);
     let gx1 = Infinity, gy1 = Infinity, gx2 = -Infinity, gy2 = -Infinity;
@@ -325,6 +333,13 @@
   function placeViews(sh, views, o) {
     o = o || {};
     const gap = o.gap === undefined ? 8 : o.gap, gapG = o.gapGeo === undefined ? 15 : o.gapGeo;
+    // заведомо не помещается (сумма габаритов видов вдоль связей) — без перестановки обозначений
+    {
+      const f = sh.frame, bs = views.map(v => primsBox(sh, v.p));
+      let w = bs[0].x2 - bs[0].x1, h = bs[0].y2 - bs[0].y1;
+      views.forEach((v, i) => { if (!i) return; const b = bs[i]; if (v.rel === 'right' || v.rel === 'left') w += (b.x2 - b.x1) * 0.6; else h += (b.y2 - b.y1) * 0.6; });
+      if (w > (f.x2 - f.x1) * 1.08 || h > (f.y2 - f.y1) * 1.08) return null;
+    }
     const V = views.map(v => {
       if (v.p && v.p._sh && v.p._sh.repair && !v.p._sh._repaired) { v.p._sh.repair(); v.p._sh._repaired = true; }
       const bx = v.p.map(q => primBox(sh, q)).filter(Boolean);

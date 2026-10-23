@@ -206,13 +206,38 @@
     if (q.t === 'C' || q.t === 'A') return [q.a[0] - q.a[2], q.a[1] - q.a[2], q.a[0] + q.a[2], q.a[1] + q.a[2]];
     return null;
   }
+  /* сетка габаритов для большого неизменяемого набора примитивов (один и тот же массив «старых» примитивов
+     проверяется для всех вариантов обозначения): отбор кандидатов не перебирает весь лист */
+  const GRIDS = new WeakMap(), GCS = 16;
+  function gridPick(arr, x1, y1, x2, y2) {
+    let g = GRIDS.get(arr);
+    if (!g || g.n !== arr.length) {
+      // сетка окупается со второго запроса к тому же набору
+      if (!g || g.n !== arr.length || !g.once) { GRIDS.set(arr, { n: arr.length, once: true }); return arr.filter(q => { const b = pbox(q); return !b || !(b[2] < x1 || b[0] > x2 || b[3] < y1 || b[1] > y2); }); }
+    }
+    if (!g.cells) {
+      g = { n: arr.length, cells: new Map(), free: [] };
+      for (let i = 0; i < arr.length; i++) {
+        const b = pbox(arr[i]); if (!b) { g.free.push(i); continue; }
+        const cx1 = Math.floor(b[0] / GCS), cx2 = Math.floor(b[2] / GCS), cy1 = Math.floor(b[1] / GCS), cy2 = Math.floor(b[3] / GCS);
+        for (let cx = cx1; cx <= cx2; cx++) for (let cy = cy1; cy <= cy2; cy++) { const k = cx * 65536 + cy; let c = g.cells.get(k); if (!c) g.cells.set(k, c = []); c.push(i); }
+      }
+      GRIDS.set(arr, g);
+    }
+    const seen = new Set(g.free);
+    const cx1 = Math.floor(x1 / GCS), cx2 = Math.floor(x2 / GCS), cy1 = Math.floor(y1 / GCS), cy2 = Math.floor(y2 / GCS);
+    for (let cx = cx1; cx <= cx2; cx++) for (let cy = cy1; cy <= cy2; cy++) { const c = g.cells.get(cx * 65536 + cy); if (c) for (const i of c) seen.add(i); }
+    const out = [];
+    for (const i of [...seen].sort((a, b) => a - b)) { const q = arr[i], b = pbox(q); if (!b || !(b[2] < x1 || b[0] > x2 || b[3] < y1 || b[1] > y2)) out.push(q); }
+    return out;
+  }
   S.conflicts = function (added, old, stopAt1, withAxes) {
     const f = this.frame;
     let n = 0;
     // наложения возможны только в пределах габарита добавленного обозначения — остальной лист не проверяется (результат тот же, быстрее)
     { let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
       for (const q of added) { const b = pbox(q); if (!b) continue; if (b[0] < x1) x1 = b[0]; if (b[1] < y1) y1 = b[1]; if (b[2] > x2) x2 = b[2]; if (b[3] > y2) y2 = b[3]; }
-      if (x1 !== Infinity) { x1 -= 1; y1 -= 1; x2 += 1; y2 += 1; old = old.filter(q => { const b = pbox(q); return !b || !(b[2] < x1 || b[0] > x2 || b[3] < y1 || b[1] > y2); }); } }
+      if (x1 !== Infinity) { x1 -= 1; y1 -= 1; x2 += 1; y2 += 1; old = old.length > 300 ? gridPick(old, x1, y1, x2, y2) : old.filter(q => { const b = pbox(q); return !b || !(b[2] < x1 || b[0] > x2 || b[3] < y1 || b[1] > y2); }); } }
     const boxR = (q, pad) => ({ x1: q.a[0] + pad, y1: q.a[1] + pad, x2: q.a[2] - pad, y2: q.a[3] - pad });
     const T = added.filter(q => q.t === 'T').map(q => textRect(q, -0.7)).concat(added.filter(q => q.t === 'B').map(q => boxR(q, 0.3)));
     const OT = old.filter(q => q.t === 'T').map(q => textRect(q, 0)).concat(old.filter(q => q.t === 'B').map(q => boxR(q, 0)));
@@ -244,9 +269,12 @@
     const AL = old.filter(q => q.t === 'L' && q.g !== undefined && q.s !== 3);
     if (AL.length) for (const q of added) {
       if (q.t !== 'L' || q.g === undefined || q.s === 3) continue;
+      const qb = pbox(q);
       for (const b of AL) {
+        const bb = pbox(b); if (bb[2] < qb[0] || bb[0] > qb[2] || bb[3] < qb[1] || bb[1] > qb[3]) continue;
         if (b.g === q.g || (q.og !== undefined && (q.og === b.g || q.og === b.og)) || (b.og !== undefined && b.og === q.g)) continue;
         if (q.ex && b.ex) continue;   // выносная с выносной — допускается (ГОСТ 2.307 запрещает пересекать размерные линии)
+        if ((q.ex && b.pl) || (q.pl && b.ex)) continue;
         const pt = segCrossPt(q.a, b.a); if (!pt) continue;
         // общая выносная линия соседних размеров (цепочка) — не пересечение
         if (b.ex && added.some(e => e.ex && e.g === q.g && onSeg(pt, e.a, 0.3))) continue;
@@ -271,12 +299,12 @@
     const top = !this._attDepth;
     this._attDepth = (this._attDepth || 0) + 1;
     try {
-      let kept = false;
+      let kept = false, oldA = null;   // лист до обозначения — один и тот же для всех вариантов
       for (let i = 0; i < fns.length; i++) {
         const i0 = this.p.length;
         fns[i]();
         const added = this.p.slice(i0);
-        const n = this.conflicts(added, this.p.slice(0, i0));
+        const n = this.conflicts(added, oldA || (oldA = this.p.slice(0, i0)));
         if (n === 0) { best = i; res = i; kept = true; if (top && fns.length > 1) (this._atts = this._atts || []).push({ fns, prims: added }); break; }   // пробный вариант подошёл — оставляем, не рисуем заново
         this.p.length = i0;
         if (n < bn) { bn = n; best = i; }
@@ -311,7 +339,7 @@
         try {
           for (let i = 0; i < r.fns.length; i++) {
             const i0 = P.length; r.fns[i]();
-            const n = this.conflicts(P.slice(i0), P.slice(0, i0));
+            const n = this.conflicts(P.slice(i0), others);
             P.length = i0;
             if (n < bn) { bn = n; best = i; if (!n) break; }
           }
@@ -321,18 +349,25 @@
       }
       if (!changed) break;
     }
-    moved += this.repairPairs(recs);
+    if (!globalThis.NOPAIRS) moved += this.repairPairs(recs);
     return moved;
   };
   /* перестановка парами: два обозначения, которые мешают друг другу, перебирают сочетания своих вариантов
      (по одному каждое сдвинуться не может — второе стоит на единственном свободном месте первого) */
   S.repairPairs = function (recs, maxCombos) {
     const P = this.p, lim = maxCombos || 6000;
+    let work = 0;   // бюджет вызовов вариантов: перестановка парами ограничена по объёму работы (детерминированно, без таймера)
+    const BUDGET = globalThis.RPBUDGET || 4000;
     let moved = 0;
-    const alive = r => { const own = new Set(r.prims); let c = 0; for (const q of P) if (own.has(q)) c++; return c === r.prims.length; };
+    let pset = new Set(P);
+    const alive = r => r.prims.every(q => pset.has(q));
+    const boxOf = prims => { let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity; for (const q of prims) { const b = pbox(q); if (!b) continue; if (b[0] < x1) x1 = b[0]; if (b[1] < y1) y1 = b[1]; if (b[2] > x2) x2 = b[2]; if (b[3] > y2) y2 = b[3]; } return [x1 - 1, y1 - 1, x2 + 1, y2 + 1]; };
+    const near = (a, b) => !(a[2] < b[0] || b[2] < a[0] || a[3] < b[1] || b[3] < a[1]);
     for (let pass = 0; pass < 3; pass++) {
       let changed = false;
       for (const r of recs) {
+        if (work > BUDGET) break;
+        pset = new Set(P);
         if (!alive(r)) continue;
         const ownR = new Set(r.prims);
         const restR = P.filter(q => !ownR.has(q));
@@ -340,15 +375,20 @@
         // соседи по конфликту — обозначения, с которыми r пересекается
         // и те, что занимают места других вариантов r (сдвинув их, r встанет без наложений)
         const cand = recs.filter(s => s !== r && alive(s) && s.fns.length * r.fns.length <= lim);
-        const hits = new Map(cand.map(s => [s, this.conflicts(r.prims, s.prims) + this.conflicts(s.prims, r.prims) > 0 ? 1000 : 0]));
+        const cb = new Map(cand.map(s => [s, boxOf(s.prims)]));
+        const rb = boxOf(r.prims);
+        const hits = new Map(cand.map(s => [s, near(rb, cb.get(s)) && this.conflicts(r.prims, s.prims) + this.conflicts(s.prims, r.prims) > 0 ? 1000 : 0]));
+        const optBlk = [];
         {
           P.length = 0; restR.forEach(q => P.push(q));
           this._attDepth = (this._attDepth || 0) + 1;
           try {
             for (let i = 0; i < r.fns.length; i++) {
-              const i0 = P.length; r.fns[i]();
+              const i0 = P.length; r.fns[i](); work++;
               const a = P.slice(i0); P.length = i0;
-              const blk = cand.filter(s => this.conflicts(a, s.prims) + this.conflicts(s.prims, a) > 0);
+              const ab = boxOf(a);
+              const blk = cand.filter(s => near(ab, cb.get(s)) && this.conflicts(a, s.prims) + this.conflicts(s.prims, a) > 0);
+              optBlk[i] = blk;
               if (blk.length && blk.length <= 2) blk.forEach(s => hits.set(s, hits.get(s) + 1));
             }
           } finally { this._attDepth--; }
@@ -361,6 +401,8 @@
           for (let i = 0; i < r.fns.length; i++) { const i0 = P.length; r.fns[i](); const a = P.slice(i0); P.length = i0; const n = this.conflicts(a, restR); const blk = cand.filter(s => this.conflicts(a, s.prims) + this.conflicts(s.prims, a) > 0).map(nm); console.error('  opt', i, n, blk.join(' | ')); }
           this._attDepth--; r.prims.forEach(q => P.push(q)); } }
         for (const s of mates) {
+          if (work > BUDGET) break;
+          pset = new Set(P);
           if (!alive(r) || !alive(s)) continue;
           const own = new Set(r.prims.concat(s.prims));
           const rest = P.filter(q => !own.has(q));
@@ -372,14 +414,17 @@
           this._attDepth = (this._attDepth || 0) + 1;
           try {
             outer: for (let i = 0; i < r.fns.length; i++) {
-              const i0 = P.length; r.fns[i]();
+              // вариант r имеет смысл, только если ему мешает именно s (иначе его уже рассмотрела одиночная перестановка)
+              if (!optBlk[i] || !optBlk[i].includes(s) || optBlk[i].length > 2) continue;
+              const i0 = P.length; r.fns[i](); work++;
               const a = P.slice(i0);
               const ca = this.conflicts(a, rest);
+              let restA = null;
               if (ca >= bn) { P.length = i0; continue; }
               for (let j = 0; j < s.fns.length; j++) {
-                const j0 = P.length; s.fns[j]();
+                const j0 = P.length; s.fns[j](); work++;
                 const b = P.slice(j0); P.length = j0;
-                const n = ca + this.conflicts(b, P) + this.conflicts(a, b);
+                const n = ca + this.conflicts(b, restA || (restA = rest.concat(a))) + this.conflicts(a, b);
                 if (n < bn) { bn = n; best = [i, j]; if (!n) { P.length = i0; break outer; } }
               }
               P.length = i0;
@@ -394,6 +439,7 @@
       }
       if (!changed) break;
     }
+    if (globalThis.RPSTAT) { const t = globalThis.RPSTAT; const st = (new Error().stack || '').split('\n').map(l => (l.match(/at (\S+)/) || [])[1]).filter(x => /Sheet|sheet|compose/.test(x || ''))[0] || '?'; t[st] = (t[st] || 0) + work; t.n = (t.n || 0) + 1; t.work = (t.work || 0) + work; t.recs = (t.recs || 0) + recs.length; t.moved = (t.moved || 0) + moved; }
     return moved;
   };
   S.textRect = textRect;
@@ -655,6 +701,19 @@
     this.text(tx, ty, text, { h: o.h || 3.5, anchor: Math.cos(am * D2R) >= 0 ? 'lm' : 'rm' });
     // для КОМПАС — объект «Угловой размер»
     this.p.push({ t: 'D', k: 'AN', a: [r3(x), r3(y), r3(a1), r3(a2), r3(R)], s: String(text), h: o.h || 3.5 });
+    return this;
+  };
+  /* обозначение позиции (ГОСТ 2.109): линия-выноска с точкой на детали (x, y), полка от (sx, sy), номера ns столбиком (dir — вверх/вниз) */
+  S.posMark = function (x, y, sx, sy, ns, side, dir, pg) {
+    const w = Math.max(...ns.map(q => tw(q, 7))) + 2, ex = side === 'r' ? sx + w : sx - w;
+    const i0 = this.p.length;
+    this.line(x, y, sx, sy, 2); this.p[this.p.length - 1].pl = 1;   // линия-выноска позиции: выносные линии размеров пересекать может (ГОСТ 2.109 п. 7.6 — только размерные)
+    this.dot(x, y, 0.8);
+    ns.forEach((q, j) => { const yy = sy + dir * 9 * j; this.line(sx, yy, ex, yy, 2); this.text(side === 'r' ? sx + 1 : ex + 1, yy + 2, q, { h: 7, pos: true }); });
+    if (ns.length > 1) this.line(sx, sy, sx, sy + dir * 9 * (ns.length - 1), 2);
+    // для КОМПАС — объект «Обозначение позиции» (линия-выноска с точкой, номера на полках); отрезки выше — запасной вариант
+    for (let i = i0; i < this.p.length; i++) this.p[i].pg = pg;
+    this.p.push({ t: 'D', k: 'P', a: [x, y, sx, sy], ns, side, dir, h: 7, pg });
     return this;
   };
   /* выноска с полкой: от точки (x, y) к началу полки (sx, sy); texts — строки над и под полкой */
@@ -1196,6 +1255,7 @@
     wrapAnn('dimV', (x1, y1, x2, y2, xd, t, o) => [ext(o, 'noExt1') ? [x1, y1] : null, ext(o, 'noExt2') ? [x2, y2] : null].filter(Boolean), 5);
     wrapAnn('dimAng', () => [], 5);
     wrapAnn('dimAligned', (p1, p2) => [p1, p2], 5);
+    wrapAnn('posMark', () => [], -1);
     wrapAnn('dimHalfV', (x, y1) => [[x, y1]], 3);
     wrapAnn('leader', (x, y, sx, sy, ab, be, o) => (o && o.dot ? [] : [[x, y]]), 4);
     wrapAnn('rough', (x, y) => [[x, y]], 2);

@@ -4,7 +4,7 @@
 (function (root) {
   'use strict';
   const D2R = Math.PI / 180;
-  const KIND = { dimH: 'размер', dimV: 'размер', dimAng: 'угловой размер', leader: 'выноска', rough: 'знак шероховатости', roughLeader: 'шероховатость на выноске', tol: 'допуск формы/расположения', datum: 'обозначение базы', cutV: 'линия сечения', viewArrow: 'стрелка вида', roughCorner: 'шероховатость остальных поверхностей' };
+  const KIND = { dimH: 'размер', dimV: 'размер', dimAng: 'угловой размер', leader: 'выноска', rough: 'знак шероховатости', roughLeader: 'шероховатость на выноске', tol: 'допуск формы/расположения', datum: 'обозначение базы', cutV: 'линия сечения', viewArrow: 'стрелка вида', roughCorner: 'шероховатость остальных поверхностей', dimAligned: 'размер', dimHalfV: 'размер', posMark: 'позиция' };
 
   function distSeg(px, py, x1, y1, x2, y2) {
     const dx = x2 - x1, dy = y2 - y1, L2 = dx * dx + dy * dy;
@@ -147,6 +147,7 @@
         const a = AL[ids[i]], b = AL[ids[j]];
         if (a.g === b.g || (a.og !== undefined && (a.og === b.g || a.og === b.og)) || (b.og !== undefined && b.og === a.g)) continue;
         if (a.ex && b.ex) continue;   // выносные линии между собой пересекаться могут
+        if ((a.ex && b.pl) || (a.pl && b.ex)) continue;   // линия-выноска позиции и выносная линия размера (ГОСТ 2.109 п. 7.6 ограничивает только размерные)
         const key = Math.min(a.g, b.g) + '/' + Math.max(a.g, b.g); if (done.has(key)) continue;
         const pt = cross(a, b); if (!pt) continue;
         const onExt = (g, pt) => (EXT.get(g) || []).some(e => distSeg(pt[0], pt[1], e.a[0], e.a[1], e.a[2], e.a[3]) <= 0.3);
