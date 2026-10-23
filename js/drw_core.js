@@ -155,13 +155,30 @@
   }
   function rectsHit(a, b) { return a.x1 < b.x2 && a.x2 > b.x1 && a.y1 < b.y2 && a.y2 > b.y1; }
   /* отрезки пересекаются во внутренних точках обоих (касание концами и наложение вдоль не считаются) */
-  function segCross(p, q) {
+  function segCross(p, q) { return !!segCrossPt(p, q); }
+  /* точка на отрезке (в пределах tol) */
+  function onSeg(pt, a, tol) { const dx = a[2] - a[0], dy = a[3] - a[1], L2 = dx * dx + dy * dy; let t = L2 ? ((pt[0] - a[0]) * dx + (pt[1] - a[1]) * dy) / L2 : 0; t = Math.max(0, Math.min(1, t)); return Math.hypot(pt[0] - a[0] - t * dx, pt[1] - a[1] - t * dy) <= tol; }
+  /* пересечение дуги обозначения q (t:'A') с отрезком s во внутренних точках обоих */
+  function arcSegCross(q, s) {
+    const [cx, cy, R, a1, a2] = q.a, [x1, y1, x2, y2] = s, dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy);
+    const fx = x1 - cx, fy = y1 - cy, A = dx * dx + dy * dy, B = 2 * (fx * dx + fy * dy), C = fx * fx + fy * fy - R * R, D = B * B - 4 * A * C;
+    if (D <= 0 || !A) return false;
+    let e2 = a2; while (e2 <= a1) e2 += 360;
+    const da = 0.25 / R / D2R;
+    for (const t of [(-B - Math.sqrt(D)) / (2 * A), (-B + Math.sqrt(D)) / (2 * A)]) {
+      if (t * L < 0.25 || (1 - t) * L < 0.25) continue;
+      let ang = Math.atan2(y1 + t * dy - cy, x1 + t * dx - cx) / D2R; while (ang < a1) ang += 360;
+      if (ang > a1 + da && ang < e2 - da) return true;
+    }
+    return false;
+  }
+  function segCrossPt(p, q) {
     const [x1, y1, x2, y2] = p, [x3, y3, x4, y4] = q;
     if (Math.max(x1, x2) < Math.min(x3, x4) || Math.max(x3, x4) < Math.min(x1, x2) || Math.max(y1, y2) < Math.min(y3, y4) || Math.max(y3, y4) < Math.min(y1, y2)) return false;
     const d = (x2 - x1) * (y4 - y3) - (y2 - y1) * (x4 - x3); if (Math.abs(d) < 1e-9) return false;
     const t = ((x3 - x1) * (y4 - y3) - (y3 - y1) * (x4 - x3)) / d, u = ((x3 - x1) * (y2 - y1) - (y3 - y1) * (x2 - x1)) / d;
     const ea = 0.25 / (Math.hypot(x2 - x1, y2 - y1) || 1), eb = 0.25 / (Math.hypot(x4 - x3, y4 - y3) || 1);
-    return t > ea && t < 1 - ea && u > eb && u < 1 - eb;
+    return t > ea && t < 1 - ea && u > eb && u < 1 - eb ? [x1 + t * (x2 - x1), y1 + t * (y2 - y1)] : null;
   }
   function collOv(a, G) {
     const len = Math.hypot(a[2] - a[0], a[3] - a[1]); if (len < 1) return 0;
@@ -210,6 +227,13 @@
       if (stopAt1 && n) return n;
     }
     for (const q of added) if (q.t === 'L' && q.s !== 3) { for (const r of OT) if (segHitsRect(q.a[0], q.a[1], q.a[2], q.a[3], r)) n++; if (stopAt1 && n) return n; }
+    // дуги добавленного обозначения (угловой размер) — по надписям и рамкам
+    for (const q of added) if ((q.t === 'A' || q.t === 'C') && q.s !== 3 && OT.length) {
+      const a1 = q.t === 'A' ? q.a[3] : 0; let a2 = q.t === 'A' ? q.a[4] : 360; while (a2 <= a1) a2 += 360;
+      const m = Math.max(4, Math.ceil((a2 - a1) * D2R * q.a[2] / 0.5));
+      for (const r of OT) for (let i = 0; i <= m; i++) { const t = (a1 + (a2 - a1) * i / m) * D2R, x = q.a[0] + q.a[2] * Math.cos(t), y = q.a[1] + q.a[2] * Math.sin(t); if (x > r.x1 && x < r.x2 && y > r.y1 && y < r.y2) { n++; break; } }
+      if (stopAt1 && n) return n;
+    }
     // линии обозначений не должны лежать на линиях изображения (ГОСТ 2.307)
     const GL = OL.filter(q => q.g === undefined);
     for (const q of added) if (q.t === 'L' && q.s !== 3 && collOv(q.a, GL) > 1.5) { n += 2; if (stopAt1) return n; }
@@ -223,8 +247,20 @@
       for (const b of AL) {
         if (b.g === q.g || (q.og !== undefined && (q.og === b.g || q.og === b.og)) || (b.og !== undefined && b.og === q.g)) continue;
         if (q.ex && b.ex) continue;   // выносная с выносной — допускается (ГОСТ 2.307 запрещает пересекать размерные линии)
-        if (segCross(q.a, b.a)) { n += 2; if (stopAt1) return n; }
+        const pt = segCrossPt(q.a, b.a); if (!pt) continue;
+        // общая выносная линия соседних размеров (цепочка) — не пересечение
+        if (b.ex && added.some(e => e.ex && e.g === q.g && onSeg(pt, e.a, 0.3))) continue;
+        if (q.ex && old.some(e => e.ex && e.g === b.g && onSeg(pt, e.a, 0.3))) continue;
+        n += 2; if (stopAt1) return n;
       }
+    }
+    // дуги угловых размеров и линии других обозначений
+    const sep = (q, b) => b.g === q.g || (q.og !== undefined && (q.og === b.g || q.og === b.og)) || (b.og !== undefined && b.og === q.g);
+    const OA = old.filter(q => q.t === 'A' && q.g !== undefined && q.s !== 3);
+    for (const q of added) {
+      if (q.g === undefined || q.s === 3) continue;
+      if (q.t === 'L') for (const c of OA) if (!sep(q, c) && arcSegCross(c, q.a)) { n += 2; if (stopAt1) return n; }
+      if (q.t === 'A') for (const b of AL) if (!sep(q, b) && arcSegCross(q, b.a)) { n += 2; if (stopAt1) return n; }
     }
     return n;
   };
@@ -432,7 +468,7 @@
       }
       if (!fits && o.textX === undefined) { this.textFree(outH(this, x1, x2, yd, 0, text, h, w, o.side === 'left'), i0); return ret(); }
     } else {
-      const ext = 7;
+      const ext = AR + 2;   // стрелки снаружи: короткое продолжение размерной линии, длиннее — только со стороны надписи
       this.line(x1 - ext, yd, x2 + ext, yd, 2); this.p[this.p.length - 1].dl = 1; this.arrow(x1, yd, 0); this.arrow(x2, yd, 180);
       if (o.textX === undefined) {
         // малый размер: текст над размерной линией между выносными (если помещается по высоте ряда) или на продолжении линии
@@ -475,7 +511,7 @@
         return ret();
       } else if (!fits && o.textY === undefined) { this.textFree(outV(this, xd, y1, y2, 0, text, h, w, o.side === 'below'), i0); return ret(); }
     } else {
-      const ext = 7;
+      const ext = AR + 2;   // стрелки снаружи: короткое продолжение размерной линии, длиннее — только со стороны надписи
       this.line(xd, y1 - ext, xd, y2 + ext, 2); this.p[this.p.length - 1].dl = 1; this.arrow(xd, y1, 90); this.arrow(xd, y2, 270);
       if (o.textY === undefined) { this.textFree(outV(this, xd, y1, y2, ext, text, h, w, o.side === 'below'), i0); return ret(); }
     }
@@ -519,6 +555,22 @@
   /* угловой размер: вершина (x, y), лучи a1→a2 (против часовой), радиус дуги R */
   S.dimAng = function (x, y, a1, a2, R, text, o) {
     o = o || {};
+    // выносные линии по сторонам угла — там, где сторона не совпадает с линией контура (ГОСТ 2.307 п. 4.1)
+    for (const a of [a1, a2]) {
+      const c = Math.cos(a * D2R), s = Math.sin(a * D2R), L = R + EXT;
+      let cov = 0;   // сторона угла покрыта контуром от вершины на длину cov
+      const iv = [];
+      for (const q of this.p) {
+        if (q.t !== 'L' || q.g !== undefined || q.s === 3) continue;
+        const d1 = (q.a[0] - x) * -s + (q.a[1] - y) * c, d2 = (q.a[2] - x) * -s + (q.a[3] - y) * c;
+        if (Math.abs(d1) > 0.15 || Math.abs(d2) > 0.15) continue;
+        const t1 = (q.a[0] - x) * c + (q.a[1] - y) * s, t2 = (q.a[2] - x) * c + (q.a[3] - y) * s;
+        iv.push([Math.min(t1, t2), Math.max(t1, t2)]);
+      }
+      iv.sort((u, v) => u[0] - v[0]);
+      for (const [t1, t2] of iv) if (t1 <= cov + 0.2) cov = Math.max(cov, t2);
+      if (cov < R - 0.5) { this.line(x + c * cov, y + s * cov, x + c * L, y + s * L, 2); this.p[this.p.length - 1].ex = 1; }
+    }
     this.arc(x, y, R, a1, a2, 2);
     this.arrow(x + R * Math.cos(a1 * D2R), y + R * Math.sin(a1 * D2R), a1 - 90);
     this.arrow(x + R * Math.cos(a2 * D2R), y + R * Math.sin(a2 * D2R), a2 + 90);

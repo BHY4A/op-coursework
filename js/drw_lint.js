@@ -141,16 +141,30 @@
         const la = Math.hypot(x2 - x1, y2 - y1), lb = Math.hypot(x4 - x3, y4 - y3), ea = 0.25 / la, eb = 0.25 / lb;
         return t > ea && t < 1 - ea && u > eb && u < 1 - eb ? [x1 + t * (x2 - x1), y1 + t * (y2 - y1)] : null;
       };
-      const done = new Set();
+      const done = new Set(), EXT = new Map();
+      AL.forEach(q => { if (q.ex) { if (!EXT.has(q.g)) EXT.set(q.g, []); EXT.get(q.g).push(q); } });
       for (const ids of grid.values()) for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) {
         const a = AL[ids[i]], b = AL[ids[j]];
         if (a.g === b.g || (a.og !== undefined && (a.og === b.g || a.og === b.og)) || (b.og !== undefined && b.og === a.g)) continue;
         if (a.ex && b.ex) continue;   // выносные линии между собой пересекаться могут
         const key = Math.min(a.g, b.g) + '/' + Math.max(a.g, b.g); if (done.has(key)) continue;
         const pt = cross(a, b); if (!pt) continue;
+        const onExt = (g, pt) => (EXT.get(g) || []).some(e => distSeg(pt[0], pt[1], e.a[0], e.a[1], e.a[2], e.a[3]) <= 0.3);
+        if ((b.ex && onExt(a.g, pt)) || (a.ex && onExt(b.g, pt))) continue;   // общая выносная линия цепочки размеров
         done.add(key);
         const ka = KIND[kindOf[a.g]] || kindOf[a.g] || 'обозначение', kb = KIND[kindOf[b.g]] || kindOf[b.g] || 'обозначение';
         const ta = (P.find(t => t.t === 'T' && t.g === a.g) || {}).s, tb = (P.find(t => t.t === 'T' && t.g === b.g) || {}).s;
+        add('error', 'пересечение обозначений', `${ka}${ta ? ' «' + short(ta) + '»' : ''} пересекает ${kb}${tb ? ' «' + short(tb) + '»' : ''}`, pt);
+      }
+      // дуги обозначений (угловые размеры) и линии других обозначений
+      const AA = ann.filter(q => q.t === 'A' && q.s !== 3);
+      for (const c of AA) for (const b of AL) {
+        if (b.g === c.g || (c.og !== undefined && (c.og === b.g || c.og === b.og)) || (b.og !== undefined && b.og === c.g)) continue;
+        const key = Math.min(c.g, b.g) + '/' + Math.max(c.g, b.g); if (done.has(key)) continue;
+        const pt = arcCross(c, b.a); if (!pt) continue;
+        done.add(key);
+        const ka = KIND[kindOf[c.g]] || kindOf[c.g] || 'обозначение', kb = KIND[kindOf[b.g]] || kindOf[b.g] || 'обозначение';
+        const ta = (P.find(t => t.t === 'T' && t.g === c.g) || {}).s, tb = (P.find(t => t.t === 'T' && t.g === b.g) || {}).s;
         add('error', 'пересечение обозначений', `${ka}${ta ? ' «' + short(ta) + '»' : ''} пересекает ${kb}${tb ? ' «' + short(tb) + '»' : ''}`, pt);
       }
     }
@@ -165,6 +179,21 @@
     const out = [], idx = new Map();
     for (const it of issues) { const k = it.rule + '|' + it.msg; if (idx.has(k)) { idx.get(k).n++; continue; } const z = Object.assign({ n: 1 }, it); idx.set(k, z); out.push(z); }
     return out;
+  }
+  /* пересечение дуги q (t:'A') с отрезком s во внутренних точках обоих (касание концами — не пересечение) */
+  function arcCross(q, s) {
+    const [cx, cy, R, a1, a2] = q.a, [x1, y1, x2, y2] = s, dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy);
+    const fx = x1 - cx, fy = y1 - cy, A = dx * dx + dy * dy, B = 2 * (fx * dx + fy * dy), C = fx * fx + fy * fy - R * R, D = B * B - 4 * A * C;
+    if (D <= 0 || !A) return null;
+    for (const t of [(-B - Math.sqrt(D)) / (2 * A), (-B + Math.sqrt(D)) / (2 * A)]) {
+      if (t * L < 0.25 || (1 - t) * L < 0.25) continue;
+      const x = x1 + t * dx, y = y1 + t * dy, ang = Math.atan2(y - cy, x - cx) / D2R;
+      if (!angIn(ang, a1, a2)) continue;
+      const da = 0.25 / R / D2R;   // концы дуги (у стрелок, на выносных линиях) — не пересечение
+      if (angIn(ang, a1, a1 + da) || angIn(ang, a2 - da, a2)) continue;
+      return [x, y];
+    }
+    return null;
   }
   root.DRWLINT = { lint, KIND };
 })(typeof window !== 'undefined' ? window : globalThis);

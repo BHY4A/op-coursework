@@ -618,7 +618,8 @@
     // ⌀ отверстия H7 — внутри, у левого торца ступицы; база А — на продолжении
     const xd = xl + Math.min(P.hl * 0.35, 10 / k);
     sh.dimHalfV(X(xd), Y(-rb), Y(0) + Math.max(8, 0.35 * (Y(rb) - Y(0))), `⌀${nf(g.dbore, 2)}H7`);
-    sh.attempt([2, 8, 14].map(len => () => sh.datum(X(xd), Y(-rb), 270, base, { len }) ));
+    // база — на поверхности отверстия, выноска внутрь отверстия (не через материал ступицы)
+    sh.attempt([0.75, 0.55, 0.9, 0.35].flatMap(t => [3, 8, 14].map(len => () => sh.datum(X(xl + (xr - xl) * t), Y(-rb), 90, base, { len }))));
     // ⌀ ступицы
     const yHubDim = Y(0);
     void yHubDim;
@@ -635,7 +636,8 @@
     if (P.holes) dimsR.push({ y: P.holes.Dc / 2, x: P.he, t: `⌀${nf(P.holes.Dc, 0)}`, axis: true });
     if (!P.holes && kind === 'wheel' && P.rr) dimsR.push({ y: P.rr, x: P.hb, t: `⌀${nf(2 * P.rr, 1)}*` });
     dimsR.sort((a, b) => a.y - b.y);
-    let xdim = X(xr) + 10;
+    // у конического колеса между задним торцом венца и диаметрами — место под рамку торцового биения с горизонтальной выноской
+    let xdim = Math.max(X(xr) + 10, kind === 'bevel' ? X(P.bevel.xB) + 7 + tw(nf(tolPerp(g.dst) * 1.25, 3), 3.5) + tw(base, 3.5) + 6 + 12 : -1e9);
     dimsR.forEach(d => {
       sh.attempt([0, 7, 14, 21].map(dx => () => sh.dimV(X(d.x), Y(-d.y), X(d.x), Y(d.y), xdim + dx, d.t)));
       xdim += 8;
@@ -692,7 +694,9 @@
     // шероховатость: отверстие (на полке выноски), зубья, торцы ступицы
     { // отверстие: стрелка выноски на линии отверстия со стороны отверстия (не через материал ступицы), знак на полке
       const room = Y(0) - Y(-rb);
-      sh.attempt([[0.55, 10, 0.35], [0.7, 12, 0.35], [0.4, -10, 0.35], [0.8, 14, 0.5], [0.3, -14, 0.5]].map(([t, dx, f]) => () => { const px = X(xl + (xr - xl) * t), py = Y(-rb); sh.roughLeader(px, py, px + dx, py + Math.max(4, Math.min(room * f, room - 11)), 'Ra 1,6'); }));
+      const ro = [[0.55, 10, 0.35], [0.7, 12, 0.35], [0.4, -10, 0.35], [0.8, 14, 0.5], [0.3, -14, 0.5]];
+      for (const t of [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]) for (const dx of [10, -10, 16, -16]) for (const f of [0.35, 0.55]) ro.push([t, dx, f]);
+      sh.attempt(ro.map(([t, dx, f]) => () => { const px = X(xl + (xr - xl) * t), py = Y(-rb); sh.roughLeader(px, py, px + dx, py + Math.max(4, Math.min(room * f, room - 11)), 'Ra 1,6'); }));
     }
     // середина плоского участка вершин венца (у червячного колеса посередине — впадина по дуге)
     const xFlat = (() => { const xs = P.pieces.flat().filter(([, y]) => Math.abs(y - P.rmax) < 1e-6).map(p => p[0]).filter(x => x > 0); return kind === 'wormwheel' && xs.length >= 2 ? (Math.min(...xs) + Math.max(...xs)) / 2 : null; })();
@@ -703,9 +707,31 @@
     const rT = kind === 'bevel' ? P.bevel.Te : [xFlat !== null ? xFlat : P.hb * 0.4, P.rmax];
     const fy0 = Y(rTip) + 10;
     const tRun = nf(tolRun(tipD, kind === 'wormwheel' ? 2.5 : 2), 3), tFace = nf(tolPerp(g.dst) * 1.25, 3);
-    sh.attempt([0, 8, 16].flatMap(dy => [0, -20, 20].map(dx => () => { const tx = X(rT[0]), ty = Y(rT[1]); const x1 = tx - 12 + dx; sh.tol(x1, fy0 + dy, ['rrun', tRun, base], { from: 'b', fx: Math.min(Math.max(tx - x1, 3), 20), via: dx ? [[x1 + Math.min(Math.max(tx - x1, 3), 20), fy0 + dy - 4], [tx, fy0 + dy - 4]] : [], to: [tx, ty + 0.2] }); })));
+    // радиальное биение вершин: рамка над венцом, линия-выноска отвесно к поверхности вершин (точка — по всей ширине площадки)
+    {
+      const Wr = 7 + [tRun, base].reduce((a, c) => a + tw(c, 3.5) + 3, 0);
+      const txs = kind === 'bevel' ? [rT[0]] : (xFlat !== null ? [xFlat, -xFlat] : [0.4, 0, -0.4, 0.7, -0.7].map(t => t * (P.hb - P.cr)));
+      const opts = [];
+      for (const dy of [0, 7, 14, 21]) for (const xm of txs) for (const fx of [3.5, Wr / 2, Wr - 3.5]) opts.push(() => {
+        const tx = X(xm), ty = kind === 'bevel' ? Y(rT[1]) : Y(P.rmax); sh.tol(tx - fx, fy0 + dy, ['rrun', tRun, base], { from: 'b', fx, via: [], to: [tx, ty + 0.2] }); });
+      sh.attempt(opts);
+    }
     const faceX = kind === 'bevel' ? P.bevel.xB : P.hb, faceY = kind === 'bevel' ? (P.bevel.Be[1] + rh) / 2 : (P.rr ? (P.rr + P.rmax) / 2 : P.rmax * 0.8);
-    sh.attempt([12, 20, 28].flatMap(dx => [0, 10, -10].map(dy => () => { const tx = X(faceX), ty = Y(faceY); const att = tx + dx; sh.tol(att - 3.5, ty + 8 + dy, ['perp', tFace, base], { from: 'b', fx: 3.5, via: [[att, ty]], to: [tx, ty] }); })));
+    // торцовое биение: стрелка перпендикулярно торцу венца (правому или левому), рамка над венцом
+    {
+      const opts = [];
+      for (const sd of kind === 'bevel' ? [1] : [1, -1]) for (const dx of [10, 16, 24]) for (const dy of [8, 14, 20]) opts.push(() => {
+        const tx = X(sd * faceX), ty = Y(faceY), att = tx + sd * dx, top = Y(kind === 'bevel' ? rTip : P.rmax) + dy;
+        sh.tol(att - (sd > 0 ? 3.5 : 0), Math.max(ty + 8, top), ['perp', tFace, base], { from: 'b', fx: sd > 0 ? 3.5 : 0, via: [[att, ty]], to: [tx, ty] }); });
+      // рамка сбоку от торца, выноска горизонтально (когда над венцом проходят выносные линии диаметров)
+      const fy1 = kind === 'bevel' ? P.bevel.Be[1] : (P.rr || P.rmax * 0.9), fy2 = rh;
+      const Wf = 7 + [tFace, base].reduce((a, c) => a + tw(c, 3.5) + 3, 0);
+      for (const sd of kind === 'bevel' ? [1] : [1, -1]) for (const t of [0.5, 0.3, 0.7, 0.15, 0.85]) for (const dx of [5, 9, 14]) opts.push(() => {
+        const tx = X(sd * faceX), ty = Y(fy1 + (fy2 - fy1) * t);
+        const sx = sd > 0 ? tx + dx : tx - dx;   // via в точке начала: выноска строго горизонтальна (рамку не сдвигать)
+        sh.tol(sd > 0 ? sx : sx - Wf, ty - 3.5, ['perp', tFace, base], { from: sd > 0 ? 'l' : 'r', via: [[sx, ty]], to: [tx, ty] }); });
+      sh.attempt(opts);
+    }
     return { P };
   }
 
@@ -747,7 +773,7 @@
           const sh2 = new Sheet(fmt, land);
           setupSheet(sh2, info, notes, ttPos);
           const pl = placeGroup(sh2, tmp.p, { near: [sh2.frame.x1 + 15 + (mb.x2 - mb.x1) / 2, (sh2.frame.y1 + sh2.frame.y2) / 2 + 30] });
-          if (info.debug) console.log('wheel', fmt, k, land, ttPos, mb, !!pl);
+          if (info.debug || globalThis.WDBG) console.error('wheel', fmt, k, land, ttPos, JSON.stringify(mb), !!pl);
           if (!pl) continue;
           // стрелка взгляда «А» слева от главного вида и вид А
           if (g.key) {
