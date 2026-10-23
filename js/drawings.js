@@ -220,13 +220,16 @@
       const s = fr.s;
       const W = 7 + fr.cells.slice(1).reduce((a, c) => a + tw(c, 3.5) + 3, 0);
       const opts = [];
-      for (const dy of [0, 9, 18, 27, 36]) {
-        const fy = yband + dy;
+      // ряд рамок над всеми обозначениями; если оттуда линия-выноска что-то пересекает — рамка ниже, ближе к поверхности
+      const fys = [0, 9, 18, 27, 36].map(dy => yband + dy);
+      for (let fy = Y(fr.fr || s.r) + 6; fy < yband - 2; fy += 4) fys.push(fy);
+      for (const fy of fys) {
         if (fr.face) {
           const tx = X(fr.face === 'R' ? s.x1 : s.x0), ty = Y(fr.fr), dir = fr.face === 'R' ? -1 : 1;
           for (const dx of [8, 14, 22]) opts.push(() => { const att = tx + dir * dx; const x1 = att - 3.5; sh.tol(x1, fy, fr.cells, { from: 'b', fx: 3.5, via: [[att, ty]], to: [tx, ty] }); });
         } else {
-          const ts = fr.bevel ? [0.6, 0.4] : [0.72, 0.6, 0.85, 0.45];
+          // точка у поверхности — по всей длине ступени: линия-выноска рамки не должна пересекать размеры паза и другие обозначения
+          const ts = fr.bevel ? [0.6, 0.4, 0.75, 0.25] : [0.72, 0.6, 0.85, 0.45, 0.92, 0.3, 0.08, 0.2, 0.8, 0.5];
           for (const t of ts) {
             const xm = s.x0 + s.l * t, tx = X(xm), ty = fr.bevel ? Y(bi.Rai + (bi.Rae - bi.Rai) * t) : Y(s.r);
             for (const sx of [0, -W / 2 - 4, W / 2 + 4]) opts.push(() => {
@@ -276,6 +279,7 @@
   function primBox(sh, q) {
     if (q.t === 'L') return { x1: Math.min(q.a[0], q.a[2]), y1: Math.min(q.a[1], q.a[3]), x2: Math.max(q.a[0], q.a[2]), y2: Math.max(q.a[1], q.a[3]) };
     if (q.t === 'T') return sh.textRect(q, 0);
+    if (q.t === 'B') return { x1: q.a[0], y1: q.a[1], x2: q.a[2], y2: q.a[3] };
     if (q.t === 'C' || q.t === 'A') return { x1: q.a[0] - q.a[2], y1: q.a[1] - q.a[2], x2: q.a[0] + q.a[2], y2: q.a[1] + q.a[2] };
     if (q.t === 'H') { let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity; for (let i = 0; i < q.l.length; i += 2) { x1 = Math.min(x1, q.l[i]); x2 = Math.max(x2, q.l[i]); y1 = Math.min(y1, q.l[i + 1]); y2 = Math.max(y2, q.l[i + 1]); } return { x1, y1, x2, y2 }; }
     return null;
@@ -285,6 +289,7 @@
     if (q.t === 'L') c.a = [q.a[0] + dx, q.a[1] + dy, q.a[2] + dx, q.a[3] + dy];
     else if (q.t === 'C' || q.t === 'A' || q.t === 'T') { c.a = q.a.slice(); c.a[0] += dx; c.a[1] += dy; }
     else if (q.t === 'K') { c.pts = q.pts.map(p => [p[0] + dx, p[1] + dy]); }
+    else if (q.t === 'B') { c.a = [q.a[0] + dx, q.a[1] + dy, q.a[2] + dx, q.a[3] + dy]; }
     else if (q.t === 'D') { if (q.tx !== undefined) { c.tx = q.tx + dx; c.ty = q.ty + dy; } if (q.via && q.via.length) c.via = q.via.map(p => [p[0] + dx, p[1] + dy]); c.a = q.k === 'PL' ? [q.a[0] + dx, q.a[1] + dy, q.a[2] + dx, q.a[3] + dy, q.a[4] + dx, q.a[5] + dy] : q.k === 'T' ? [q.a[0] + dx, q.a[1] + dy, q.a[2], q.a[3]] : q.k === 'AN' ? [q.a[0] + dx, q.a[1] + dy, q.a[2], q.a[3], q.a[4]] : q.k === 'F' && !q.to ? [q.a[0] + dx, q.a[1] + dy, 0, 0] : q.k === 'L' || q.k === 'P' || q.k === 'TT' || q.k === 'BR' || q.k === 'TB' || q.k === 'WD' || q.k === 'R' || q.k === 'F' || q.k === 'B' || q.k === 'C' || q.k === 'W' || q.k === 'RL' || q.k === 'Q' ? [q.a[0] + dx, q.a[1] + dy, q.a[2] + dx, q.a[3] + dy] : q.k === 'H' ? [q.a[0] + dx, q.a[1] + dy, q.a[2] + dx, q.a[3] + dy, q.a[4] + dy] : [q.a[0] + dx, q.a[1] + dy, q.a[2] + dx, q.a[3] + dy, q.a[4] + dx]; }
     else if (q.t === 'H') { c.l = q.l.map((v, i) => v + (i % 2 ? dy : dx)); c.rings = q.rings.map(r => r.map(p => [p[0] + dx, p[1] + dy])); }
     return c;
@@ -311,6 +316,46 @@
       return { dx, dy, box: R };
     }
     return null;
+  }
+  /* разместить несколько видов одного масштаба как единый блок: сначала виды сдвигаются друг к другу в проекционной связи
+     (каждый — вплотную к соседу с зазором между обозначениями), затем блок целиком ищет место на листе.
+     views[0] — главный вид {p}; остальные {p, rel: 'right'|'left'|'below'|'above', of: номер вида, d: сдвиг вдоль связи}.
+     Так виды не уменьшаются ради того, что жадная раскладка поставила главный вид неудачно. Возврат — [{dx, dy, box}] по видам. */
+  function placeViews(sh, views, o) {
+    o = o || {};
+    const gap = o.gap === undefined ? 8 : o.gap, gapG = o.gapGeo === undefined ? 15 : o.gapGeo;
+    const V = views.map(v => {
+      if (v.p && v.p._sh && v.p._sh.repair && !v.p._sh._repaired) { v.p._sh.repair(); v.p._sh._repaired = true; }
+      const bx = v.p.map(q => primBox(sh, q)).filter(Boolean);
+      const gb = v.p.filter(q => (q.t === 'L' || q.t === 'C' || q.t === 'A') && q.g === undefined).map(q => primBox(sh, q));
+      const un = a => a.reduce((m, b) => ({ x1: Math.min(m.x1, b.x1), y1: Math.min(m.y1, b.y1), x2: Math.max(m.x2, b.x2), y2: Math.max(m.y2, b.y2) }), { x1: Infinity, y1: Infinity, x2: -Infinity, y2: -Infinity });
+      return { bx, all: un(bx), geo: gb.length ? un(gb) : un(bx) };
+    });
+    const off = [[0, 0]];
+    const sb = (b, d) => ({ x1: b.x1 + d[0], y1: b.y1 + d[1], x2: b.x2 + d[0], y2: b.y2 + d[1] });
+    for (let i = 1; i < views.length; i++) {
+      const v = views[i], j = v.of || 0, d = v.d || 0, me = V[i];
+      const hor = v.rel === 'right' || v.rel === 'left', sgn = v.rel === 'right' || v.rel === 'above' ? 1 : -1;
+      const placed = []; for (let m = 0; m < i; m++) V[m].bx.forEach(b => placed.push(sb(b, off[m])));
+      const gj = sb(V[j].geo, off[j]);
+      let o2 = hor ? off[j][1] + d : off[j][0] + d;                 // вдоль связи — как у соседа
+      // поперёк связи: геометрия видов не ближе gapG, обозначения разных видов — не ближе gap
+      let s = hor ? (sgn > 0 ? gj.x2 + gapG - me.geo.x1 : gj.x1 - gapG - me.geo.x2) : (sgn > 0 ? gj.y2 + gapG - me.geo.y1 : gj.y1 - gapG - me.geo.y2);
+      for (const b of me.bx) for (const a of placed) {
+        if (hor) { if (b.y1 + o2 >= a.y2 + gap || b.y2 + o2 <= a.y1 - gap) continue; s = sgn > 0 ? Math.max(s, a.x2 + gap - b.x1) : Math.min(s, a.x1 - gap - b.x2); }
+        else { if (b.x1 + o2 >= a.x2 + gap || b.x2 + o2 <= a.x1 - gap) continue; s = sgn > 0 ? Math.max(s, a.y2 + gap - b.y1) : Math.min(s, a.y1 - gap - b.y2); }
+      }
+      off.push(hor ? [s, o2] : [o2, s]);
+    }
+    const merged = [];
+    views.forEach((v, i) => v.p.forEach(q => merged.push(shiftPrim(q, off[i][0], off[i][1]))));
+    const tot = V.reduce((m, v, i) => { const b = sb(v.all, off[i]); return { x1: Math.min(m.x1, b.x1), y1: Math.min(m.y1, b.y1), x2: Math.max(m.x2, b.x2), y2: Math.max(m.y2, b.y2) }; }, { x1: Infinity, y1: Infinity, x2: -Infinity, y2: -Infinity });
+    const f = sh.frame, W = tot.x2 - tot.x1, H = tot.y2 - tot.y1;
+    if (W > f.x2 - f.x1 - 2 || H > f.y2 - f.y1 - 2) return null;
+    const near = o.near ? o.near(W, H) : [f.x1 + (o.margin || 10) + W / 2, f.y2 - (o.margin || 10) - H / 2];
+    const pl = placeGroup(sh, merged, { near });
+    if (!pl) return null;
+    return V.map((v, i) => ({ dx: off[i][0] + pl.dx, dy: off[i][1] + pl.dy, box: sb(v.all, [off[i][0] + pl.dx, off[i][1] + pl.dy]) }));
   }
   function shaftSheet(pd, info) {
     const segs = prepSegs(pd);
@@ -827,5 +872,5 @@
     return { x1: x, y1: ytop - H, x2: f.x2, y2: ytop };
   }
 
-  root.DRAWINGS = { prepSegsPublic: prepSegs, detailSheets, partInfo, massOf, wheelMain, hubView, placeGroup, wheelSheet, wheelProfile, shaftSheet, gearTable, segRole, fitOf, raOf, tolCyl, tolRun, tolPerp, tolSym, keyFit, chamf, deg, scaleText, SCALES, nf, IT };
+  root.DRAWINGS = { prepSegsPublic: prepSegs, detailSheets, partInfo, massOf, wheelMain, hubView, placeGroup, placeViews, wheelSheet, wheelProfile, shaftSheet, gearTable, segRole, fitOf, raOf, tolCyl, tolRun, tolPerp, tolSym, keyFit, chamf, deg, scaleText, SCALES, nf, IT };
 })(typeof window !== 'undefined' ? window : globalThis);

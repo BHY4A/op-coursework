@@ -69,7 +69,8 @@
       }
     }
     // 2. надписи: не пересекаются линиями, штриховкой, окружностями и другими надписями (ГОСТ 2.304, 2.307, 2.306)
-    const TR = texts.map(q => ({ q, r: textRect(q, kT, 0.35) }));
+    // рамки допусков и баз проверяются как надписи: на них не заходят линии изображения и чужих обозначений
+    const TR = texts.map(q => ({ q, r: textRect(q, kT, 0.35) })).concat(P.filter(q => q.t === 'B').map(q => ({ q: { t: 'B', g: q.g, s: 'рамка ' + ((P.find(t => t.t === 'T' && t.g === q.g && t.a[0] > q.a[0] && t.a[0] < q.a[2] && t.a[1] > q.a[1] - 1 && t.a[1] < q.a[3] + 1) || {}).s || ''), a: [q.a[0], q.a[1], 3.5, 0] }, r: { x1: q.a[0] + 0.35, y1: q.a[1] + 0.35, x2: q.a[2] - 0.35, y2: q.a[3] - 0.35 } })));
     for (let i = 0; i < TR.length; i++) {
       const { q, r } = TR[i];
       const lines = P.filter(z => z.t === 'L' && (z.g === undefined || z.g !== q.g) && segHitsRect(z.a[0], z.a[1], z.a[2], z.a[3], r));
@@ -81,7 +82,7 @@
       const nAnn = lines.filter(z => z.g !== undefined).length + circs.filter(z => z.g !== undefined).length;
       if (nGeo) what.push('линии изображения'); if (nAx) what.push('осевые линии'); if (nAnn) what.push('линии других обозначений'); if (hh) what.push('штриховку');
       if (what.length) { const z = lines.find(z => !(z.g === undefined && z.s === 3)) || circs[0]; add('error', 'надпись на линии', `надпись «${short(q.s)}» пересекает ${what.join(', ')}`, [q.a[0], q.a[1]], z ? { by: (z.g === undefined ? 'геом.' : (kindOf[z.g] || '?')) + ' ' + z.t + ' s' + z.s + ' ' + z.a.map(f1).join(' '), tg: kindOf[q.g] } : null); }
-      for (let j = i + 1; j < TR.length; j++) if (rectsHit(r, TR[j].r) && !(q.g !== undefined && q.g === TR[j].q.g && Math.abs(q.a[2] - TR[j].q.a[2]) > 0.5)) add('error', 'надписи накладываются', `надписи «${short(q.s)}» и «${short(TR[j].q.s)}» накладываются`, [q.a[0], q.a[1]]);
+      for (let j = i + 1; j < TR.length; j++) if (rectsHit(r, TR[j].r) && !(q.g !== undefined && q.g === TR[j].q.g && (q.t === 'B' || TR[j].q.t === 'B' || Math.abs(q.a[2] - TR[j].q.a[2]) > 0.5))) add('error', 'надписи накладываются', `надписи «${short(q.s)}» и «${short(TR[j].q.s)}» накладываются`, [q.a[0], q.a[1]]);
       if (r.x1 < f.x1 || r.x2 > f.x2 || r.y1 < f.y1 || r.y2 > f.y2) add('error', 'за рамкой', `надпись «${short(q.s)}» выходит за рамку`, [q.a[0], q.a[1]]);
       if (st && rectsHit(r, st)) add('error', 'основная надпись', `надпись «${short(q.s)}» заходит на основную надпись`, [q.a[0], q.a[1]]);
     }
@@ -122,6 +123,34 @@
         if (!isFinite(cv.lo)) { if (R >= 3) add(R >= 6 ? 'error' : 'warn', 'центровые линии', `окружность ⌀${f1(2 * R)} мм (на листе): нет ${dir === 'h' ? 'горизонтальной' : 'вертикальной'} центровой линии`, [cx, cy]); continue; }
         const e1 = -cv.lo - R, e2 = cv.hi - R;
         if (R >= 6 && (Math.min(e1, e2) < 1.5)) add('warn', 'центровые линии', `окружность ⌀${f1(2 * R)} мм: центровая линия выходит за контур меньше чем на 2 мм (${f1(Math.min(e1, e2))} мм)`, [cx, cy]);
+      }
+    }
+    // 5а. линии разных обозначений не пересекаются (ГОСТ 2.307 п. 5.10 — избегать пересечения размерных и выносных линий;
+    //     ГОСТ 2.109 п. 7.6 — линии-выноски позиций не пересекаются между собой и по возможности — с размерными линиями)
+    {
+      const AL = ann.filter(q => q.t === 'L' && q.s !== 3 && Math.hypot(q.a[2] - q.a[0], q.a[3] - q.a[1]) > 0.05);
+      const cell = 20, grid = new Map();
+      AL.forEach((q, i) => {
+        const x1 = Math.floor(Math.min(q.a[0], q.a[2]) / cell), x2 = Math.floor(Math.max(q.a[0], q.a[2]) / cell), y1 = Math.floor(Math.min(q.a[1], q.a[3]) / cell), y2 = Math.floor(Math.max(q.a[1], q.a[3]) / cell);
+        for (let gx = x1; gx <= x2; gx++) for (let gy = y1; gy <= y2; gy++) { const k = gx + ':' + gy; if (!grid.has(k)) grid.set(k, []); grid.get(k).push(i); }
+      });
+      const cross = (a, b) => {   // пересечение во внутренних точках обоих отрезков (касание концами и наложение вдоль — не пересечение)
+        const [x1, y1, x2, y2] = a.a, [x3, y3, x4, y4] = b.a;
+        const d = (x2 - x1) * (y4 - y3) - (y2 - y1) * (x4 - x3); if (Math.abs(d) < 1e-9) return null;
+        const t = ((x3 - x1) * (y4 - y3) - (y3 - y1) * (x4 - x3)) / d, u = ((x3 - x1) * (y2 - y1) - (y3 - y1) * (x2 - x1)) / d;
+        const la = Math.hypot(x2 - x1, y2 - y1), lb = Math.hypot(x4 - x3, y4 - y3), ea = 0.25 / la, eb = 0.25 / lb;
+        return t > ea && t < 1 - ea && u > eb && u < 1 - eb ? [x1 + t * (x2 - x1), y1 + t * (y2 - y1)] : null;
+      };
+      const done = new Set();
+      for (const ids of grid.values()) for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) {
+        const a = AL[ids[i]], b = AL[ids[j]];
+        if (a.g === b.g || (a.og !== undefined && (a.og === b.g || a.og === b.og)) || (b.og !== undefined && b.og === a.g)) continue;
+        const key = Math.min(a.g, b.g) + '/' + Math.max(a.g, b.g); if (done.has(key)) continue;
+        const pt = cross(a, b); if (!pt) continue;
+        done.add(key);
+        const ka = KIND[kindOf[a.g]] || kindOf[a.g] || 'обозначение', kb = KIND[kindOf[b.g]] || kindOf[b.g] || 'обозначение';
+        const ta = (P.find(t => t.t === 'T' && t.g === a.g) || {}).s, tb = (P.find(t => t.t === 'T' && t.g === b.g) || {}).s;
+        add('error', 'пересечение обозначений', `${ka}${ta ? ' «' + short(ta) + '»' : ''} пересекает ${kb}${tb ? ' «' + short(tb) + '»' : ''}`, pt);
       }
     }
     // 5. геометрия за рамкой и в основной надписи

@@ -1067,18 +1067,12 @@
       if (E) lab(E.sh, kt2);
       return { S, G2, E, onlyE: listE.length > 0 };
     };
-    // общая точка для проекционной связи при разных масштабах — середина между осями валов
-    const mid = ax => A.shafts.reduce((s, q) => s + dot(q.pos, ax), 0) / Math.max(1, A.shafts.length);
-    const al = (dRef, kRef, kNew, c) => dRef + c * (kRef - kNew);
-    // сначала — раскладки со всеми видами (вид с лапами нужен для установочных размеров), только потом — без третьего вида
-    // масштаб видов: «как в методичке» — главный вид крупнее, неосновные при нехватке места мельче;
-    // «единый» (настройка) — сначала только раскладки, где все виды в одном масштабе, и лишь если такой нет — как в методичке
-    const passes = (C.opts || {}).scaleUniform ? ['u', 'm'] : ['m'];
-    for (const pass of passes) for (const needE of (V.extra ? [true, false] : [false])) for (const fmt of ['A1']) for (const [k, kt] of SC) for (const [k2] of SC.filter(q => pass === 'u' ? q[0] === k : q[0] <= k)) {
-      const B = build(k, k2);
+    // все виды — в масштабе главного (ГОСТ 2.302: масштаб, указанный в основной надписи, общий для изображений);
+    // виды раскладываются блоком в проекционной связи, масштаб уменьшается, только если блок не помещается на лист
+    for (const needE of (V.extra ? [true, false] : [false])) for (const fmt of ['A1']) for (const [k, kt] of SC) {
+      const B = build(k, k);
       if (needE && !B.E) continue;
       const { S, G2, E } = B;
-      const DBG = root.ASMDBG ? (m => root.ASMDBG.push(kt + '/' + k2 + ' ' + m)) : () => {};
       for (const withE of (E ? [true, false] : [false])) {
         if (needE && !withE) continue;
         if (!withE && B.onlyE) break;                 // без третьего вида пропали бы позиции
@@ -1091,33 +1085,18 @@
         sh.notes(sh.stamp.x1 + 2, y0, W - 4, notes.req, { title: 'Технические требования' }); const rq = { x1: sh.stamp.x1, y1: y0 - 2, x2: f.x2 - 2, y2: y0 + h2 + 9 }; sh.occupy(rq, 2);
         y0 = rq.y2 + 8;
         sh.notes(sh.stamp.x1 + 2, y0, W - 4, notes.tech, { title: 'Техническая характеристика' }); sh.occupy({ x1: sh.stamp.x1, y1: y0 - 2, x2: f.x2 - 2, y2: y0 + h1 + 9 }, 2);
-        const mb = S.sh.bbox(0);
+        const views = [{ p: S.sh.p }];
+        let near;
         if (R.task === 6 && G2) {
-          // вид вдоль валов — вверху слева; основной разрез по разъёму — под ним (по горизонтали); вид слева — справа (по высоте)
-          const gb = G2.sh.bbox(0), cH = mid(V.main.u);
-          // основной разрез — внизу слева, над ним вид вдоль валов (по горизонтали в проекционной связи)
-          const gb0 = G2.sh.bbox(0), cH0 = mid(V.main.u), sL6 = Math.max(0, mb.x1 - (gb0.x1 + cH0 * (k - k2)));
-          const ps = DR.placeGroup(sh, S.sh.p, { near: [f.x1 + 10 + sL6 + (mb.x2 - mb.x1) / 2, f.y1 + 10 + (mb.y2 - mb.y1) / 2] });
-          if (!ps) { DBG('S ' + withE); continue; }
-          const pg = DR.placeGroup(sh, G2.sh.p, { fixX: al(ps.dx, k, k2, cH), near: [0, ps.box.y2 + 12 + (gb.y2 - gb.y1) / 2] });
-          if (!pg) { DBG('G2 ' + withE); continue; }
-          let pe = null;
-          if (withE) { const eb = E.sh.bbox(0); pe = DR.placeGroup(sh, E.sh.p, { fixY: pg.dy, near: [pg.box.x2 + 20 + (eb.x2 - eb.x1) / 2, 0] }); if (!pe) continue; }
-          return { sh, scale: kt, k, fmt };
+          // основной разрез по разъёму — внизу слева, над ним вид вдоль валов, справа от него — вид слева
+          views.push({ p: G2.sh.p, rel: 'above', of: 0 });
+          if (withE) views.push({ p: E.sh.p, rel: 'right', of: 1 });
+          near = (w, h) => [f.x1 + 10 + w / 2, f.y1 + 10 + h / 2];
+        } else {
+          if (G2) views.push({ p: G2.sh.p, rel: geo ? 'below' : 'right', of: 0 });
+          if (withE) views.push({ p: E.sh.p, rel: R.task === 1 ? 'right' : 'below', of: 0 });
         }
-        // вид под основным (по X) может быть шире слева — основной сдвигается вправо
-        const below = geo ? G2 : (withE ? E : null), cX = mid(V.main.u);
-        const sLb = below ? Math.max(0, mb.x1 - (below.sh.bbox(0).x1 + cX * (k - k2))) : 0;
-        const pl = DR.placeGroup(sh, S.sh.p, { near: [f.x1 + 10 + sLb + (mb.x2 - mb.x1) / 2, f.y2 - 10 - (mb.y2 - mb.y1) / 2] });
-        if (!pl) continue;
-        let p2 = null;
-        if (G2) {
-          const gb = G2.sh.bbox(0);
-          p2 = geo ? DR.placeGroup(sh, G2.sh.p, { fixX: al(pl.dx, k, k2, mid([1, 0, 0])), near: [0, pl.box.y1 - 12 - (gb.y2 - gb.y1) / 2] }) : DR.placeGroup(sh, G2.sh.p, { fixY: al(pl.dy, k, k2, mid(V.main.v)), near: [pl.box.x2 + 20 + (gb.x2 - gb.x1) / 2, 0] });
-          if (!p2) continue;
-        }
-        let pe = null;
-        if (withE) { const eb = E.sh.bbox(0); pe = R.task === 1 ? DR.placeGroup(sh, E.sh.p, { fixY: al(pl.dy, k, k2, mid(V.main.v)), near: [pl.box.x2 + 20 + (eb.x2 - eb.x1) / 2, 0] }) : DR.placeGroup(sh, E.sh.p, { fixX: al(pl.dx, k, k2, mid(V.main.u)), near: [0, pl.box.y1 - 12 - (eb.y2 - eb.y1) / 2] }); if (!pe) continue; }
+        if (!DR.placeViews(sh, views, { near })) continue;
         return { sh, scale: kt, k, fmt };
       }
     }

@@ -154,6 +154,15 @@
     return t0 <= t1;
   }
   function rectsHit(a, b) { return a.x1 < b.x2 && a.x2 > b.x1 && a.y1 < b.y2 && a.y2 > b.y1; }
+  /* отрезки пересекаются во внутренних точках обоих (касание концами и наложение вдоль не считаются) */
+  function segCross(p, q) {
+    const [x1, y1, x2, y2] = p, [x3, y3, x4, y4] = q;
+    if (Math.max(x1, x2) < Math.min(x3, x4) || Math.max(x3, x4) < Math.min(x1, x2) || Math.max(y1, y2) < Math.min(y3, y4) || Math.max(y3, y4) < Math.min(y1, y2)) return false;
+    const d = (x2 - x1) * (y4 - y3) - (y2 - y1) * (x4 - x3); if (Math.abs(d) < 1e-9) return false;
+    const t = ((x3 - x1) * (y4 - y3) - (y3 - y1) * (x4 - x3)) / d, u = ((x3 - x1) * (y2 - y1) - (y3 - y1) * (x2 - x1)) / d;
+    const ea = 0.25 / (Math.hypot(x2 - x1, y2 - y1) || 1), eb = 0.25 / (Math.hypot(x4 - x3, y4 - y3) || 1);
+    return t > ea && t < 1 - ea && u > eb && u < 1 - eb;
+  }
   function collOv(a, G) {
     const len = Math.hypot(a[2] - a[0], a[3] - a[1]); if (len < 1) return 0;
     const ux = (a[2] - a[0]) / len, uy = (a[3] - a[1]) / len;
@@ -187,8 +196,9 @@
     { let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
       for (const q of added) { const b = pbox(q); if (!b) continue; if (b[0] < x1) x1 = b[0]; if (b[1] < y1) y1 = b[1]; if (b[2] > x2) x2 = b[2]; if (b[3] > y2) y2 = b[3]; }
       if (x1 !== Infinity) { x1 -= 1; y1 -= 1; x2 += 1; y2 += 1; old = old.filter(q => { const b = pbox(q); return !b || !(b[2] < x1 || b[0] > x2 || b[3] < y1 || b[1] > y2); }); } }
-    const T = added.filter(q => q.t === 'T').map(q => textRect(q, -0.7));
-    const OT = old.filter(q => q.t === 'T').map(q => textRect(q, 0));
+    const boxR = (q, pad) => ({ x1: q.a[0] + pad, y1: q.a[1] + pad, x2: q.a[2] - pad, y2: q.a[3] - pad });
+    const T = added.filter(q => q.t === 'T').map(q => textRect(q, -0.7)).concat(added.filter(q => q.t === 'B').map(q => boxR(q, 0.3)));
+    const OT = old.filter(q => q.t === 'T').map(q => textRect(q, 0)).concat(old.filter(q => q.t === 'B').map(q => boxR(q, 0)));
     const OL = old.filter(q => q.t === 'L' && (q.s !== 3 || withAxes));
     const OC = old.filter(q => (q.t === 'C' || q.t === 'A') && q.a[2] > 1);
     for (const r of T) {
@@ -206,6 +216,15 @@
     // размерные линии разных размеров не совпадают
     const DL = old.filter(q => q.t === 'L' && q.dl);
     if (DL.length) for (const q of added) if (q.t === 'L' && q.dl && collOv(q.a, DL) > 0.5) { n += 3; if (stopAt1) return n; }
+    // линии разных обозначений не пересекаются: размерные и выносные (ГОСТ 2.307 п. 5.10), линии-выноски позиций (ГОСТ 2.109 п. 7.6)
+    const AL = old.filter(q => q.t === 'L' && q.g !== undefined && q.s !== 3);
+    if (AL.length) for (const q of added) {
+      if (q.t !== 'L' || q.g === undefined || q.s === 3) continue;
+      for (const b of AL) {
+        if (b.g === q.g || (q.og !== undefined && (q.og === b.g || q.og === b.og)) || (b.og !== undefined && b.og === q.g)) continue;
+        if (segCross(q.a, b.a)) { n += 2; if (stopAt1) return n; }
+      }
+    }
     return n;
   };
   /* попробовать варианты: первый без наложений; иначе — вариант с наименьшим числом наложений */
@@ -241,7 +260,7 @@
     const recs = (this._atts || []).filter(r => r.fns.length > 1 && r.prims.length);
     let moved = 0;
     const P = this.p;
-    for (let it = 0; it < (maxIter || 4); it++) {
+    for (let it = 0; it < (maxIter || 12); it++) {
       let changed = false;
       for (const r of recs) {
         const own = new Set(r.prims);
@@ -603,6 +622,7 @@
     const ws = [hh].concat(cells.slice(1).map(c => tw(c, h) + 3));
     const W = ws.reduce((a, b) => a + b, 0);
     this.rect(x, y, x + W, y + hh, 1);
+    this.p.push({ t: 'B', a: [x, y, x + W, y + hh] });   // габарит рамки: для проверки наложений как надпись (в чертёж не выводится)
     let cx = x;
     ws.forEach((w, i) => {
       if (i) this.line(cx, y, cx, y + hh, 1);
@@ -635,6 +655,7 @@
     this.line(x + c * a * 0.866, y + s * a * 0.866, ex, ey, 2);
     const bx = ex + c * 3.5, by = ey + s * 3.5;
     this.rect(bx - 3.5, by - 3.5, bx + 3.5, by + 3.5, 1);
+    this.p.push({ t: 'B', a: [bx - 3.5, by - 3.5, bx + 3.5, by + 3.5] });
     this.text(bx, by, letter, { h: 3.5, anchor: 'cm' });
     // для КОМПАС — объект «Обозначение базы»: знак на поверхности, конец выноски у рамки, буква
     this.p.push({ t: 'D', k: 'B', a: [r3(x), r3(y), r3(ex), r3(ey)], s: String(letter), h: 3.5 });
