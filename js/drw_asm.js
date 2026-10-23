@@ -1570,12 +1570,7 @@
             const hN = notesH(notes, 185);
             sh.notes(sh.stamp.x1 + 2, sh.stamp.y2 + 6, 180, notes); sh.occupy({ x1: sh.stamp.x1, y1: sh.stamp.y2 + 4, x2: f.x2 - 2, y2: sh.stamp.y2 + 8 + hN }, 2);
           }
-          const eb = El.sh.bbox(0);
-          const p1 = DR.placeGroup(sh, El.sh.p, { near: [f.x1 + 10 + (eb.x2 - eb.x1) / 2, f.y2 - 10 - (eb.y2 - eb.y1) / 2] });
-          if (!p1) continue;
-          const pb = Pl.sh.bbox(0);
-          const p2 = DR.placeGroup(sh, Pl.sh.p, { fixX: p1.dx, near: [p1.box.x1 + (pb.x2 - pb.x1) / 2, p1.box.y1 - 10 - (pb.y2 - pb.y1) / 2] });
-          if (!p2) continue;
+          if (!DR.placeViews(sh, [{ p: El.sh.p }, { p: Pl.sh.p, rel: 'below', of: 0 }])) continue;
           done = { sh, scale: kt, fmt };
           break;
         }

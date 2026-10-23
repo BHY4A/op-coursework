@@ -185,12 +185,10 @@
         sh.occupy(sh.stamp, 2); sh.occupy(sh.reserved(), 2);
         let hN = 0; notes.forEach(t => { hN += C.wrap(String(t), 176, 3.5).length; }); hN = hN * 3.5 * 1.65;
         sh.notes(sh.stamp.x1 + 2, sh.stamp.y2 + 6, 180, notes); sh.occupy({ x1: sh.stamp.x1, y1: sh.stamp.y2 + 4, x2: f.x2 - 2, y2: sh.stamp.y2 + 8 + hN }, 2);
-        const fb = V.front.sh.bbox(0);
-        const sL = Math.max(0, fb.x1 - V.plan.sh.bbox(0).x1), p1 = DR.placeGroup(sh, V.front.sh.p, { near: [f.x1 + 15 + sL + (fb.x2 - fb.x1) / 2, f.y2 - 15 - (fb.y2 - fb.y1) / 2] });
-        if (!p1) continue;
-        const pb = V.plan.sh.bbox(0);
-        const p2_ = DR.placeGroup(sh, V.plan.sh.p, { fixX: p1.dx, near: [0, p1.box.y1 - 10 - (pb.y2 - pb.y1) / 2] });
-        if (!p2_) continue;
+        // главный вид и вид сверху (под ним) — единым блоком в проекционной связи
+        const PV = DR.placeViews(sh, [{ p: V.front.sh.p }, { p: V.plan.sh.p, rel: 'below', of: 0 }], { near: (w, h) => [f.x1 + 12 + w / 2, f.y2 - 12 - h / 2] });   // слева сверху: справа — место для вида А
+        if (!PV) continue;
+        const p1 = PV[0], p2_ = PV[1];
         // обозначение вида «А» и подпись — над видом, вместе с ним (чтобы при раскладке не легли на соседние надписи)
         if (!V.bottom.titled) { const b0 = V.bottom.sh.bbox(0), cx = (b0.x1 + b0.x2) / 2; V.bottom.sh.text(cx, b0.y2 + 3, 'Отверстия для крепления к полу', { h: 3.5, anchor: 'cb' }); V.bottom.sh.text(cx, b0.y2 + 10, 'А', { h: 7, anchor: 'cb' }); V.bottom.titled = true; }
         const bb = V.bottom.sh.bbox(0);

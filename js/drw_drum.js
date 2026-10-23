@@ -161,13 +161,8 @@
       sh.notes(sh.stamp.x1 + 2, y0, W - 4, req, { title: 'Технические требования' }); const rq = { x1: sh.stamp.x1, y1: y0 - 2, x2: f.x2 - 2, y2: y0 + hT(req) + 9 }; sh.occupy(rq, 2);
       y0 = rq.y2 + 8;
       sh.notes(sh.stamp.x1 + 2, y0, W - 4, tech, { title: 'Техническая характеристика' }); sh.occupy({ x1: sh.stamp.x1, y1: y0 - 2, x2: f.x2 - 2, y2: y0 + hT(tech) + 9 }, 2);
-      const mb = M.sh.bbox(0);
-      const p1 = DR.placeGroup(sh, M.sh.p, { near: [f.x1 + 15 + (mb.x2 - mb.x1) / 2, f.y2 - 15 - (mb.y2 - mb.y1) / 2] });
-      if (!p1) continue;
-      // вид А — справа от главного, на уровне оси
-      const sb = Sd.sh.bbox(0);
-      const p2 = DR.placeGroup(sh, Sd.sh.p, { near: [p1.box.x2 + 20 + (sb.x2 - sb.x1) / 2, p1.dy + (sb.y1 + sb.y2) / 2] });
-      if (!p2) continue;
+      // главный вид и вид А (справа, на уровне оси) — единым блоком
+      if (!DR.placeViews(sh, [{ p: M.sh.p }, { p: Sd.sh.p, rel: 'right', of: 0 }], { gapGeo: 20 })) continue;
       return { id: 'val_baraban_sb', file: 'val_baraban_SB.cdw', code: sp.code + ' СБ', name: 'Вал приводной с барабаном\nСборочный чертёж', material: '', mass: '', scale: kt, fmt, landscape: true, sh };
     }
     return null;
