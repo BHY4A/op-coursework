@@ -756,11 +756,11 @@
       RS.solve().edges.forEach(([x1, y1, x2, y2]) => sh.line(x1, y1, x2, y2, 1));
     });
     if (o.draw) pts.forEach(([x, y]) => { sh.circle(x, y, r, 1); sh.line(x - r - 2, y, x + r + 2, y, 3).line(x, y - r - 2, x, y + r + 2, 3); });
-    const bb = sh.geoBox();
+    const bb = sh.geoBox(), ob = sh.bbox(0);
     const xs = [...new Set(pts.map(p => Math.round(p[0] * 100) / 100))].sort((a, b) => a - b), ys = [...new Set(pts.map(p => Math.round(p[1] * 100) / 100))].sort((a, b) => a - b);
     const real = v => nf(v / k, 0);
-    if (xs.length > 1) { const y = ys[0]; sh.attempt([12, 21, 30].map(d => () => sh.dimH(xs[0], y, xs[xs.length - 1], y, Math.min(bb.y1, y - r) - d, real(xs[xs.length - 1] - xs[0])))); }
-    if (ys.length > 1) { const x = xs[xs.length - 1]; sh.attempt([12, 21, 30].map(d => () => sh.dimV(x, ys[0], x, ys[ys.length - 1], Math.max(bb.x2, x + r) + d, real(ys[ys.length - 1] - ys[0])))); }
+    if (xs.length > 1) { const y = ys[0]; sh.attempt([12, 21, 30].map(d => () => sh.dimH(xs[0], y, xs[xs.length - 1], y, Math.min(bb.y1, ob.y1, y - r) - d, real(xs[xs.length - 1] - xs[0])))); }
+    if (ys.length > 1) { const x = xs[xs.length - 1]; sh.attempt([12, 21, 30].map(d => () => sh.dimV(x, ys[0], x, ys[ys.length - 1], Math.max(bb.x2, ob.x2, x + r) + d, real(ys[ys.length - 1] - ys[0])))); }
     const h0 = pts.reduce((a, p) => (p[0] + p[1] < a[0] + a[1] ? p : a), pts[0]);
     sh.attempt([[-14, -14], [-14, 14], [14, -14], [-20, -8]].map(([dx, dy]) => () => sh.leader(h0[0] + Math.sign(dx) * r * 0.7, h0[1] + Math.sign(dy) * r * 0.7, h0[0] + dx, h0[1] + dy, `⌀${nf(feet.d, 0)}`, `${pts.length} отв.`, { side: dx > 0 ? 'r' : 'l' })));
   }
@@ -770,7 +770,7 @@
     if (!feet) return;
     const s = dot(V, feet.up); if (Math.abs(s) < 0.9) return;
     const N = [U[1] * V[2] - U[2] * V[1], U[2] * V[0] - U[0] * V[2], U[0] * V[1] - U[1] * V[0]];
-    const yF = s * feet.bottom * k, bb = sh.geoBox();
+    const yF = s * feet.bottom * k, bb = sh.geoBox(), ob = sh.bbox(0);   // ob — с обозначениями: размер за номерами позиций
     const seen = [];
     shafts.filter(q => Math.abs(dot(q.ax, V)) < 0.1).forEach(q => {
       const h = dot(q.pos, feet.up) - feet.bottom; if (seen.some(v => Math.abs(v - h) < 0.5) || (o.skip || []).some(v => Math.abs(v - h) < 0.5)) return;
@@ -780,7 +780,7 @@
       // размер — с той стороны вида, к которой ближе конец вала: выносная линия не пересекает изображение
       const opts = [];
       ends.forEach(pa => { const xa = dot(pa, U) * k, ya = dot(pa, V) * k, left = xa - bb.x1 <= bb.x2 - xa, i = seen.length - 1;
-        [0, 9, 18, 27].forEach(d => opts.push(left ? () => sh.dimV(bb.x1, yF, xa, ya, bb.x1 - 12 - 9 * i - d, nf(h, 1)) : () => sh.dimV(bb.x2, yF, xa, ya, bb.x2 + 12 + 9 * i + d, nf(h, 1)))); });
+        [0, 9, 18, 27].forEach(d => opts.push(left ? () => sh.dimV(bb.x1, yF, xa, ya, Math.min(bb.x1, ob.x1) - 12 - 9 * i - d, nf(h, 1)) : () => sh.dimV(bb.x2, yF, xa, ya, Math.max(bb.x2, ob.x2) + 12 + 9 * i + d, nf(h, 1)))); });
       sh.attempt(opts);
     });
   }
@@ -799,8 +799,9 @@
         const a = list[i], b = list[i + 1];
         const aw = Math.abs(horiz ? (b.o[1] - a.o[1]) : (b.o[0] - a.o[0])) / k;
         const txt = awText(R, aw);
-        if (horiz) { const x = bb0.x1 - 12 - i * 0; sh.attempt([0, 9, 18].map(d => () => sh.dimV(Math.min(a.P(-2, 0)[0], b.P(-2, 0)[0]), a.o[1], Math.min(a.P(-2, 0)[0], b.P(-2, 0)[0]), b.o[1], x - d, txt))); }
-        else { const y = bb0.y1 - 12; sh.attempt([0, 9, 18].map(d => () => sh.dimH(a.o[0], Math.min(a.P(-2, 0)[1], a.o[1]), b.o[0], Math.min(b.P(-2, 0)[1], b.o[1]), y - d, txt))); }
+        const ob = sh.bbox(0);   // за номерами позиций
+        if (horiz) { const x = Math.min(bb0.x1, ob.x1) - 12 - i * 0; sh.attempt([0, 9, 18].map(d => () => sh.dimV(Math.min(a.P(-2, 0)[0], b.P(-2, 0)[0]), a.o[1], Math.min(a.P(-2, 0)[0], b.P(-2, 0)[0]), b.o[1], x - d, txt))); }
+        else { const y = Math.min(bb0.y1, ob.y1) - 12; sh.attempt([0, 9, 18].map(d => () => sh.dimH(a.o[0], Math.min(a.P(-2, 0)[1], a.o[1]), b.o[0], Math.min(b.P(-2, 0)[1], b.o[1]), y - d, txt))); }
       }
     });
     // посадки: подшипники (наружное кольцо — H7, внутреннее — k6), колёса, выходные концы
@@ -980,8 +981,11 @@
     const FEET = (() => { try { return root.M3D.housing3d(R, P, T || {}).feet; } catch (e) { return null; } })();
     const geo = R.task === 1 && root.M3D ? (root.M3D.housing3d(R, P, T || {}) || {}).geo : null;
     const cr = (u, v) => [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
-    const mainSec = k => {
+    // hook(S) — после изображения и до размеров: позиции ставятся ближе к виду, наружные размеры — за ними
+    // (линии-выноски позиций пересекают только выносные линии этих размеров, что допускает ГОСТ 2.109 п. 7.6)
+    const mainSec = (k, hook) => {
       const S = geo ? sectionView(A, R, V.main, k, { extra: [{ x1: geo.flR.x1 * k, x2: geo.flR.x2 * k, y1: (geo.ys - geo.tf) * k, y2: (geo.ys + geo.tf) * k }], split: geo.ys * k }) : sectionView(A, R, V.main, k, MS ? { model: MS.main } : {});
+      let feetDim = null;
       if (geo) {
         // лапы корпуса (за плоскостью разреза): видимый контур ниже стенок
         const x1 = (geo.xW1 - geo.K1) * k, x2 = (geo.xW2 + geo.K1) * k, yF = geo.yFeet * k, yT = (geo.yBot + geo.pF) * k;
@@ -990,8 +994,10 @@
         const hline = (xa, xb, y) => { let segs = [[xa, xb]]; gaps.forEach(([a, b]) => { segs = segs.flatMap(([p, q]) => (b <= p || a >= q) ? [[p, q]] : [[p, a], [b, q]].filter(([u, v]) => v - u > 0.3)); }); segs.forEach(([p, q]) => S.sh.line(p, y, q, y, 1)); };
         S.sh.line(x1, yF, x2, yF, 1); hline(x1, geo.xW1 * k, yT); hline(geo.xW2 * k, x2, yT);
         S.sh.line(x1, yF, x1, yT, 1).line(x2, yF, x2, yT, 1);
-        S.sh.dimV(x1, yF, x1, geo.ys * k, x1 - 12, nf(geo.ys - geo.yFeet, 0));
+        feetDim = () => S.sh.dimV(x1, yF, x1, geo.ys * k, Math.min(x1, S.sh.bbox(0).x1) - 12, nf(geo.ys - geo.yFeet, 0));
       }
+      if (hook) hook(S);
+      if (feetDim) feetDim();
       sectionDims(S, R, R.task, k);
       // установочные размеры: высоты осей над опорной плоскостью (вид-фасад) или отверстия в лапах (разрез в плане)
       axisHeights(S.sh, k, V.main.u, V.main.v, FEET, A.shafts);
@@ -1013,7 +1019,7 @@
           else if (FEET && FEET.holes.length) { const h = FEET.holes.reduce((a, b) => Math.abs(dot(b, s.ax) - tA) < Math.abs(dot(a, s.ax) - tA) ? b : a); ref = s.pos.map((v, i) => v + s.ax[i] * (dot(h, s.ax) - dot(s.pos, s.ax))); }
           if (!ref) return;
           const a = P2(tip), b = P2(ref), L = Math.abs(dot(tip, s.ax) - dot(ref, s.ax)); if (L < 5) return;
-          const hor = Math.abs(dot(s.ax, U0)) > 0.9, bb = S.sh.geoBox();
+          const hor = Math.abs(dot(s.ax, U0)) > 0.9, bb = S.sh.bbox(0);
           if (hor) S.sh.attempt([12, 21, 30].flatMap(d => [() => S.sh.dimH(a[0], a[1], b[0], b[1], bb.y2 + d, nf(L, 1)), () => S.sh.dimH(a[0], a[1], b[0], b[1], bb.y1 - d, nf(L, 1))]));
           else S.sh.attempt([12, 21, 30].flatMap(d => [() => S.sh.dimV(a[0], a[1], b[0], b[1], bb.x2 + d, nf(L, 1)), () => S.sh.dimV(a[0], a[1], b[0], b[1], bb.x1 - d, nf(L, 1))]));
         });
@@ -1030,27 +1036,29 @@
     };
     // все виды при масштабах k1 (основной) и k2 (неосновные); позиции — без повторов между видами
     const build = (k1, k2) => {
-      const S = mainSec(k1);
+      const used = new Set(), list = [], list2 = [], listE = [];
+      const take = (items, arr) => items.forEach(it => { const p = find(it); if (p && !used.has(p)) { used.add(p); arr.push(Object.assign({ pos: p }, it)); } });
+      const Nm = cr(V.main.u, V.main.v);
+      const S = mainSec(k1, S => {
+        const cutM = A.shafts.length ? dot(A.shafts[0].pos, Nm) : 0;
+        accessories(S.sh, k1, F0, V.main.u, V.main.v, S.items, { cut: cutM });
+        extraFasteners(S.sh, k1, MF, V.main.u, V.main.v, S.items, { cut: cutM, draw: R.task === 3 });
+        take(S.items, list);
+        positions(S.sh, list);
+      });
       let G2 = null;
       const SBV = (C.opts.views && C.opts.views.sb) || {};
       if (SBV.second === false) { /* второй вид выключен в настройках */ }
       else if (V.side) G2 = sideView(A, R, k2 === k1 ? S : sectionView(A, R, V.main, k2), V.main, V.side, k2, MV);
       else if (geo && root.DRWVERT) G2 = root.DRWVERT.topView(A, R, geo, k2);
       else if (V.second) { G2 = sectionView(A, R, V.second, k2, MS && MS.second ? { model: MS.second } : {}); sectionDims(G2, R, R.task, k2); }
-      const Nm = cr(V.main.u, V.main.v), cutM = A.shafts.length ? dot(A.shafts[0].pos, Nm) : 0;
-      accessories(S.sh, k1, F0, V.main.u, V.main.v, S.items, { cut: cutM });
-      extraFasteners(S.sh, k1, MF, V.main.u, V.main.v, S.items, { cut: cutM, draw: R.task === 3 });
       if (G2 && V.side) accessories(G2.sh, k2, F0, V.side.h, V.side.up, G2.items, {});
       else if (G2 && geo) { accessories(G2.sh, k2, F0, [1, 0, 0], [0, 0, -1], G2.items, { lid: false }); extraFasteners(G2.sh, k2, MF, [1, 0, 0], [0, 0, -1], G2.items, { draw: false }); }
       else if (G2 && V.second) { const w = A.wheels.find(q => q.kind === 'wormwheel'); const N2 = cr(V.second.u, V.second.v); accessories(G2.sh, k2, F0, V.second.u, V.second.v, G2.items, { cut: w ? dot(w.pos, N2) : 0 }); const skip = new Set(S.items.filter(q => q.kind === 'boltSet').map(q => 'b' + q.d + 'x' + q.L)); extraFasteners(G2.sh, k2, MF, V.second.u, V.second.v, G2.items, { cut: w ? dot(w.pos, N2) : 0, hiddenFallback: true, skip }); }
-      const used = new Set(), list = [], list2 = [], listE = [];
-      const take = (items, arr) => items.forEach(it => { const p = find(it); if (p && !used.has(p)) { used.add(p); arr.push(Object.assign({ pos: p }, it)); } });
-      take(S.items, list);
       if (G2) take(G2.items, list2);
       const E = MX && V.extra && SBV.extra !== false ? modelView(A, R, MX, Fx, V.extra.u, V.extra.v, k2) : null;
       if (E) { take(E.items, listE); feetPlanDims(E.sh, k2, V.extra.u, V.extra.v, FEET, { draw: false }); }
       if (V.second && G2) { const w = A.wheels.find(q => q.kind === 'wormwheel'); if (w) { const bbm = S.sh.bbox(0); const x = dot(w.pos, V.main.u) * k1; S.sh.cutV(x, bbm.y1 - 2, bbm.y2 + 2, 'Б', 'r'); } }
-      positions(S.sh, list);
       if (G2) positions(G2.sh, list2);
       if (E) positions(E.sh, listE);
       // надписи над неосновными видами: Б–Б и масштаб, если он отличается от масштаба основного вида

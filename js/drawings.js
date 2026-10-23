@@ -320,6 +320,7 @@
       if (R.x1 < f.x1 + 1 || R.x2 > f.x2 - 1 || R.y1 < f.y1 + 1 || R.y2 > f.y2 - 1) continue;
       const near = occ.filter(z => overlaps(R, z));
       if (near.length && boxes.some(b => { const bb = { x1: b.x1 + dx, y1: b.y1 + dy, x2: b.x2 + dx, y2: b.y2 + dy }; return near.some(z => overlaps(bb, z)); })) continue;
+      if (o.dry) return { dx, dy, box: R };
       prims.forEach(q => sh.p.push(shiftPrim(q, dx, dy)));
       boxes.forEach(b => sh.occupy({ x1: b.x1 + dx, y1: b.y1 + dy, x2: b.x2 + dx, y2: b.y2 + dy }, 1.5));
       return { dx, dy, box: R };
@@ -333,40 +334,45 @@
   function placeViews(sh, views, o) {
     o = o || {};
     const gap = o.gap === undefined ? 8 : o.gap, gapG = o.gapGeo === undefined ? 15 : o.gapGeo;
-    // заведомо не помещается (сумма габаритов видов вдоль связей) — без перестановки обозначений
-    {
-      const f = sh.frame, bs = views.map(v => primsBox(sh, v.p));
-      let w = bs[0].x2 - bs[0].x1, h = bs[0].y2 - bs[0].y1;
-      views.forEach((v, i) => { if (!i) return; const b = bs[i]; if (v.rel === 'right' || v.rel === 'left') w += (b.x2 - b.x1) * 0.6; else h += (b.y2 - b.y1) * 0.6; });
-      if (w > (f.x2 - f.x1) * 1.08 || h > (f.y2 - f.y1) * 1.08) return null;
-    }
-    const V = views.map(v => {
-      if (v.p && v.p._sh && v.p._sh.repair && !v.p._sh._repaired) { v.p._sh.repair(); v.p._sh._repaired = true; }
-      const bx = v.p.map(q => primBox(sh, q)).filter(Boolean);
-      const gb = v.p.filter(q => (q.t === 'L' || q.t === 'C' || q.t === 'A') && q.g === undefined).map(q => primBox(sh, q));
-      const un = a => a.reduce((m, b) => ({ x1: Math.min(m.x1, b.x1), y1: Math.min(m.y1, b.y1), x2: Math.max(m.x2, b.x2), y2: Math.max(m.y2, b.y2) }), { x1: Infinity, y1: Infinity, x2: -Infinity, y2: -Infinity });
-      return { bx, all: un(bx), geo: gb.length ? un(gb) : un(bx) };
-    });
-    const off = [[0, 0]];
-    const sb = (b, d) => ({ x1: b.x1 + d[0], y1: b.y1 + d[1], x2: b.x2 + d[0], y2: b.y2 + d[1] });
-    for (let i = 1; i < views.length; i++) {
-      const v = views[i], j = v.of || 0, d = v.d || 0, me = V[i];
-      const hor = v.rel === 'right' || v.rel === 'left', sgn = v.rel === 'right' || v.rel === 'above' ? 1 : -1;
-      const placed = []; for (let m = 0; m < i; m++) V[m].bx.forEach(b => placed.push(sb(b, off[m])));
-      const gj = sb(V[j].geo, off[j]);
-      let o2 = hor ? off[j][1] + d : off[j][0] + d;                 // вдоль связи — как у соседа
-      // поперёк связи: геометрия видов не ближе gapG, обозначения разных видов — не ближе gap
-      let s = hor ? (sgn > 0 ? gj.x2 + gapG - me.geo.x1 : gj.x1 - gapG - me.geo.x2) : (sgn > 0 ? gj.y2 + gapG - me.geo.y1 : gj.y1 - gapG - me.geo.y2);
-      for (const b of me.bx) for (const a of placed) {
-        if (hor) { if (b.y1 + o2 >= a.y2 + gap || b.y2 + o2 <= a.y1 - gap) continue; s = sgn > 0 ? Math.max(s, a.x2 + gap - b.x1) : Math.min(s, a.x1 - gap - b.x2); }
-        else { if (b.x1 + o2 >= a.x2 + gap || b.x2 + o2 <= a.x1 - gap) continue; s = sgn > 0 ? Math.max(s, a.y2 + gap - b.y1) : Math.min(s, a.y1 - gap - b.y2); }
+    const f = sh.frame;
+    // раскладка видов по габаритам их примитивов; rep — сначала переставить обозначения видов (дорого)
+    const lay = rep => {
+      const V = views.map(v => {
+        if (rep && v.p && v.p._sh && v.p._sh.repair && !v.p._sh._repaired) { v.p._sh.repair(); v.p._sh._repaired = true; }
+        const bx = v.p.map(q => primBox(sh, q)).filter(Boolean);
+        const gb = v.p.filter(q => (q.t === 'L' || q.t === 'C' || q.t === 'A') && q.g === undefined).map(q => primBox(sh, q));
+        const un = a => a.reduce((m, b) => ({ x1: Math.min(m.x1, b.x1), y1: Math.min(m.y1, b.y1), x2: Math.max(m.x2, b.x2), y2: Math.max(m.y2, b.y2) }), { x1: Infinity, y1: Infinity, x2: -Infinity, y2: -Infinity });
+        return { bx, all: un(bx), geo: gb.length ? un(gb) : un(bx) };
+      });
+      const off = [[0, 0]];
+      const sb = (b, d) => ({ x1: b.x1 + d[0], y1: b.y1 + d[1], x2: b.x2 + d[0], y2: b.y2 + d[1] });
+      for (let i = 1; i < views.length; i++) {
+        const v = views[i], j = v.of || 0, d = v.d || 0, me = V[i];
+        const hor = v.rel === 'right' || v.rel === 'left', sgn = v.rel === 'right' || v.rel === 'above' ? 1 : -1;
+        const placed = []; for (let m = 0; m < i; m++) V[m].bx.forEach(b => placed.push(sb(b, off[m])));
+        const gj = sb(V[j].geo, off[j]);
+        let o2 = hor ? off[j][1] + d : off[j][0] + d;                 // вдоль связи — как у соседа
+        // поперёк связи: геометрия видов не ближе gapG, обозначения разных видов — не ближе gap
+        let s = hor ? (sgn > 0 ? gj.x2 + gapG - me.geo.x1 : gj.x1 - gapG - me.geo.x2) : (sgn > 0 ? gj.y2 + gapG - me.geo.y1 : gj.y1 - gapG - me.geo.y2);
+        for (const b of me.bx) for (const a of placed) {
+          if (hor) { if (b.y1 + o2 >= a.y2 + gap || b.y2 + o2 <= a.y1 - gap) continue; s = sgn > 0 ? Math.max(s, a.x2 + gap - b.x1) : Math.min(s, a.x1 - gap - b.x2); }
+          else { if (b.x1 + o2 >= a.x2 + gap || b.x2 + o2 <= a.x1 - gap) continue; s = sgn > 0 ? Math.max(s, a.y2 + gap - b.y1) : Math.min(s, a.y1 - gap - b.y2); }
+        }
+        off.push(hor ? [s, o2] : [o2, s]);
       }
-      off.push(hor ? [s, o2] : [o2, s]);
+      const tot = V.reduce((m, v, i) => { const b = sb(v.all, off[i]); return { x1: Math.min(m.x1, b.x1), y1: Math.min(m.y1, b.y1), x2: Math.max(m.x2, b.x2), y2: Math.max(m.y2, b.y2) }; }, { x1: Infinity, y1: Infinity, x2: -Infinity, y2: -Infinity });
+      return { V, off, sb, W: tot.x2 - tot.x1, H: tot.y2 - tot.y1 };
+    };
+    // заведомо не помещается — без перестановки обозначений (она почти не меняет габарит)
+    {
+      const L0 = lay(false); if (L0.W > (f.x2 - f.x1) * 1.03 || L0.H > (f.y2 - f.y1) * 1.03) return null;
+      // и не находит места рядом с основной надписью и техническими требованиями
+      const m0 = []; views.forEach((v, i) => v.p.forEach(q => m0.push(shiftPrim(q, L0.off[i][0], L0.off[i][1]))));
+      if (!placeGroup(sh, m0, { dry: true })) return null;
     }
+    const { V, off, sb, W, H } = lay(true);
     const merged = [];
     views.forEach((v, i) => v.p.forEach(q => merged.push(shiftPrim(q, off[i][0], off[i][1]))));
-    const tot = V.reduce((m, v, i) => { const b = sb(v.all, off[i]); return { x1: Math.min(m.x1, b.x1), y1: Math.min(m.y1, b.y1), x2: Math.max(m.x2, b.x2), y2: Math.max(m.y2, b.y2) }; }, { x1: Infinity, y1: Infinity, x2: -Infinity, y2: -Infinity });
-    const f = sh.frame, W = tot.x2 - tot.x1, H = tot.y2 - tot.y1;
     if (W > f.x2 - f.x1 - 2 || H > f.y2 - f.y1 - 2) return null;
     // по умолчанию — ближе к середине поля чертежа (не прижимать к углу, когда лист свободен)
     const near = o.near ? o.near(W, H) : [(f.x1 + f.x2) / 2, (f.y1 + f.y2) / 2];
