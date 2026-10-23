@@ -784,13 +784,14 @@
       sh.attempt(opts);
     });
   }
-  function sectionDims(S, R, task, k) {
+  /* part: 'fits' — только посадки (по изображению, до номеров позиций), 'outer' — межосевые и габаритные (за позициями), без part — всё */
+  function sectionDims(S, R, task, k, part) {
     const sh = S.sh, inPlane = S.inPlane;
     const bb0 = sh.geoBox ? sh.geoBox() : sh.bbox(0);
     // межосевые расстояния между параллельными валами
     const par = inPlane.filter(s => !s.cartridge);
     const groups = {};
-    par.forEach(s => { const key = s.horiz ? 'h' : 'v'; (groups[key] = groups[key] || []).push(s); });
+    if (part !== 'fits') par.forEach(s => { const key = s.horiz ? 'h' : 'v'; (groups[key] = groups[key] || []).push(s); });
     Object.values(groups).forEach(list => {
       if (list.length < 2) return;
       const horiz = list[0].horiz;
@@ -805,7 +806,7 @@
       }
     });
     // посадки: подшипники (наружное кольцо — H7, внутреннее — k6), колёса, выходные концы
-    inPlane.forEach(s => {
+    if (part !== 'outer') inPlane.forEach(s => {
       // размер поперёк вала в сечении x; xa…xb — участок, в пределах которого размер можно сдвинуть
       const across = (x, r, txt, xa, xb) => {
         const xs = [x]; if (xa !== undefined) [0.3, 0.7, 0.4, 0.6, 0.15, 0.85, 0.25, 0.75].forEach(f => xs.push(xa + (xb - xa) * f)); else [1.5, -1.5, 3, -3].forEach(d => xs.push(x + d));
@@ -843,6 +844,7 @@
       });
     });
     // габаритные размеры разреза
+    if (part === 'fits') return;
     const bb = sh.bbox(0);
     sh.dimH(bb0.x1, bb0.y1, bb0.x2, bb0.y1, bb.y1 - 12, nf((bb0.x2 - bb0.x1) / k, 0) + '*');
     sh.dimV(bb0.x2, bb0.y1, bb0.x2, bb0.y2, bb.x2 + 12, nf((bb0.y2 - bb0.y1) / k, 0) + '*');
@@ -998,7 +1000,7 @@
       }
       if (hook) hook(S);
       if (feetDim) feetDim();
-      sectionDims(S, R, R.task, k);
+      sectionDims(S, R, R.task, k, hook ? 'outer' : undefined);
       // установочные размеры: высоты осей над опорной плоскостью (вид-фасад) или отверстия в лапах (разрез в плане)
       axisHeights(S.sh, k, V.main.u, V.main.v, FEET, A.shafts);
       if (FEET && Math.abs(dot(cr(V.main.u, V.main.v), FEET.up)) > 0.9) {
@@ -1043,6 +1045,8 @@
         const cutM = A.shafts.length ? dot(A.shafts[0].pos, Nm) : 0;
         accessories(S.sh, k1, F0, V.main.u, V.main.v, S.items, { cut: cutM });
         extraFasteners(S.sh, k1, MF, V.main.u, V.main.v, S.items, { cut: cutM, draw: R.task === 3 });
+        // посадки — до позиций: у выносок позиций вариантов больше, они обходят размеры
+        sectionDims(S, R, R.task, k1, 'fits');
         take(S.items, list);
         positions(S.sh, list);
       });
