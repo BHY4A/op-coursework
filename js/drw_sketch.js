@@ -433,7 +433,10 @@
           tp.dimV(b.x1, b.y1, b.x1, b.y2, b.x1 - 14, nf((b.y2 - b.y1) / k) + '*');
           const xs = [...new Set(D.floor.map(h => Math.round(h[0])))].sort((p, q) => p - q), ys = [...new Set(D.floor.map(h => Math.round(h[1])))].sort((p, q) => p - q);
           const yLow = SY > 0 ? ys[0] : ys[ys.length - 1];   // ряд отверстий, что ниже на листе
-          tp.dimH(xs[0] * k, SY * yLow * k, xs[xs.length - 1] * k, SY * yLow * k, Math.min(b.y1, SY * yLow * k) - 12, nf(xs[xs.length - 1] - xs[0]));
+          const yHigh = SY > 0 ? ys[ys.length - 1] : ys[0], xT = nf(xs[xs.length - 1] - xs[0]);
+          // под видом может уже стоять размер цепной передачи — тогда шаг отверстий над видом, от другого ряда
+          tp.attempt([...[12, 20].map(o => () => tp.dimH(xs[0] * k, SY * yLow * k, xs[xs.length - 1] * k, SY * yLow * k, Math.min(b.y1, SY * yLow * k) - o, xT)),
+            ...[12, 20].map(o => () => tp.dimH(xs[0] * k, SY * yHigh * k, xs[xs.length - 1] * k, SY * yHigh * k, Math.max(b.y2, SY * yHigh * k) + o, xT))]);
           tp.dimV(xs[xs.length - 1] * k, SY * ys[0] * k, xs[xs.length - 1] * k, SY * ys[ys.length - 1] * k, b.x2 + 12, nf(ys[ys.length - 1] - ys[0]));
           const h = D.floor[0];
           tp.attempt([[-14, 14], [-14, -14], [14, -14]].map(([dx, dy]) => () => tp.leader(h[0] * k + Math.sign(dx) * D.dF / 2 * k * 0.7, SY * h[1] * k + Math.sign(dy) * D.dF / 2 * k * 0.7, h[0] * k + dx, SY * h[1] * k + dy, `⌀${D.dF}`, `${D.floor.length} отв.`, { side: dx > 0 ? 'r' : 'l' })));
@@ -464,7 +467,10 @@
           const lenDim = (Q, sg) => Math.abs(Q[0][0] - Q[1][0]) > Math.abs(Q[0][1] - Q[1][1])
             ? () => sh.dimH(Q[0][0], Q[0][1], Q[1][0], Q[1][1], Q[0][1] + sg * 10, lTxt) : () => sh.dimV(Q[0][0], Q[0][1], Q[1][0], Q[1][1], Q[0][0] + sg * 10, lTxt);
           const sideC = Math.sign((C[0][0] - T0[0]) + (C[0][1] - T0[1])) || 1;
-          sh.attempt([10, 16, 24, 32].flatMap(o => [lenDim(C, sideC * o / 10), lenDim(C2, -sideC * o / 10)]));
+          // торец корпуса (крышки) у основания ступени: выносная линия легла бы на него — тогда размерная линия упирается прямо в торец (ГОСТ 2.307 п. 2.4)
+          const wallDim = (Q, sg, o) => () => { const ox = Math.sign(Q[0][0] - T0[0]) * o, oy = Math.sign(Q[0][1] - T0[1]) * o, a = [Q[0][0] + ox, Q[0][1] + oy];
+            if (Math.abs(Q[0][0] - Q[1][0]) > Math.abs(Q[0][1] - Q[1][1])) sh.dimH(a[0], a[1], Q[1][0], Q[1][1], a[1], lTxt, { fixed: true }); else sh.dimV(a[0], a[1], Q[1][0], Q[1][1], a[0], lTxt, { fixed: true }); };
+          sh.attempt([...[10, 16, 24, 32].flatMap(o => [lenDim(C, sideC * o / 10), lenDim(C2, -sideC * o / 10)]), ...[8, 12, 16].flatMap(o => [wallDim(C, 1, o), wallDim(C2, -1, o)])]);
           // высота оси выходного вала над полом (если вал горизонтальный и выше входного)
           if (oe.ax !== 2 && Math.abs(oe.c[2]) > 1) {
             const yb = (D.zTop - D.hc) * k, x = D.fx0 * k;   // рядом с высотой оси входного вала, слева
