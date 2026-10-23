@@ -353,7 +353,8 @@
     const tot = V.reduce((m, v, i) => { const b = sb(v.all, off[i]); return { x1: Math.min(m.x1, b.x1), y1: Math.min(m.y1, b.y1), x2: Math.max(m.x2, b.x2), y2: Math.max(m.y2, b.y2) }; }, { x1: Infinity, y1: Infinity, x2: -Infinity, y2: -Infinity });
     const f = sh.frame, W = tot.x2 - tot.x1, H = tot.y2 - tot.y1;
     if (W > f.x2 - f.x1 - 2 || H > f.y2 - f.y1 - 2) return null;
-    const near = o.near ? o.near(W, H) : [f.x1 + (o.margin || 10) + W / 2, f.y2 - (o.margin || 10) - H / 2];
+    // по умолчанию — ближе к середине поля чертежа (не прижимать к углу, когда лист свободен)
+    const near = o.near ? o.near(W, H) : [(f.x1 + f.x2) / 2, (f.y1 + f.y2) / 2];
     const pl = placeGroup(sh, merged, { near });
     if (!pl) return null;
     return V.map((v, i) => ({ dx: off[i][0] + pl.dx, dy: off[i][1] + pl.dy, box: sb(v.all, [off[i][0] + pl.dx, off[i][1] + pl.dy]) }));

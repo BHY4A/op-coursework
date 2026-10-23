@@ -407,18 +407,16 @@
       sh.notes(sh.stamp.x1 + 2, y0, W - 4, tech, { title: 'Техническая характеристика' }); sh.occupy({ x1: sh.stamp.x1, y1: y0 - 2, x2: f.x2 - 2, y2: y0 + hT(tech) + 9 }, 2);
       // расположение видов по ГОСТ 2.305: сверху — под главным, снизу — над ним, слева — справа от главного,
       // справа — слева от него, сзади — правее вида слева; все в проекционной связи
-      const G = vw => V.res[vw] && V.res[vw].sh, BX = vw => G(vw) ? G(vw).bbox(0) : null, Wd = b => b ? b.x2 - b.x1 : 0, H = b => b ? b.y2 - b.y1 : 0;
-      const fb = fr.bbox(0), tb = BX('top'), bb = BX('bottom'), rb = BX('right');
-      const sL = Math.max(0, tb ? fb.x1 - tb.x1 : 0, bb ? fb.x1 - bb.x1 : 0) + (rb ? Wd(rb) + 20 : 0);
-      const p1 = DR.placeGroup(sh, fr.p, { near: [f.x1 + 15 + sL + Wd(fb) / 2, f.y2 - 15 - (bb ? H(bb) + 12 : 0) - H(fb) / 2] });
-      if (!p1) continue;
-      let ok = true, xr = p1.box.x2;
-      if (tb && !DR.placeGroup(sh, G('top').p, { fixX: p1.dx, near: [0, p1.box.y1 - 12 - H(tb) / 2] })) ok = false;
-      if (ok && bb && !DR.placeGroup(sh, G('bottom').p, { fixX: p1.dx, near: [0, p1.box.y2 + 12 + H(bb) / 2] })) ok = false;
-      if (ok && G('left')) { const lb = BX('left'), q = DR.placeGroup(sh, G('left').p, { fixY: p1.dy, near: [p1.box.x2 + 20 + Wd(lb) / 2, 0] }); if (!q) ok = false; else xr = q.box.x2; }
-      if (ok && rb && !DR.placeGroup(sh, G('right').p, { fixY: p1.dy, near: [p1.box.x1 - 20 - Wd(rb) / 2, 0] })) ok = false;
-      if (ok && G('back')) { const kb = BX('back'); if (!DR.placeGroup(sh, G('back').p, { fixY: p1.dy, near: [xr + 20 + Wd(kb) / 2, 0] })) ok = false; }
-      if (!ok) continue;
+      // виды ставятся единым блоком: каждый вплотную к главному в проекционной связи, затем блок — на свободное место листа
+      const G = vw => V.res[vw] && V.res[vw].sh;
+      const vs = [{ p: fr.p }];
+      if (G('top')) vs.push({ p: G('top').p, rel: 'below', of: 0 });
+      if (G('bottom')) vs.push({ p: G('bottom').p, rel: 'above', of: 0 });
+      let iL = -1;
+      if (G('left')) { iL = vs.length; vs.push({ p: G('left').p, rel: 'right', of: 0 }); }
+      if (G('right')) vs.push({ p: G('right').p, rel: 'left', of: 0 });
+      if (G('back')) vs.push({ p: G('back').p, rel: 'right', of: iL >= 0 ? iL : 0 });
+      if (!DR.placeViews(sh, vs, { gapGeo: 20 })) continue;
       return { id: meta.id, file: meta.file, name: (root.DATA.TASKS[P.task] || {}).title || 'Привод', nameSub: meta.nameSub, scale: kt, fmt, landscape: land, sh };
     }
     return null;
