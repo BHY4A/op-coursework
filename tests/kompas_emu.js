@@ -12,14 +12,18 @@ const args = process.argv.slice(2);
 const pngDir = args.includes('--png') ? args[args.indexOf('--png') + 1] : null;
 const sel = (args[0] && !args[0].startsWith('--') ? args[0] : '4,16,22').toLowerCase();
 const vars = sel === 'all' ? Array.from({ length: 26 }, (_, i) => i + 1) : sel.split(',').map(Number);
+// --opt '{"O": {…}, "T": {…}}' — сочетание расчётных настроек и настроек чертежей (tests/combos.js)
+const OPT = args.includes('--opt') ? JSON.parse(args[args.indexOf('--opt') + 1]) : {};
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'kemu-'));
 let bad = 0;
 const tot = {};
 for (const v of vars) {
-  const P = TC.defaults(v), R = TC['task' + P.task](P);
+  const P = TC.defaults(v);
+  Object.assign(P.O, OPT.O || {});
+  const R = TC['task' + P.task](P);
   const dir = path.join(tmp, 'v' + v), out = path.join(dir, 'out');
   fs.mkdirSync(dir, { recursive: true });
-  for (const f of ctx.KOMPAS.files(R, P, {})) if (f.path === '30_drawings.py') fs.writeFileSync(path.join(dir, f.path), f.gen());
+  for (const f of ctx.KOMPAS.files(R, P, OPT.T || {})) if (f.path === '30_drawings.py') fs.writeFileSync(path.join(dir, f.path), f.gen());
   const t0 = Date.now();
   const r = cp.spawnSync('python3', [path.join(__dirname, 'kompas_emu', 'run.py'), path.join(dir, '30_drawings.py'), out], { encoding: 'utf8', timeout: 900000 });
   let rep = null;

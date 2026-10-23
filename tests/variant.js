@@ -4,14 +4,18 @@
 const { load } = require('./load');
 
 const no = +process.argv[2];
+// необязательный третий аргумент — сочетание настроек: {"O": {расчётные настройки}, "T": {настройки чертежей}}
+const OPT = process.argv[3] ? JSON.parse(process.argv[3]) : {};
 const ctx = load();
 const out = { no, sheets: {}, specs: 0, fails: [], ms: 0 };
 const fail = m => out.fails.push(m);
 const t0 = Date.now();
 try {
-  const TC = ctx.TASKS_CALC, P = TC.defaults(no), R = TC['task' + P.task](P);
+  const TC = ctx.TASKS_CALC, P = TC.defaults(no);
+  Object.assign(P.O, OPT.O || {});
+  const R = TC['task' + P.task](P);
   out.task = P.task;
-  const K = ctx.KOMPAS, T = { student: 'Тест', group: '741-15' };
+  const K = ctx.KOMPAS, T = Object.assign({ student: 'Тест', group: '741-15' }, OPT.T || {});
   const S = K.sheets(R, P, T);
   const ids = S.list.map(d => d.id);
   // обязательные листы
@@ -41,7 +45,7 @@ try {
   if (!sp.length) fail('нет спецификаций');
   sp.forEach(d => { if (!d.sh.p.length) fail(`пустая спецификация ${d.id}`); });
   // режим «без размеров»: ни одного размера на СБ редуктора (проверяется на первом варианте каждого задания — это вторая полная сборка листов)
-  if (no % 10 === 1) {
+  if (no % 10 === 1 && !process.argv[3]) {
   const Snd = K.sheets(R, P, Object.assign({}, T, { noDims: true }));
   const sb = Snd.list.find(d => d.id === 'reduktor_sb');
   if (sb && sb.sh.p.some(q => q.t === 'T' && /^⌀|±/.test(String(q.s)))) fail('режим «без размеров»: на СБ остались размеры');

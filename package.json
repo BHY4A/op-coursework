@@ -5,7 +5,8 @@
   "scripts": {
     "test": "node tests/run.js",
     "test:update": "node tests/run.js --update",
-    "test:kompas": "node tests/kompas_emu.js"
+    "test:kompas": "node tests/kompas_emu.js",
+    "test:combos": "node tests/combos.js"
   },
   "engines": { "node": ">=18" }
 }

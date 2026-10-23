@@ -10,7 +10,7 @@ import os, sys, re, json, queue, threading, subprocess, datetime, traceback, run
 
 APP = 'KOMPAS Build'
 EDU_URL = 'https://kompas.ru/kompas-educational/about/'   # КОМПАС-3D Учебная версия (бесплатная)
-VERSION = '1.4'
+VERSION = '1.5'
 
 # порядок как в 00_build_all.py: номера позиций чертежей берутся из спецификаций
 STEPS = [
@@ -403,7 +403,7 @@ def main_gui():
         tl = tk.Label(txt, text=title, font=FN['b'], fg=C['fg'], bg=bg, anchor='w')
         tl.pack(anchor='w')
         tk.Label(txt, text=desc + '  ·  ' + fn, font=FN['small'], fg=C['muted'], bg=bg, anchor='w').pack(anchor='w')
-        stl = tk.Label(row, text='', font=FN['small'], bg=bg, anchor='e', width=22)
+        stl = tk.Label(row, text='', font=FN['small'], bg=bg, anchor='e', width=34)
         stl.pack(side='right')
         for w in (row, txt, tl):
             w.bind('<Button-1>', lambda e, v=var: (not st['running']) and v.set(not v.get()))
@@ -690,6 +690,7 @@ def main_gui():
                 if kind == 'begin':
                     r, k, n, sub = ev[1], ev[2], ev[3], ev[4]
                     st['cur'] = r
+                    st['tb0'] = datetime.datetime.now()
                     st['results'].setdefault(r['fn'], dict(fail=0, warn=0, mis=0, tb=False))
                     set_status(r, ('идёт: %s' % sub) if sub else 'идёт…', 'accent2')
                     set_no(r, 'run')
@@ -708,6 +709,10 @@ def main_gui():
                 elif kind == 'end':
                     r, code = ev[1], ev[2]
                     res = st['results'][r['fn']]
+                    # время этапа — в окне и в журнале (по сумме прогонов в отладке)
+                    res['sec'] = res.get('sec', 0) + (datetime.datetime.now() - st['tb0']).total_seconds()
+                    took = ' · %d мин %02d с' % (res['sec'] // 60, res['sec'] % 60) if res['sec'] >= 60 else ' · %d с' % res['sec']
+                    log_line('<<< %s: %d с' % (r['fn'], (datetime.datetime.now() - st['tb0']).total_seconds()), 'muted')
                     if st['stop']:
                         set_status(r, 'остановлен', 'warn')
                         set_no(r, 'warn')
@@ -718,10 +723,10 @@ def main_gui():
                         set_status(r, 'не выполнено шагов: %d' % res['fail'], 'bad')
                         set_no(r, 'bad')
                     elif res['warn'] or res['mis']:
-                        set_status(r, 'готово, замечаний: %d' % (res['warn'] + res['mis']), 'warn')
+                        set_status(r, 'готово, замечаний: %d' % (res['warn'] + res['mis']) + took, 'warn')
                         set_no(r, 'warn')
                     else:
-                        set_status(r, 'готово', 'ok')
+                        set_status(r, 'готово' + took, 'ok')
                         set_no(r, 'ok')
                     draw_prog((ev[3] + 1) / ev[4])
                 elif kind == 'done':

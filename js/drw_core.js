@@ -219,18 +219,21 @@
   const GRIDS = new WeakMap(), GCS = 16;
   function gridPick(arr, x1, y1, x2, y2) {
     let g = GRIDS.get(arr);
-    if (!g || g.n !== arr.length) {
-      // сетка окупается со второго запроса к тому же набору
-      if (!g || g.n !== arr.length || !g.once) { GRIDS.set(arr, { n: arr.length, once: true }); return arr.filter(q => { const b = pbox(q); return !b || !(b[2] < x1 || b[0] > x2 || b[3] < y1 || b[1] > y2); }); }
-    }
-    if (!g.cells) {
+    // сетка окупается со второго запроса к тому же набору
+    if (!g) { GRIDS.set(arr, { n: arr.length, once: true }); return arr.filter(q => { const b = pbox(q); return !b || !(b[2] < x1 || b[0] > x2 || b[3] < y1 || b[1] > y2); }); }
+    const put = (g, i) => {
+      const b = pbox(arr[i]); if (!b) { g.free.push(i); return; }
+      const cx1 = Math.floor(b[0] / GCS), cx2 = Math.floor(b[2] / GCS), cy1 = Math.floor(b[1] / GCS), cy2 = Math.floor(b[3] / GCS);
+      for (let cx = cx1; cx <= cx2; cx++) for (let cy = cy1; cy <= cy2; cy++) { const k = cx * 65536 + cy; let c = g.cells.get(k); if (!c) g.cells.set(k, c = []); c.push(i); }
+    };
+    if (!g.cells || arr.length < g.n) {
       g = { n: arr.length, cells: new Map(), free: [] };
-      for (let i = 0; i < arr.length; i++) {
-        const b = pbox(arr[i]); if (!b) { g.free.push(i); continue; }
-        const cx1 = Math.floor(b[0] / GCS), cx2 = Math.floor(b[2] / GCS), cy1 = Math.floor(b[1] / GCS), cy2 = Math.floor(b[3] / GCS);
-        for (let cx = cx1; cx <= cx2; cx++) for (let cy = cy1; cy <= cy2; cy++) { const k = cx * 65536 + cy; let c = g.cells.get(k); if (!c) g.cells.set(k, c = []); c.push(i); }
-      }
+      for (let i = 0; i < arr.length; i++) put(g, i);
       GRIDS.set(arr, g);
+    } else if (arr.length > g.n) {
+      // лист растёт по мере простановки обозначений: в сетку добавляются только новые примитивы, без перестройки
+      for (let i = g.n; i < arr.length; i++) put(g, i);
+      g.n = arr.length;
     }
     const seen = new Set(g.free);
     const cx1 = Math.floor(x1 / GCS), cx2 = Math.floor(x2 / GCS), cy1 = Math.floor(y1 / GCS), cy2 = Math.floor(y2 / GCS);

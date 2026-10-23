@@ -796,10 +796,21 @@
       <h3>Шаг 1. Варианты</h3>
       <p><button class="btn sm" data-dbgp="all">Все 26</button> <button class="btn sm" data-dbgp="3">По одному на задание (№ 4, 12, 22)</button> <button class="btn sm" data-dbgp="cur">Только текущий (№ ${S.P.listNo})</button> <button class="btn sm" data-dbgp="none">Снять все</button> <span id="dbgn" class="hint"></span></p>
       ${rows}
+      <p class="hint">Настройки чертежей — текущие с этой страницы (раздел 5): ${esc(dbgSettings())}. Исходные данные вариантов — по умолчанию.</p>
+      <p><label class="dbg-c"><input type="checkbox" id="dbgmx"> Добавить ключевые сочетания настроек на текущем варианте (№ ${S.P.listNo}): все форматы листов А4–А0 и «все виды в одном масштабе» наоборот — ещё 5 прогонов</label></p>
       <h3>Шаг 2. Скачать — выберите один способ</h3>
       <div class="opt"><div class="opt-t"><b>Отладочный KOMPAS Build (.exe) — рекомендуется</b><span>Python не нужен. В окне уже отмечены спецификации, чертежи и калибровка эмулятора, 3D выключено (его можно включить). Варианты идут подряд, журнал подробный. В конце в папке результатов появится <b>debug_logs.zip</b> — его и пришлите. Время: калибровка ≈ 5 мин, затем ≈ 1 мин на вариант (все 26 — около получаса); с 3D — 5–15 мин на вариант.</span></div><div class="opt-c"><button class="btn primary" id="dbgexe">${dlIcon()} KOMPAS-Build-debug.exe</button></div></div>
       <div class="opt"><div class="opt-t"><b>Архив с макросами и bat (.zip)</b><span>Нужен свой Python с pywin32. Строит всё, включая 3D, PNG-снимки и DXF-копии листов; в конце — <b>debug_для_отправки.zip</b>. Время: 5–15 мин на вариант, все 26 — несколько часов.</span></div><div class="opt-c"><button class="btn" id="dbgzip">${dlIcon()} OP_KP_DEBUG.zip</button></div></div>
       <p><span id="dbgst" class="hint"></span></p>`;
+  }
+  /* настройки чертежей, которые уйдут в отладочный exe (как в разделе 5) */
+  function dbgSettings() {
+    const T = S.T || {}, DV = window.DRWCORE ? window.DRWCORE.opts.VIEWS_DEF : { vo: {}, sb: {} }, tv = T.views || {};
+    const off = g => Object.entries(Object.assign({}, DV[g], tv[g] || {})).filter(([, v]) => !v).length;
+    const nOff = Object.keys(T.koff || {}).length, vOff = off('vo') + off('sb');
+    return ['формат ' + (T.sheetFmt || 'A1').replace('A', 'А'), T.kompasDims === 'lines' ? 'обозначения отрезками' : 'обозначения объектами КОМПАС',
+      T.noDims ? 'без размеров' : 'с размерами', T.scaleUniform ? 'виды в одном масштабе' : 'масштаб видов как в методичке',
+      vOff ? 'выключено видов: ' + vOff : 'все виды', nOff ? 'выключено элементов состава: ' + nOff : 'полный состав'].join(', ');
   }
   function bindDebug(main) {
     if (!dbgOn() || !$('#dbgzip', main)) return;
@@ -810,28 +821,62 @@
     $$('[data-dbgp]', main).forEach(b => b.onclick = () => { const m = b.dataset.dbgp; boxes().forEach(c => { const no = +c.dataset.dbgno; c.checked = m === 'all' ? true : m === 'none' ? false : m === 'cur' ? no === S.P.listNo : [4, 12, 22].includes(no); }); cnt(); });
     $('#dbgexe', main).onclick = async () => {
       const btn = $('#dbgexe', main), st = $('#dbgst', main);
-      const list = boxes().filter(c => c.checked).map(c => Object.assign({ no: +c.dataset.dbgno }, D.byListNo(+c.dataset.dbgno)));
-      if (!list.length) { st.textContent = 'Отметьте хотя бы один вариант.'; return; }
+      const T0 = JSON.parse(JSON.stringify(S.T || {}));
+      const jobs = boxes().filter(c => c.checked).map(c => ({ no: +c.dataset.dbgno, T: T0, suf: '' }));
+      if ($('#dbgmx', main) && $('#dbgmx', main).checked) {
+        // ключевые сочетания настроек чертежей на текущем варианте: все форматы листов и «один масштаб» наоборот
+        const sf = T0.sheetFmt || 'A1';
+        ['A4', 'A3', 'A2', 'A1', 'A0'].filter(f => f !== sf).forEach(f => jobs.push({ no: S.P.listNo, T: Object.assign({}, T0, { sheetFmt: f }), suf: '_' + f }));
+        jobs.push({ no: S.P.listNo, T: Object.assign({}, T0, { scaleUniform: !T0.scaleUniform }), suf: T0.scaleUniform ? '_scale_free' : '_scale_one' });
+      }
+      if (!jobs.length) { st.textContent = 'Отметьте хотя бы один вариант.'; return; }
       btn.disabled = true;
+      const workers = [];
       try {
-        const exe = await builderExe(); if (!exe) { st.textContent = 'Не удалось скачать KOMPAS Build — проверьте соединение'; return; }
-        // [exe][zip: папки вариантов + debug.json][длина zip][KPBUILD1] — построитель гоняет этапы по всем папкам из debug.json
-        const z = new JSZip(), dirs = [];
-        for (let i = 0; i < list.length; i++) {
-          const x = list[i]; st.textContent = `Расчёт № ${x.no} (${i + 1} из ${list.length})…`;
-          await new Promise(r => setTimeout(r, 0));
-          const P = fresh(x.no), R = compute(P), dir = window.KPDEBUG.dirOf(P.task, P.v);
-          // калибровка не зависит от варианта — только в первой папке
-          window.KOMPAS.files(R, P, S.T, { debug: true }).filter(f => !i || f.path !== '60_calibrate.py').forEach(f => z.file(dir + '/' + f.path, f.gen()));
-          dirs.push(dir);
-        }
+        const exeP = builderExe();
+        // варианты считаются параллельно в фоновых потоках (js/dbg_worker.js): раскладка листов одного варианта — 10–20 с
+        const scripts = [...document.querySelectorAll('script[src]')].map(x => x.src).filter(u => /\/js\//.test(u) && !/(app|suite|debug)\.js/.test(u));
+        const ver = (scripts[0] || '').split('?')[1] || '';
+        const nW = Math.max(1, Math.min(6, (navigator.hardwareConcurrency || 4) - 1, jobs.length));
+        const z = new JSZip(), dirs = new Array(jobs.length);
+        let done = 0, next = 0;
+        const t0 = Date.now();
+        const show = () => {
+          const el = (Date.now() - t0) / 1000, left = done ? Math.round(el / done * (jobs.length - done)) : null;
+          st.textContent = `Расчёт вариантов: готово ${done} из ${jobs.length} (потоков: ${nW})` + (left !== null ? `, осталось ≈ ${left < 60 ? left + ' с' : Math.ceil(left / 60) + ' мин'}` : '…');
+        };
+        show();
+        await new Promise((resolve, reject) => {
+          const run = w => {
+            if (next >= jobs.length) return;
+            const id = next++;
+            w.onmessage = e => {
+              const r = e.data;
+              if (r.err) { reject(new Error('№ ' + jobs[id].no + ': ' + r.err.split('\n')[0])); return; }
+              const dir = window.KPDEBUG.dirOf(r.task, r.v) + jobs[id].suf;
+              dirs[id] = dir;
+              r.files.forEach(([p, t]) => z.file(dir + '/' + p, t));
+              done++; show();
+              if (done === jobs.length) resolve(); else run(w);
+            };
+            w.onerror = e => reject(new Error(e.message || 'сбой фонового потока'));
+            w.postMessage({ id, no: jobs[id].no, T: jobs[id].T, cal: id === 0 });   // калибровка — только в первой папке
+          };
+          for (let k = 0; k < nW; k++) {
+            const w = new Worker('js/dbg_worker.js' + (ver ? '?' + ver : ''));
+            w.postMessage({ init: scripts });
+            workers.push(w);
+            run(w);
+          }
+        });
         z.file('debug.json', JSON.stringify({ vars: dirs }));
         st.textContent = 'Упаковка…';
+        const exe = await exeP; if (!exe) { st.textContent = 'Не удалось скачать KOMPAS Build — проверьте соединение'; return; }
         const zb = await z.generateAsync({ type: 'uint8array', compression: 'DEFLATE' });
         const tail = new Uint8Array(16); new DataView(tail.buffer).setBigUint64(0, BigInt(zb.length), true); tail.set(new TextEncoder().encode('KPBUILD1'), 8);
         downloadBlob('KOMPAS-Build-debug.exe', new Blob([exe, zb, tail], { type: 'application/octet-stream' }));
-        st.textContent = `Готово: вариантов — ${list.length}.`;
-      } catch (e) { console.error(e); st.textContent = 'Ошибка: ' + e.message; } finally { btn.disabled = false; }
+        st.textContent = `Готово за ${Math.round((Date.now() - t0) / 1000)} с: прогонов — ${jobs.length}.`;
+      } catch (e) { console.error(e); st.textContent = 'Ошибка: ' + e.message; } finally { workers.forEach(w => w.terminate()); btn.disabled = false; }
     };
     $('#dbgzip', main).onclick = async () => {
       const btn = $('#dbgzip', main), st = $('#dbgst', main);
@@ -884,7 +929,7 @@
   }
   /* KOMPAS Build (runner/kp_builder.py, собран в dl/KOMPAS-Build.exe): макросы без установленного Python */
   const EDU_URL = 'https://kompas.ru/kompas-educational/about/';   // КОМПАС-3D Учебная версия (бесплатная, АСКОН)
-  const BUILDER_VER = '1.4';
+  const BUILDER_VER = '1.5';
   let builderBlob = null;
   /* одноразовый KOMPAS Build: в конец exe дописываются макросы варианта (zip; данные и настройки — уже в макросах):
      [exe][zip][длина zip — 8 байт little-endian]['KPBUILD1'] — построитель находит их в своём файле и распаковывает сам */
