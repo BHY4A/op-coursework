@@ -9,7 +9,7 @@
 import os, sys, re, json, queue, threading, subprocess, datetime, traceback, runpy
 
 APP = 'KOMPAS Build'
-VERSION = '1.1'
+VERSION = '1.2'
 
 # порядок как в 00_build_all.py: номера позиций чертежей берутся из спецификаций
 STEPS = [
@@ -17,7 +17,7 @@ STEPS = [
     ('20_assembly.py', 'Сборка', 'Сборка редуктора из моделей деталей (.a3d)'),
     ('40_spec.py', 'Спецификации', 'Спецификации редуктора, рамы и привода (.spw)'),
     ('30_drawings.py', 'Чертежи', 'Сборочные и рабочие чертежи с основной надписью (.cdw)'),
-    ('50_snapshots.py', 'Снимки и архив', 'PNG всех файлов и out/для_отправки.zip'),
+    ('50_snapshots.py', 'Снимки и архив', 'PNG всех файлов и архив для_отправки.zip'),
 ]
 
 
@@ -25,18 +25,101 @@ def here():
     return os.path.dirname(os.path.abspath(sys.executable if getattr(sys, 'frozen', False) else __file__))
 
 
+# ---------------------------------------------------------------- макросы, вшитые в exe
+# Сайт дописывает в конец exe zip с макросами варианта (данные и настройки — уже в них):
+# [exe][zip][длина zip — 8 байт little-endian][MAGIC]. Такой exe самодостаточен: папка с макросами не нужна.
+MAGIC = b'KPBUILD1'
+
+
+def embedded_zip():
+    if not getattr(sys, 'frozen', False):
+        return None
+    try:
+        with open(sys.executable, 'rb') as fh:
+            fh.seek(0, 2)
+            size = fh.tell()
+            if size < 16:
+                return None
+            fh.seek(size - 16)
+            tail = fh.read(16)
+            if tail[8:] != MAGIC:
+                return None
+            n = int.from_bytes(tail[:8], 'little')
+            if n <= 0 or n > size - 16:
+                return None
+            fh.seek(size - 16 - n)
+            return fh.read(n)
+    except Exception:
+        return None
+
+
+def _ascii_dir(cands):
+    """Первая папка из списка без кириллицы в пути, в которую можно писать (КОМПАС надёжнее сохраняет по латинским путям)."""
+    for d in cands:
+        if not d or any(ord(ch) > 127 for ch in d):
+            continue
+        try:
+            os.makedirs(d, exist_ok=True)
+            probe = os.path.join(d, '.w')
+            open(probe, 'w').close()
+            os.remove(probe)
+            return d
+        except Exception:
+            pass
+    return None
+
+
+def unpack_embedded(data):
+    """Распаковать вшитые макросы; вернуть (папка макросов, папка результатов)."""
+    import hashlib, io, tempfile, zipfile
+    stem = os.path.splitext(os.path.basename(sys.executable))[0]
+    lad = os.environ.get('LOCALAPPDATA') or ''
+    base = _ascii_dir([os.path.join(lad, 'KOMPAS-Build') if lad else None, r'C:\KP\.kompas-build',
+                       os.path.join(tempfile.gettempdir(), 'KOMPAS-Build')]) or os.path.join(tempfile.gettempdir(), 'KOMPAS-Build')
+    work = os.path.join(base, 'run_' + hashlib.sha1(data).hexdigest()[:12])
+    os.makedirs(work, exist_ok=True)
+    with zipfile.ZipFile(io.BytesIO(data)) as z:
+        z.extractall(work)
+    # результаты — рядом с exe (папка с тем же именем); если в пути кириллица — в C:\KP
+    out = _ascii_dir([os.path.join(here(), stem), os.path.join(r'C:\KP', stem)]) or os.path.join(work, 'out')
+    return work, out
+
+
 # ---------------------------------------------------------------- режим --run: один макрос в отдельном процессе
 
 def _persistent_genpy():
-    """Обёртки типов КОМПАС (gen_py) — в постоянную папку: иначе каждый макрос генерирует их заново (десятки секунд)."""
+    """Обёртки типов КОМПАС (gen_py) — в постоянную папку: иначе каждый макрос генерирует их заново (десятки секунд).
+    В pywin32 нет пакета win32com/gen_py: модуль создаётся на лету (types.ModuleType с __path__ на папку кэша).
+    Импортировать его нельзя — в собранном exe это «No module named 'win32com.gen_py'», поэтому модуль создаётся так же."""
     try:
-        import win32com
-        gp = os.path.join(os.environ.get('LOCALAPPDATA') or os.path.expanduser('~'), 'KOMPAS-Build', 'gen_py')
-        os.makedirs(gp, exist_ok=True)
-        win32com.__gen_path__ = gp
-        sys.modules.pop('win32com.gen_py', None)
-        import win32com.gen_py
-        win32com.gen_py.__path__ = [gp]
+        import types, tempfile, win32com
+    except Exception:
+        return
+    gp = None
+    for base in (os.environ.get('LOCALAPPDATA'), tempfile.gettempdir()):
+        if not base:
+            continue
+        d = os.path.join(base, 'KOMPAS-Build', 'gen_py')
+        try:
+            os.makedirs(d, exist_ok=True)
+            probe = os.path.join(d, '.w')
+            open(probe, 'w').close()
+            os.remove(probe)
+            gp = d
+            break
+        except Exception:
+            pass
+    if not gp:
+        return   # остаётся кэш по умолчанию (временная папка pywin32)
+    win32com.__gen_path__ = gp
+    m = types.ModuleType('win32com.gen_py')
+    m.__path__ = [gp]
+    sys.modules['win32com.gen_py'] = m
+    win32com.gen_py = m
+    try:
+        from win32com.client import gencache
+        gencache.is_readonly = gencache.is_zip = False   # кэш — в обычной папке, его можно дописывать
+        gencache.__init__()                             # словари кэша — из новой папки
     except Exception:
         pass
 
@@ -62,7 +145,7 @@ def run_macro(path):
         tb = traceback.format_exc()
         print(tb, file=sys.stderr)
         try:
-            with open(os.path.join(os.path.dirname(os.path.abspath(path)), 'out', 'log.txt'), 'a', encoding='utf-8') as f:
+            with open(os.path.join(os.environ.get('KP_OUT') or os.path.join(os.path.dirname(os.path.abspath(path)), 'out'), 'log.txt'), 'a', encoding='utf-8') as f:
                 f.write(datetime.datetime.now().strftime('%H:%M:%S ') + 'СБОЙ МАКРОСА ' + os.path.basename(path) + '\n' + tb)
         except Exception:
             pass
@@ -185,7 +268,15 @@ def main_gui():
     root.minsize(720, 600)
 
     RX_SUM = re.compile(r'итог \S+: невыполненных шагов (\d+), предупреждений (\d+), расхождений габаритов (\d+)')
-    st = dict(folder=here(), proc=None, running=False, stop=False, q=queue.Queue(), idx=-1, results={})
+    st = dict(folder=here(), out=None, emb=False, proc=None, running=False, stop=False, q=queue.Queue(), idx=-1, results={})
+    emb = embedded_zip()
+    if emb:   # одноразовый exe с сайта: макросы варианта внутри
+        try:
+            st['folder'], st['out'] = unpack_embedded(emb)
+            st['emb'] = True
+        except Exception:
+            pass
+    out_dir = lambda: st['out'] or os.path.join(st['folder'], 'out')
     hidden = tk.BooleanVar(value=True)
 
     # --- элементы в стиле сайта: плоские кнопки, отметки-квадраты, штамп
@@ -266,7 +357,8 @@ def main_gui():
     # папка с макросами
     fold = tk.Frame(sheet, bg=C['sheet2'], highlightthickness=1, highlightbackground=C['line'], padx=12, pady=8)
     fold.pack(fill='x', pady=(16, 0))
-    tk.Label(fold, text='Папка', font=FN['eyebrow'], fg=C['muted'], bg=C['sheet2']).pack(side='left')
+    fold_t = tk.Label(fold, text='Папка', font=FN['eyebrow'], fg=C['muted'], bg=C['sheet2'])
+    fold_t.pack(side='left')
     fold_lbl = tk.Label(fold, font=FN['mono'], fg=C['fg'], bg=C['sheet2'], anchor='w')
     fold_lbl.pack(side='left', fill='x', expand=True, padx=(10, 10))
 
@@ -274,6 +366,8 @@ def main_gui():
         d = filedialog.askdirectory(initialdir=st['folder'], title='Папка с макросами (10_parts.py, 20_assembly.py, …)')
         if d:
             st['folder'] = os.path.normpath(d)
+            st['out'] = None
+            st['emb'] = False
             refresh()
     b_choose = Btn(fold, 'Выбрать…', choose)
     b_choose.pack(side='right')
@@ -341,9 +435,9 @@ def main_gui():
     b_go.pack(side='left')
     b_stop = Btn(bar, 'Остановить', lambda: stop())
     b_stop.pack(side='left', padx=(8, 0))
-    b_out = Btn(bar, 'Открыть папку out', lambda: open_path(os.path.join(st['folder'], 'out')))
+    b_out = Btn(bar, 'Открыть папку результатов', lambda: open_path(out_dir()))
     b_out.pack(side='right')
-    b_log = Btn(bar, 'Журнал', lambda: open_path(os.path.join(st['folder'], 'out', 'log.txt')))
+    b_log = Btn(bar, 'Журнал', lambda: open_path(os.path.join(out_dir(), 'log.txt')))
     b_log.pack(side='right', padx=(0, 8))
 
     prog = tk.Canvas(sheet, height=4, bg=C['line'], highlightthickness=0)
@@ -408,7 +502,8 @@ def main_gui():
 
     def refresh():
         folder = st['folder']
-        fold_lbl.configure(text=folder)
+        fold_lbl.configure(text=out_dir() if st['emb'] else folder)
+        fold_t.configure(text='Результаты' if st['emb'] else 'Папка')
         have = [os.path.exists(os.path.join(folder, r['fn'])) for r in rows]
         info = {}
         try:
@@ -431,11 +526,11 @@ def main_gui():
                 set_no(r, '')
         msg, kind = None, None
         if not any(have):
-            msg, kind = ('В этой папке нет макросов. Положите построитель рядом с файлами из архива «Скачать всё» '
-                         '(вкладка КОМПАС утилиты) или нажмите «Выбрать…».'), 'bad'
+            msg, kind = ('В этой папке нет макросов. Скачайте KOMPAS Build заново на вкладке «КОМПАС» утилиты — '
+                         'макросы вашего варианта будут внутри exe — или нажмите «Выбрать…» и укажите папку с макросами.'), 'bad'
         elif ki is False:
             msg, kind = 'КОМПАС-3D не найден в системе. Макросы работают с установленным КОМПАС-3D v25.', 'bad'
-        elif any(ord(ch) > 127 for ch in folder):
+        elif any(ord(ch) > 127 for ch in out_dir()):
             msg, kind = ('В пути к папке есть кириллица или пробелы не на латинице — КОМПАС может не сохранить файлы. '
                          'Надёжнее распаковать архив в C:\\KP\\.'), 'warn'
         if msg:
@@ -460,7 +555,7 @@ def main_gui():
         todo = [r for r in rows if r['var'].get() and os.path.exists(os.path.join(st['folder'], r['fn']))]
         if not todo or st['running']:
             return
-        out = os.path.join(st['folder'], 'out')
+        out = out_dir()
         os.makedirs(out, exist_ok=True)
         lg = os.path.join(out, 'log.txt')
         if os.path.exists(lg):   # новый запуск — новый журнал, как в 00_build_all.py
@@ -495,7 +590,7 @@ def main_gui():
             q.put(('begin', r))
             path = os.path.join(st['folder'], r['fn'])
             cmd = self_cmd('--run', path)
-            env = dict(os.environ, PYTHONIOENCODING='utf-8', PYTHONUNBUFFERED='1', KP_KOMPAS_VISIBLE='0' if st['hidden'] else '1')
+            env = dict(os.environ, PYTHONIOENCODING='utf-8', PYTHONUNBUFFERED='1', KP_KOMPAS_VISIBLE='0' if st['hidden'] else '1', KP_OUT=out_dir())
             flags = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
             try:
                 p = subprocess.Popen(cmd, cwd=st['folder'], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
@@ -580,12 +675,12 @@ def main_gui():
                     secs = int((datetime.datetime.now() - st['t0']).total_seconds())
                     took = '%d мин %02d с' % (secs // 60, secs % 60)
                     if st['stop']:
-                        summary.configure(text='Остановлено. Что успело построиться — в папке out.', fg=C['warn'])
+                        summary.configure(text='Остановлено. Что успело построиться — в папке результатов: ' + out_dir(), fg=C['warn'])
                     elif bad:
                         summary.configure(text='Готово за %s, но в %d этап(ах) есть невыполненные шаги. Что достроить вручную — '
                                                'в журнале; размеры — на вкладке «КОМПАС» утилиты и в DXF.' % (took, bad), fg=C['bad'])
                     else:
-                        summary.configure(text='Готово за %s. Файлы — в папке out, для отправки — out\\для_отправки.zip.' % took, fg=C['ok'])
+                        summary.configure(text='Готово за %s. Файлы — в папке %s, для отправки — для_отправки.zip в ней.' % (took, out_dir()), fg=C['ok'])
                     for r in rows:
                         if r['status'].cget('text') == 'ожидает':
                             set_status(r, 'не запускался')
@@ -612,7 +707,7 @@ def main_gui():
         note.configure(wraplength=max(300, e.width - 70))
     sheet.bind('<Configure>', rewrap)
     refresh()
-    log_line('%s %s. Отметьте этапы и нажмите «Построить». Журнал также пишется в out\\log.txt.' % (APP, VERSION), 'muted')
+    log_line('%s %s. Отметьте этапы и нажмите «Построить». Журнал также пишется в %s.' % (APP, VERSION, os.path.join(out_dir(), 'log.txt')), 'muted')
     root.after(80, pump)
 
     root.update_idletasks()

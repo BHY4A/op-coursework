@@ -850,9 +850,18 @@
     })();
   }
   /* KOMPAS Build (runner/kp_builder.py, собран в dl/KOMPAS-Build.exe): макросы без установленного Python */
-  const BUILDER_NAME = 'KOMPAS Build.exe';
-  const BUILDER_VER = '1.1';
+  const BUILDER_VER = '1.2';
   let builderBlob = null;
+  /* одноразовый KOMPAS Build: в конец exe дописываются макросы варианта (zip; данные и настройки — уже в макросах):
+     [exe][zip][длина zip — 8 байт little-endian]['KPBUILD1'] — построитель находит их в своём файле и распаковывает сам */
+  const exeName = () => zipName('KOMPAS').replace(/\.zip$/, '.exe');
+  async function personalExe(files) {
+    const exe = await builderExe(); if (!exe) return null;
+    const z = new JSZip(); files.forEach(f => z.file(f.path, f.gen()));
+    const zb = await z.generateAsync({ type: 'uint8array', compression: 'DEFLATE' });
+    const tail = new Uint8Array(16); new DataView(tail.buffer).setBigUint64(0, BigInt(zb.length), true); tail.set(new TextEncoder().encode('KPBUILD1'), 8);
+    return new Blob([exe, zb, tail], { type: 'application/octet-stream' });
+  }
   async function builderExe() {
     if (builderBlob) return builderBlob;
     try { const r = await fetch('dl/KOMPAS-Build.exe?v=' + BUILDER_VER); if (!r.ok) return null; builderBlob = await r.blob(); return builderBlob; }
@@ -866,7 +875,7 @@
       <header class="sheet-head"><div><div class="eyebrow">Курсовой проект · файлы для КОМПАС</div><h1>Файлы для КОМПАС-3D v25</h1><p class="lead">Python-макросы строят 3D-модели деталей и сборку редуктора, рабочие чертежи с основной надписью и спецификацию. Для ручного построения — таблицы размеров и DXF-контуры.</p></div>${stamp('kompas')}</header>
       <div class="sheet-body rep">
         <h2>1. Как запустить макросы</h2>
-        <ol class="steps-n"><li>Нажмите «Скачать всё (.zip)» внизу страницы и распакуйте архив в папку без кириллицы в пути, например <code>C:\\KP\\</code>.</li><li>Запустите <code>KOMPAS Build.exe</code> из архива. <b>Python ставить не нужно</b>: он уже внутри вместе с pywin32 и Pillow.</li><li>Отметьте этапы и нажмите «Построить». КОМПАС-3D запустится сам — по умолчанию <b>в фоне, без окна</b>: ход, ошибки и итог по каждому этапу видны в окне KOMPAS Build. Если КОМПАС уже был открыт, на время построения он скроется и вернётся, а запущенный построителем — закроется в конце. Снимите отметку «КОМПАС в фоне», чтобы смотреть, как строится модель.</li><li>Файлы <code>.m3d</code>, <code>.a3d</code>, <code>.cdw</code>, <code>.spw</code> сохраняются в папку <code>out</code> рядом с макросами, архив для отправки — <code>out\\для_отправки.zip</code>. Журнал — <code>out\\log.txt</code> (кнопка «Журнал» в окне).</li></ol><div class="note">Если Windows покажет «Windows защитила ваш компьютер», нажмите «Подробнее» → «Выполнить в любом случае»: программа не подписана платным сертификатом. Некоторые антивирусы так же настороженно относятся к любым программам, собранным из Python; исходный код — <code>runner/kp_builder.py</code> в репозитории утилиты.</div><details class="adv"><summary>Без KOMPAS Build — через свой Python</summary><div class="in"><ol class="steps-n"><li>Установите обычный Python 3 с <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">python.org</a>. В первом окне установщика отметьте <b>Add python.exe to PATH</b>. Встроенный в КОМПАС Python не нужен: макросы управляют КОМПАСом снаружи, через его COM-интерфейс.</li><li>Один раз запустите <code>01_install_pywin32.bat</code>: он ставит пакет <code>pywin32</code>, через который Python связывается с КОМПАС. Нужен интернет.</li><li>Запустите <code>02_run_all.bat</code>. Можно запускать и отдельные макросы: <code>py 10_parts.py</code> и т. д.</li></ol></div></details>
+        <ol class="steps-n"><li>Скачайте KOMPAS Build — <b>один файл .exe</b>, в который уже вшиты макросы, ваш вариант и все настройки с сайта: <button class="btn primary sm" id="kb1">${dlIcon()} Скачать ${esc(exeName())}</button> Распаковывать ничего не нужно, <b>Python ставить не нужно</b>. Файл одноразовый: поменяли вариант или настройки — скачайте заново.</li><li>Отметьте этапы и нажмите «Построить». КОМПАС-3D запустится сам — по умолчанию <b>в фоне, без окна</b>: ход, ошибки и итог по каждому этапу видны в окне KOMPAS Build. Если КОМПАС уже был открыт, на время построения он скроется и вернётся, а запущенный построителем — закроется в конце. Снимите отметку «КОМПАС в фоне», чтобы смотреть, как строится модель.</li><li>Файлы <code>.m3d</code>, <code>.a3d</code>, <code>.cdw</code>, <code>.spw</code> сохраняются в папку с тем же именем, что у exe, рядом с ним (если в пути есть кириллица — в <code>C:\\KP\\</code>); путь виден в окне построителя. Там же архив для отправки <code>для_отправки.zip</code> и журнал <code>log.txt</code> (кнопка «Журнал» в окне).</li></ol><div class="note">Если Windows покажет «Windows защитила ваш компьютер», нажмите «Подробнее» → «Выполнить в любом случае»: программа не подписана платным сертификатом. Некоторые антивирусы так же настороженно относятся к любым программам, собранным из Python; исходный код — <code>runner/kp_builder.py</code> в репозитории утилиты.</div><details class="adv"><summary>Без KOMPAS Build — через свой Python</summary><div class="in"><ol class="steps-n"><li>Нажмите «Скачать всё (.zip)» внизу страницы и распакуйте архив в папку без кириллицы в пути, например <code>C:\\KP\\</code>. Результаты — в папке <code>out</code> рядом с макросами.</li><li>Установите обычный Python 3 с <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">python.org</a>. В первом окне установщика отметьте <b>Add python.exe to PATH</b>. Встроенный в КОМПАС Python не нужен: макросы управляют КОМПАСом снаружи, через его COM-интерфейс.</li><li>Один раз запустите <code>01_install_pywin32.bat</code>: он ставит пакет <code>pywin32</code>, через который Python связывается с КОМПАС. Нужен интернет.</li><li>Запустите <code>02_run_all.bat</code>. Можно запускать и отдельные макросы: <code>py 10_parts.py</code> и т. д.</li></ol></div></details>
         <div class="note warn">Макросы используют API КОМПАС (KompasAPI5/API7 через pywin32). Если какой-то шаг не выполнится, остальные продолжат работу, а в журнале будет указано, что построить вручную; размеры для ручного построения — в таблицах ниже и в DXF.</div>
         <h2>2. Состав: что строить</h2>
         <p>Снимите отметку, если элемент не нужен по заданию или методичке, — макросы его не построят, он пропадёт из сборки, архива и предпросмотра. Отметка «по заданию» — листы, которые требует задание на курсовой проект. Выбор сохраняется вместе с вариантом.</p>
@@ -875,7 +884,7 @@
         ${kompasCheck(K)}
         <h2>4. Файлы</h2>
         <div class="files"><div class="files-head"><h3>Макросы и файлы для КОМПАС-3D</h3><button class="btn primary" id="kz">${dlIcon()} Скачать всё (.zip)</button></div>
-          <div class="file-row builder-row"><span><b>${BUILDER_NAME}</b><small>Окно запуска макросов: Python, pywin32 и Pillow уже внутри, КОМПАС работает в фоне. Уже есть в архиве «Скачать всё»; отдельно — если обновляете только макросы (≈18 МБ, Windows 10/11 x64)</small></span><button class="btn sm" id="kb" aria-label="Скачать ${BUILDER_NAME}" title="Скачать">${dlIcon()}</button></div>
+          <div class="file-row builder-row"><span><b>${esc(exeName())}</b><small>KOMPAS Build со всеми макросами, вариантом и настройками внутри: запускается сам, без папки с файлами. Python, pywin32 и Pillow уже внутри, КОМПАС работает в фоне (≈18 МБ, Windows 10/11 x64)</small></span><button class="btn sm" id="kb" aria-label="Скачать ${esc(exeName())}" title="Скачать">${dlIcon()}</button></div>
           ${files.map((f, i) => `<div class="file-row"><span><b>${esc(f.path)}</b><small>${esc(f.desc || '')}</small></span><button class="btn sm" data-kf="${i}" aria-label="Скачать ${esc(f.path)}" title="Скачать">${dlIcon()}</button></div>`).join('')}</div>
         <h2>5. Чертежи и спецификации</h2>
         <p>Листы, которые строит макрос <code>30_drawings.py</code>: сборочные чертежи, общий вид привода, рабочие чертежи деталей и спецификации (ГОСТ 2.106). Рамку и основную надпись КОМПАС добавит сам, здесь они для наглядности.</p>
@@ -958,13 +967,16 @@
       const label = kz.innerHTML; kz.disabled = true; kz.innerHTML = '<span class="spinner"></span>Собираю архив…';
       try {
         const zip = new JSZip(); files.forEach(f => zip.file('KOMPAS/' + f.path, f.gen()));
-        const exe = await builderExe();   // KOMPAS Build кладётся в архив целиком: распаковал — запустил
-        if (exe) zip.file('KOMPAS/' + BUILDER_NAME, exe, { binary: true, compression: 'STORE' });
+        const exe = await personalExe(files);   // одноразовый KOMPAS Build с макросами внутри — тоже в архиве
+        if (exe) zip.file('KOMPAS/' + exeName(), exe, { binary: true, compression: 'STORE' });
         else toast('KOMPAS Build не загрузился — в архиве только макросы; запуск через свой Python описан в п. 1');
         downloadBlob(zipName('KOMPAS'), await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' }));
       } finally { kz.disabled = false; kz.innerHTML = label; }
     };
-    const kb = $('#kb', main); if (kb) kb.onclick = async () => { const exe = await builderExe(); if (exe) downloadBlob(BUILDER_NAME, exe); else toast('Не удалось скачать KOMPAS Build — проверьте соединение'); };
+    $$('#kb, #kb1', main).forEach(kb => kb.onclick = async () => {
+      if (kb.disabled) return; kb.disabled = true;
+      try { const exe = await personalExe(files); if (exe) downloadBlob(exeName(), exe); else toast('Не удалось скачать KOMPAS Build — проверьте соединение'); } finally { kb.disabled = false; }
+    });
   }
 
   /* альбом PDF: те же листы, что в предпросмотре (с учётом снятых отметок), каждый в своём формате; jsPDF подгружается по требованию */
