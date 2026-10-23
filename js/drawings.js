@@ -7,8 +7,7 @@
   const D2R = Math.PI / 180;
   const nf = (x, dig) => C.fmtNum(x, dig === undefined ? 2 : dig);
   const n1 = x => nf(x, 1);
-  const SCALES = [[4, '4:1'], [2.5, '2,5:1'], [2, '2:1'], [1, '1:1'], [0.5, '1:2'], [0.4, '1:2,5'], [0.25, '1:4'], [0.2, '1:5']];
-  const scaleText = k => (SCALES.find(s => Math.abs(s[0] - k) < 1e-9) || [k, String(k)])[1];
+  const SCALES = C.SCALE_STD, scaleText = C.scaleText;
 
   /* ---------------------------------------------------------------- справочные правила */
   const chamf = d => d <= 30 ? 1 : d <= 50 ? 1.6 : d <= 80 ? 2 : 2.5;
@@ -386,8 +385,8 @@
     const segs = prepSegs(pd);
     const notes = info.notes || [];
     const plan = [];
-    // все чертежи — на А1 (требование пользователя); масштаб — наибольший стандартный, при котором изображение помещается
-    for (const kk of [4, 2.5, 2, 1, 0.5, 0.4, 0.25, 0.2]) plan.push(['A1', kk]);
+    // формат — из настройки (по умолчанию А1); масштаб — наибольший стандартный, при котором изображение помещается
+    for (const fmt of C.fmts()) for (const [kk] of C.scales(4)) plan.push([fmt, kk]);
     for (const [fmt, k] of plan) {
       const tmp = new Sheet('A1', true); tmp.frame = { x1: -5000, y1: -5000, x2: 5000, y2: 5000 };
       const M = shaftMain(tmp, segs, 0, 0, k, info);
@@ -784,7 +783,7 @@
     const notes = info.notes || [];
     const tipD = kind === 'sprocket' ? g.De : kind === 'wormwheel' ? g.daM : kind === 'bevel' ? g.dae : g.da;
     const plan = [];
-    for (const kk of [4, 2.5, 2, 1, 0.5, 0.4, 0.25, 0.2]) plan.push(['A1', kk]);   // все чертежи — на А1
+    for (const fmt of C.fmts()) for (const [kk] of C.scales(4)) plan.push([fmt, kk]);   // формат — из настройки, масштаб — наибольший, при котором помещается
     for (const [fmt, k] of plan) {
       const tmp = new Sheet('A1', true); tmp.frame = { x1: -5000, y1: -5000, x2: 5000, y2: 5000 };
       wheelMain(tmp, g, kind, k, info);
@@ -903,7 +902,7 @@
     for (const dd of M.drawings) {
       const pd = M.parts.find(p => p.id === dd.part); if (!pd) continue;
       const info = partInfo(R, M, pd);
-      const res = pd.kind === 'shaft' ? shaftSheet(pd, info) : wheelSheet(pd, info);
+      const res = C.fitSheet(() => pd.kind === 'shaft' ? shaftSheet(pd, info) : wheelSheet(pd, info));
       if (!res) continue;
       out.push({ id: pd.id, file: pd.id + '.cdw', code: pd.code, name: pd.name, material: info.material, mass: massText(info.mass), scale: res.scale, fmt: res.fmt, landscape: res.sh.landscape, sh: res.sh });
     }

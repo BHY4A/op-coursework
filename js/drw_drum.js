@@ -151,7 +151,7 @@
     const K = R.K || {}, n = K.nIV || R.nOut, Tq = K.TIV || 0, v = Math.PI * g.Db * n / 60000;
     const tech = [`1. Окружная сила на барабане ${nf(g.dr.Fokr || 0)} Н.`, `2. Скорость ленты ${nf(v, 2)} м/с.`, `3. Вращающий момент на валу ${nf(Tq, 0)} Н·м, частота вращения ${nf(n, 1)} мин⁻¹.`];
     const req = ['1. *Размеры для справок.', '2. Радиальное биение обечайки барабана относительно оси вала — не более 0,3 мм.', '3. Корпуса подшипников выставить соосно; несоосность — не более 0,1 мм.', '4. Подшипники заполнить смазкой Литол-24 ГОСТ 21150-87 на 2/3 свободного объёма.', '5. Вал после сборки должен проворачиваться от руки свободно, без заеданий.'];
-    for (const [k, kt] of [[0.5, '1:2'], [0.4, '1:2,5'], [0.25, '1:4'], [0.2, '1:5']]) for (const fmt of ['A1']) {
+    for (const fmt of C.fmts()) for (const [k, kt] of C.scales(1)) {
       const M = mainView(R, g, k), Sd = sideView(R, g, k);
       root.DRWASM.positions(M.sh, M.items.map(it => Object.assign({ pos: POS[it.kind] || '' }, it)).filter((it, i, arr) => it.pos && arr.findIndex(q => q.pos === it.pos) === i));
       const sh = new Sheet(fmt, true), f = sh.frame;
@@ -163,7 +163,7 @@
       sh.notes(sh.stamp.x1 + 2, y0, W - 4, tech, { title: 'Техническая характеристика' }); sh.occupy({ x1: sh.stamp.x1, y1: y0 - 2, x2: f.x2 - 2, y2: y0 + hT(tech) + 9 }, 2);
       // главный вид и вид А (справа, на уровне оси) — единым блоком
       if (!DR.placeViews(sh, [{ p: M.sh.p }, { p: Sd.sh.p, rel: 'right', of: 0 }], { gapGeo: 20 })) continue;
-      return { id: 'val_baraban_sb', file: 'val_baraban_SB.cdw', code: sp.code + ' СБ', name: 'Вал приводной с барабаном\nСборочный чертёж', material: '', mass: '', scale: kt, fmt, landscape: true, sh };
+      return { id: 'val_baraban_sb', file: 'val_baraban_SB.cdw', code: sp.code + ' СБ', name: 'Вал приводной с барабаном\nСборочный чертёж', material: '', mass: '', scale: kt, fmt, landscape: sh.landscape, sh };
     }
     return null;
   }

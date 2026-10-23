@@ -176,7 +176,9 @@
   function viewDef(vw, sig) {
     return {
       left: { u: [1, sig], v: [2, 1], d: 0, near: -1 }, right: { u: [1, -sig], v: [2, 1], d: 0, near: 1 },
-      bottom: { u: [0, 1], v: [1, sig], d: 2, near: -1 }, back: { u: [0, -1], v: [2, 1], d: 1, near: -sig }
+      bottom: { u: [0, 1], v: [1, sig], d: 2, near: -1 }, back: { u: [0, -1], v: [2, 1], d: 1, near: -sig },
+      // привод, повёрнутый на 90° вокруг вертикали (главный вид — бывший «слева»): длинная сторона ложится вдоль листа
+      front: { u: [0, 1], v: [2, 1], d: 1, near: sig }, topR: { u: [1, sig], v: [0, 1], d: 2, near: 1 }, bottomR: { u: [1, sig], v: [0, -1], d: 2, near: -1 }
     }[vw];
   }
 
@@ -234,7 +236,46 @@
     return { sh, items };
   }
 
-  function views(R, P, T, L, k) {
+  /* знак разрыва на изображении цепной передачи (межосевое расстояние показано укороченным, размер — действительный) */
+  function breakMark(sh, q1, q2) {
+    const mx = (q1[0] + q2[0]) / 2, my = (q1[1] + q2[1]) / 2, dx = q2[0] - q1[0], dy = q2[1] - q1[1], d = Math.hypot(dx, dy) || 1, ux = dx / d, uy = dy / d, nx = -uy, ny = ux, L0 = 10; [-2.5, 2.5].forEach(o => sh.poly([[mx + ux * o - nx * L0, my + uy * o - ny * L0], [mx + ux * o + nx * L0 * 0.1, my + uy * o + ny * L0 * 0.1 - 0], [mx + ux * o - nx * L0 * 0.1 + ux * 2, my + uy * o - ny * L0 * 0.1 + uy * 2], [mx + ux * o + nx * L0, my + uy * o + ny * L0]], 2, false));
+  }
+
+  /* виды повёрнутого привода: главный — со стороны бывшего вида слева, остальные — по ГОСТ 2.305 относительно него */
+  const ROT = { front: 'left', top: 'topR', left: 'back', right: 'front', back: 'right', bottom: 'bottomR' };
+  function viewsRot(R, L, k) {
+    const { F, M, up, zOff, fyAx } = L;
+    const sp = M.parts.find(p => p.kind === 'sprocket'), spIt = sp && M.asm.items.find(i => i.file === sp.file);
+    const W2F = w => ({ fx: w[0], fy: dot(w, fyAx), fz: dot(w, up) + zOff });
+    const scn = driveScene(R, L, { sp, spIt, W2F });
+    const VO = (C.opts.views && C.opts.views.vo) || {};
+    const res = {}, items = {};
+    ['front', 'top'].concat(['left', 'right', 'bottom', 'back'].filter(v => VO[v])).forEach(vw => { const g = genericView(L, M, scn, ROT[vw], k); res[vw] = { sh: g.sh }; items[vw] = g.items; });
+    // цепная передача: разрыв и действительное межосевое расстояние — один раз, на виде, где звёздочки видны плашмя, иначе сверху
+    const ch = scn.find(q => q.t === 'chain');
+    if (ch) {
+      const a = R.chn.a, broken = Math.hypot(ch.c2[0] - ch.c1[0], ch.c2[1] - ch.c1[1], ch.c2[2] - ch.c1[2]) < a - 1;
+      const faceVw = viewDef(ROT.front, L.sig).d === ch.ax ? 'front' : 'top';
+      ['front', 'top'].forEach(vw => {
+        const VD = viewDef(ROT[vw], L.sig), sh = res[vw].sh, P = f => [VD.u[1] * f[VD.u[0]] * k, VD.v[1] * f[VD.v[0]] * k];
+        const q1 = P(ch.c1), q2 = P(ch.c2);
+        if (Math.hypot(q2[0] - q1[0], q2[1] - q1[1]) < 5) return;   // цепь — вдоль взгляда
+        if (broken) breakMark(sh, q1, q2);
+        if (vw !== faceVw) return;
+        const off = (Math.max(ch.r1, ch.r2) + 14) * k;
+        sh.attempt([1, -1].map(sg => () => Math.abs(q2[0] - q1[0]) > Math.abs(q2[1] - q1[1]) ? sh.dimH(q1[0], q1[1], q2[0], q2[1], q1[1] + off * sg, nf(a)) : sh.dimV(q1[0], q1[1], q2[0], q2[1], q1[0] + off * sg, nf(a))));
+      });
+    }
+    if (R.task === 1) {
+      const o = L.out, top = o.pos.map((v, i) => v + o.ax[i] * o.segs[o.segs.length - 1].x1);
+      const q = W2F(top), x = L.sig * q.fy * k, y = q.fz * k;
+      res.front.sh.leader(x, y - 2, x + 20, y + 14, 'к звёздочке', 'конвейера');
+    }
+    return { res, items, axZ: F.Hin + F.tr, zM0: F.raise + F.tm, rot: true };
+  }
+
+  function views(R, P, T, L, k, rot) {
+    if (rot) return viewsRot(R, L, k);
     const { F, M, up, zOff, fyAx, sT } = L;
     const TY = fy => sT * fy;
     const m = R.motor || {}, cp = (R.cp && R.cp.c) || {};
@@ -330,8 +371,8 @@
           if (!behind) sh.line(p1[0], p1[1], p2[0], p2[1], 3);
         }
         const q1 = pt(c1), q2 = pt(c2);
-        if (broken && !behind) { const mx = (q1[0] + q2[0]) / 2, my = (q1[1] + q2[1]) / 2, dx = q2[0] - q1[0], dy = q2[1] - q1[1], d = Math.hypot(dx, dy) || 1, ux = dx / d, uy = dy / d, nx = -uy, ny = ux, L0 = 10; [-2.5, 2.5].forEach(o => sh.poly([[mx + ux * o - nx * L0, my + uy * o - ny * L0], [mx + ux * o + nx * L0 * 0.1, my + uy * o + ny * L0 * 0.1 - 0], [mx + ux * o - nx * L0 * 0.1 + ux * 2, my + uy * o - ny * L0 * 0.1 + uy * 2], [mx + ux * o + nx * L0, my + uy * o + ny * L0]], 2, false)); }
-        if (vw === 'top' || seesFace) sh.attempt([1, -1].map(sg => () => { const off = (Math.max(r1, r2) + 14) * k * sg; return Math.abs(q2[0] - q1[0]) > Math.abs(q2[1] - q1[1]) ? sh.dimH(q1[0], q1[1], q2[0], q2[1], q1[1] + off, nf(a) + (broken ? '' : '')) : sh.dimV(q1[0], q1[1], q2[0], q2[1], q1[0] + off, nf(a)); }));
+        if (broken && !behind) breakMark(sh, q1, q2);
+        if (seesFace || (vw === 'top' && alongFx)) sh.attempt([1, -1].map(sg => () => { const off = (Math.max(r1, r2) + 14) * k * sg; return Math.abs(q2[0] - q1[0]) > Math.abs(q2[1] - q1[1]) ? sh.dimH(q1[0], q1[1], q2[0], q2[1], q1[1] + off, nf(a) + (broken ? '' : '')) : sh.dimV(q1[0], q1[1], q2[0], q2[1], q1[0] + off, nf(a)); }));
         items[vw].push({ kind: 'chain', pt: [(pt(c1)[0] + pt(c2)[0]) / 2, (pt(c1)[1] + pt(c2)[1]) / 2 + (seesFace ? (r1 + r2) / 2 * k : 0)] });
       };
       draw('front'); draw('top');
@@ -382,10 +423,11 @@
     const req = ['1. *Размеры для справок.', `2. Смещение осей валов электродвигателя и редуктора не более ${R.cp && R.cp.c ? nf(R.cp.c.dr, 1) : '0,3'} мм, перекос — не более ${R.cp && R.cp.c ? R.cp.c.da : '1°'}.`,
       ...(R.chn ? [`3. Звёздочки цепной передачи установить в одной плоскости; отклонение — не более 0,2 мм на 100 мм межосевого расстояния. Стрела провисания цепи ${nf(0.02 * R.chn.a, 0)} мм.`] : []),
       `${R.chn ? 4 : 3}. Ограждения муфты${R.chn ? ' и цепной передачи' : ''} условно не показаны.`, `${R.chn ? 5 : 4}. Раму крепить к полу фундаментными болтами М${(R.H && R.H.d1) || 16}.`];
-    // все виды на А1: масштаб уменьшается, пока блок видов не поместится
-    const PLAN = [[0.4, '1:2,5', 'A1'], [0.25, '1:4', 'A1'], [0.2, '1:5', 'A1'], [0.1, '1:10', 'A1']];   // все чертежи — на А1
-    for (const [k, kt, fmt] of PLAN) for (const land of [true, false]) {
-      const V = build.views(k);
+    // формат — из настройки (по умолчанию А1): масштаб уменьшается, пока блок видов не поместится
+    const PLAN = []; for (const fmt of C.fmts()) for (const [k, kt] of C.scales(0.5)) PLAN.push([k, kt, fmt]);
+    // на каждом масштабе — сначала привычная ориентация, затем повёрнутая на 90° (если build.rot): длинный привод ложится вдоль листа
+    for (const [k, kt, fmt] of PLAN) for (const rot of (build.rot ? [false, true] : [false])) for (const land of (fmt === 'A4' ? [false] : [true, false])) {
+      const V = build.views(k, rot);
       const VO = (meta.id === 'obshiy_vid' && C.opts.views && C.opts.views.vo) || { top: true };
       if (VO.top === false) delete V.res.top;
       const fr = V.res.front.sh, tp = V.res.top && V.res.top.sh;
@@ -425,8 +467,35 @@
   function driveSheet(R, P, T, drvSpec) {
     const L = layout(R, P, T); if (!L) return null;
     const { F, sT } = L, TY = fy => sT * fy;
-    return compose(R, P, T, drvSpec, { views: k => views(R, P, T, L, k), dims: (V, k) => {
+    // размеры повёрнутого привода: главный вид — габариты и высота оси, вид сверху — габарит и разметка отверстий под фундаментные болты
+    const dimsRot = (V, k) => {
+      const fr = V.res.front.sh, tp = V.res.top && V.res.top.sh, sg = L.sig;
+      {
+        const b = fr.geoBox();
+        fr.dimH(b.x1, b.y1, b.x2, b.y1, b.y1 - 14, nf((b.x2 - b.x1) / k) + '*');
+        fr.dimV(b.x2, b.y1, b.x2, b.y2, b.x2 + 14, nf((b.y2 - b.y1) / k) + '*');
+        const xe = Math.min(sg * F.yL, sg * F.yR) * k;
+        fr.dimV(xe, -F.hc * k, xe, V.axZ * k, Math.min(b.x1, xe) - 12, nf(V.axZ + F.hc));
+      }
+      if (tp) {
+        const b = tp.geoBox(), PT = (fx, fy) => [sg * fy * k, fx * k];
+        const fl = F.floor.slice().sort((p, q) => p.fx - q.fx || p.fy - q.fy);
+        const xs = [...new Set(fl.map(h => Math.round(h.fx)))];
+        const yB = sg * F.yR > sg * F.yL ? F.yR : F.yL;   // швеллер, что правее на листе — размер справа от вида
+        const a = PT(xs[0], yB), c = PT(xs[xs.length - 1], yB);
+        tp.dimV(a[0], a[1], c[0], c[1], Math.max(b.x2, a[0] + F.bc / 2 * k) + 12, nf(xs[xs.length - 1] - xs[0]));
+        const l = PT(xs[0], F.yL), r = PT(xs[0], F.yR);
+        tp.dimH(l[0], l[1], r[0], r[1], Math.min(b.y1, l[1] - F.bc / 2 * k) - 12, nf(Math.abs(F.yR - F.yL)));
+        tp.dimV(b.x1, b.y1, b.x1, b.y2, b.x1 - 14, nf((b.y2 - b.y1) / k) + '*');   // габарит по глубине (длина вдоль листа — на главном виде)
+        const h = fl[0], p = PT(h.fx, h.fy);
+        tp.attempt([[-14, -14], [14, -14], [-14, 14], [14, 14]].map(([dx, dy]) => () => tp.leader(p[0] + Math.sign(dx) * F.dF / 2 * k * 0.7, p[1] + Math.sign(dy) * F.dF / 2 * k * 0.7, p[0] + dx, p[1] + dy, `⌀${F.dF}`, `${F.floor.length} отв.`)));
+      }
+      // вид слева/справа — габарит по ширине, только если его нет на виде сверху (размер не повторяется, ГОСТ 2.307)
+      if (!tp) ['left', 'right'].forEach(vw => { if (!V.res[vw]) return; const sd = V.res[vw].sh, b = sd.geoBox(); sd.dimH(b.x1, b.y1, b.x2, b.y1, b.y1 - 14, nf((b.x2 - b.x1) / k) + '*'); });
+    };
+    return compose(R, P, T, drvSpec, { rot: true, views: (k, rot) => views(R, P, T, L, k, rot), dims: (V, k) => {
       const fr = V.res.front.sh, tp = V.res.top && V.res.top.sh;
+      if (V.rot) { dimsRot(V, k); return; }
       {
         const b = fr.geoBox();
         fr.dimH(b.x1, b.y1, b.x2, b.y1, b.y1 - 14, nf((b.x2 - b.x1) / k) + '*');
@@ -445,8 +514,8 @@
         tp.attempt([[-14, 14], [-14, -14], [14, -14]].map(([dx, dy]) => () => tp.leader(h.fx * k + Math.sign(dx) * F.dF / 2 * k * 0.7, TY(h.fy) * k + Math.sign(dy) * F.dF / 2 * k * 0.7, h.fx * k + dx, TY(h.fy) * k + dy, `⌀${F.dF}`, `${F.floor.length} отв.`, { side: dx > 0 ? 'r' : 'l' })));
         if (R.chn) { /* межосевое расстояние цепной передачи */ }
       }
-      // виды слева/справа — габарит по ширине (справочный)
-      ['left', 'right'].forEach(vw => { if (!V.res[vw]) return; const sd = V.res[vw].sh, b = sd.geoBox(); sd.dimH(b.x1, b.y1, b.x2, b.y1, b.y1 - 14, nf((b.x2 - b.x1) / k) + '*'); });
+      // вид слева/справа — габарит по ширине, только если его нет на виде сверху (размер не повторяется, ГОСТ 2.307)
+      if (!tp) ['left', 'right'].forEach(vw => { if (!V.res[vw]) return; const sd = V.res[vw].sh, b = sd.geoBox(); sd.dimH(b.x1, b.y1, b.x2, b.y1, b.y1 - 14, nf((b.x2 - b.x1) / k) + '*'); });
     } }, { id: 'obshiy_vid', file: 'privod_VO.cdw', nameSub: 'Чертёж общего вида' });
   }
 

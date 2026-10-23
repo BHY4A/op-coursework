@@ -9,6 +9,10 @@
     A3x3: [891, 420], A3x4: [1189, 420], A4x3: [630, 297], A4x4: [841, 297] };
   /* обозначение формата для надписей: А3×3 */
   const fmtName = f => String(f).replace('A', 'А').replace('x', '×');
+  /* стандартные масштабы ГОСТ 2.302-68 — от крупного к мелкому; на лист — один, наибольший, при котором всё помещается */
+  const SCALE_STD = [[4, '4:1'], [2.5, '2,5:1'], [2, '2:1'], [1, '1:1'], [0.5, '1:2'], [0.4, '1:2,5'], [0.25, '1:4'], [0.2, '1:5'], [0.1, '1:10'], [1 / 15, '1:15'], [0.05, '1:20'], [0.04, '1:25'], [0.025, '1:40'], [0.02, '1:50']];
+  const scales = kMax => SCALE_STD.filter(s => s[0] <= Math.min(kMax, OPTS.kMax || Infinity) + 1e-9);   // OPTS.kMax — предел при подборе (fitSheet)
+  const scaleText = k => (SCALE_STD.find(s => Math.abs(s[0] - k) < 1e-9) || [k, String(k)])[1];
   const r3 = x => Math.round(x * 1000) / 1000;
   const fmtNum = (x, dig) => { if (x === undefined || x === null || isNaN(x)) return ''; const k = Math.pow(10, dig === undefined ? 2 : dig); return String(Math.round(x * k) / k).replace('.', ','); };
 
@@ -1298,7 +1302,33 @@
   // views — какие виды строить: vo — общий вид привода (главный всегда; top, left, right, bottom, back),
   // sb — сборочный чертёж редуктора (главный всегда; second — второй вид/разрез, extra — третий вид)
   const VIEWS_DEF = { vo: { top: true, left: true, right: false, bottom: false, back: false }, sb: { second: true, extra: true } };
-  const OPTS = { noDims: false, wormFa: '3675', scaleUniform: false, views: JSON.parse(JSON.stringify(VIEWS_DEF)), VIEWS_DEF };
+  const OPTS = { fmt: 'A1', noDims: false, wormFa: '3675', scaleUniform: false, views: JSON.parse(JSON.stringify(VIEWS_DEF)), VIEWS_DEF };
+  /* форматы листа: выбранный в настройке (по умолчанию А1); если изображение не помещается даже в самом мелком масштабе — следующие, большие */
+  const FMT_ORDER = ['A4', 'A3', 'A2', 'A1', 'A0'];
+  const fmts = () => FMT_ORDER.slice(Math.max(0, FMT_ORDER.indexOf(OPTS.fmt)));
+  /* подбор листа на формате меньше А1: build() строит лист по OPTS.fmt / OPTS.kMax.
+     Если обозначения не легли без наложений (проверка DRWLINT), лист строится на ступень мельче,
+     затем — на следующем формате; берётся лист с наименьшим числом наложений (при равенстве — первый, крупнее и меньше форматом) */
+  function fitSheet(build) {
+    const f0 = OPTS.fmt, L = root.DRWLINT, top = FMT_ORDER.indexOf('A1');
+    const first = build();
+    if (!L || FMT_ORDER.indexOf(f0) >= top) return first;
+    const errs = d => { d.sh.finalize(); return L.lint(d.sh).filter(q => q.sev === 'error').length; };
+    const kOf = t => (SCALE_STD.find(q => q[1] === t) || [0])[0];
+    let best = first, be = first ? errs(first) : Infinity, d = first, step = 0;
+    try {
+      for (let n = 0; n < 12 && be > 0; n++) {
+        const fi = d ? FMT_ORDER.indexOf(d.fmt) : FMT_ORDER.indexOf(OPTS.fmt);
+        if (d && fi === FMT_ORDER.indexOf(OPTS.fmt) && step < 1 && kOf(d.scale)) { step++; OPTS.kMax = kOf(d.scale) - 1e-6; }
+        else { if (fi >= top) break; OPTS.fmt = FMT_ORDER[fi + 1]; OPTS.kMax = undefined; step = 0; }
+        d = build();
+        if (!d) continue;
+        const e = errs(d);
+        if (e < be) { best = d; be = e; }
+      }
+    } finally { OPTS.fmt = f0; OPTS.kMax = undefined; }
+    return best;
+  }
   const DIMTXT = /⌀|^М\d|отв\.|^R\d|×45°|^\d+[,\d]*\*?$/;
   (function () {
     const dH = S.dimH, dV = S.dimV, ld = S.leader, dA = S.dimAng, dHV = S.dimHalfV;
@@ -1367,5 +1397,5 @@
     const b = root.GOST_FONT_A_ITALIC; if (!b || /@font-face/.test(svg)) return svg;
     return svg.replace(/(<svg[^>]*>)/, `$1<style>@font-face{font-family:'GOST 2.304 A';font-style:italic;src:url(data:font/ttf;base64,${b}) format('truetype')}</style>`);
   }
-  root.DRWCORE = { Sheet, View, tw, wrap, toSVG, embedFont, fmtNum, D2R, FMT, fmtName, segHitsRect, opts: OPTS };
+  root.DRWCORE = { Sheet, View, tw, wrap, toSVG, embedFont, fmtNum, D2R, FMT, fmtName, segHitsRect, SCALE_STD, scales, scaleText, fmts, fitSheet, FMT_ORDER, opts: OPTS };
 })(typeof window !== 'undefined' ? window : globalThis);

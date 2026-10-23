@@ -885,10 +885,17 @@
           const opt = (title, desc, ctl) => `<div class="opt"><div class="opt-t"><b>${title}</b><span>${desc}</span></div><div class="opt-c">${ctl}</div></div>`;
           const vch = (grp, key, label, on) => `<label class="vchip"><input type="checkbox" data-vw="${grp}.${key}" ${on ? 'checked' : ''}><span>${label}</span></label>`;
           const wf = S.T.wormFa === '1643' ? '1643' : '3675';
+          // формат листов: превью — листы в одном масштабе, с рамкой и основной надписью
+          const SF = ['A4', 'A3', 'A2', 'A1', 'A0'], sf = SF.includes(S.T.sheetFmt) ? S.T.sheetFmt : 'A1';
+          const FSZ = { A4: [210, 297], A3: [420, 297], A2: [594, 420], A1: [841, 594], A0: [1189, 841] };
+          const sheetPv = f => { const [w, h] = FSZ[f], y0 = 850 - h; return `<svg viewBox="0 0 1200 850" style="display:block;width:100%;height:64px" aria-hidden="true"><rect x="1" y="${y0}" width="${w - 2}" height="${h - 1}" fill="#fff" stroke="#7d8996" stroke-width="6"/><rect x="20" y="${y0 + 5}" width="${w - 25}" height="${h - 10}" fill="none" stroke="#1b232c" stroke-width="5"/><rect x="${w - 190}" y="${850 - 60}" width="185" height="55" fill="none" stroke="#1b232c" stroke-width="5"/></svg>`; };
+          const fmtEx = `<div class="ex-multi" style="--n:5">${SF.map(f => `<div class="ex${f === sf ? ' on' : ''}"><div class="ex-h">${f.replace('A', 'А')}${f === sf ? '<span>сейчас</span>' : ''}</div><div class="ex-b">${sheetPv(f)}<div class="ex-f">${FSZ[f][0]}×${FSZ[f][1]} мм</div></div></div>`).join('')}</div>`;
+          const fmtSeg = `<div class="seg" role="radiogroup" aria-label="Формат листов чертежей" id="sheetfmt">${SF.map(f => `<button type="button" role="radio" aria-checked="${f === sf}" data-val="${f}">${f.replace('A', 'А')}</button>`).join('')}</div>`;
           return `<div class="opts dw-opts">
+            <div class="opt has-seg"><div class="opt-t"><b>Формат листов чертежей</b><span>ГОСТ 2.301. Масштаб каждого листа — наибольший стандартный по ГОСТ 2.302, при котором виды в проекционной связи, размеры и надписи ложатся без наложений; он же пишется в основной надписи. Если на формате меньше А1 так не выходит, лист переходит на следующий формат. Спецификации — всегда А4.</span></div><div class="opt-c">${fmtSeg}</div><div class="opt-ex">${fmtEx}</div></div>
             ${opt('Без размеров', 'Размеры и посадки проставите сами в КОМПАС; позиции, шероховатость и техтребования останутся.', ksw('nodims', S.T.noDims, 'Без размеров'))}
             ${opt('Обозначения — объектами КОМПАС', 'Размеры, позиции, шероховатость и надписи можно выделять и править. Выключено — всё отрезками и текстом.', ksw('kdims', S.T.kompasDims !== 'lines', 'Обозначения объектами КОМПАС'))}
-            <div class="opt opt-views"><div class="opt-t"><b>Виды на чертежах</b><span>Главный вид строится всегда, остальные — по ГОСТ 2.305. Не помещаются в А1 — лист станет А0.</span></div>
+            <div class="opt opt-views"><div class="opt-t"><b>Виды на чертежах</b><span>Главный вид строится всегда, остальные — по ГОСТ 2.305. Не помещаются на лист — масштаб станет мельче.</span></div>
               <div class="vgroups">
                 <div class="vgroup"><span class="vgroup-t">Общий вид привода</span><div class="vchips">${vch('vo', 'top', 'сверху', vo.top)}${vch('vo', 'left', 'слева', vo.left)}${vch('vo', 'right', 'справа', vo.right)}${vch('vo', 'bottom', 'снизу', vo.bottom)}${vch('vo', 'back', 'сзади', vo.back)}</div></div>
                 <div class="vgroup"><span class="vgroup-t">Сборочный чертёж редуктора</span><div class="vchips">${vch('sb', 'second', SBN[0], sb.second)}${vch('sb', 'extra', SBN[1], sb.extra)}</div><small>Позиции деталей, видных только на выключенном виде, пропадут.</small></div>
@@ -913,6 +920,7 @@
     { const kd = $('#kdims', main); if (kd) kd.onchange = () => { S.T.kompasDims = kd.checked ? 'native' : 'lines'; saveT(); renderKompas(main, window.scrollY); }; }
     { const su = $('#scaleu', main); if (su) su.onchange = () => { S.T.scaleUniform = su.checked; saveT(); renderKompas(main, window.scrollY); }; }
     main.querySelectorAll('[data-vw]').forEach(el => { el.onchange = () => { const [g, k] = el.dataset.vw.split('.'); S.T.views = S.T.views || {}; S.T.views[g] = Object.assign({}, S.T.views[g] || {}, { [k]: el.checked }); saveT(); renderKompas(main, window.scrollY); }; });
+    $$('#sheetfmt button', main).forEach(b => b.onclick = () => { if (b.getAttribute('aria-checked') === 'true') return; S.T.sheetFmt = b.dataset.val; saveT(); renderKompas(main, window.scrollY); });
     $$('#wormfa button', main).forEach(b => b.onclick = () => { if (b.getAttribute('aria-checked') === 'true') return; S.T.wormFa = b.dataset.val; saveT(); renderKompas(main, window.scrollY); });
     $$('[data-kall]', main).forEach(b => b.onclick = () => {
       const mode = b.dataset.kall; S.T.koff = {};

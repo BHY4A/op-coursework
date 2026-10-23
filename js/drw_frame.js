@@ -177,8 +177,8 @@
     const F = spec.F;
     const find = kind => { const it = partsOf(F); const idx = it.findIndex(q => q.key === kind); return idx >= 0 ? String(idx + 1) : ''; };
     const notes = ['1. Сварка ручная дуговая электродами Э42 ГОСТ 9467-75.', '2. Швы сварных соединений по ГОСТ 5264-80:', '   №1 — ГОСТ 5264-80-Т3-△5; №2 — ГОСТ 5264-80-Н1-△4.', '3. Опорные поверхности подкладок обработать после сварки; неплоскостность — не более 0,2 мм на длине 1000 мм.', '4. Острые кромки притупить. Окалину и брызги металла удалить.', '5. Покрытие: грунт ГФ-021 ГОСТ 25129-82, эмаль ПФ-115 ГОСТ 6465-76.'];
-    for (const [k, kt] of [[1, '1:1'], [0.5, '1:2'], [0.4, '1:2,5'], [0.25, '1:4'], [0.2, '1:5'], [0.1, '1:10']]) {
-      for (const fmt of ['A1']) {
+    for (const fmt of C.fmts()) {
+      for (const [k, kt] of C.scales(1)) {
         const V = frameViews(F, k);
         Object.values(V).forEach(g => { if (g.items.length) { const used = new Set(); DRWASMpositions(g.sh, g.items.map(it => Object.assign({ pos: find(it.kind) }, it)).filter(it => it.pos && !used.has(it.pos) && used.add(it.pos))); } });
         const sh = new Sheet(fmt, true), f = sh.frame;
@@ -196,7 +196,7 @@
         if (!p3) continue;
         // стрелка взгляда «А» снизу на виде спереди
         const mass = partsOf(F).reduce((a, it) => a + it.mass, 0);
-        return { id: 'rama_sb', file: 'rama_SB.cdw', code: `${code} 02.00.00 СБ`, name: 'Рама сварная\nСборочный чертёж', material: '', mass: nf(mass, 0), scale: kt, fmt, landscape: true, sh };
+        return { id: 'rama_sb', file: 'rama_SB.cdw', code: `${code} 02.00.00 СБ`, name: 'Рама сварная\nСборочный чертёж', material: '', mass: nf(mass, 0), scale: kt, fmt, landscape: sh.landscape, sh };
       }
     }
     return null;

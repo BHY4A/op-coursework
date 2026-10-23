@@ -164,7 +164,7 @@
     const red = {
       file: 'spec_reduktor.cdw', code: `${code} 01.00.00`, name: 'Редуктор',
       sections: [
-        S('Документация', 5, [{ fmt: 'А1', code: `${code} 01.00.00 СБ`, name: 'Сборочный чертёж', noPos: true }]),
+        S('Документация', 5, [{ fmt: (opt.formats || {}).reduktor_sb || 'А1', code: `${code} 01.00.00 СБ`, name: 'Сборочный чертёж', noPos: true }]),
         S('Детали', 20, det.map(p => ({ fmt: /Корпус/.test(p.name) ? ((opt.formats || {}).korpus || 'А2') : ((opt.formats || {})[p.id] || 'А3'), code: p.code, name: p.name, qty: 1 })).concat(
           extraParts.map((e, i) => Object.assign({ code: `${code} 01.00.${p2(det.length + 1 + i)}` }, e)))),
         S('Стандартные изделия', 25, fastItems().concat(bear, seals, keys).sort((a, b) => (/^Пробка/.test(a.name) - /^Пробка/.test(b.name)) || a.name.localeCompare(b.name, 'ru', { numeric: true }))  /* так сортирует КОМПАС: пробка — в конце раздела */),
@@ -176,7 +176,7 @@
       file: 'spec_privod.cdw', code: `${code} 00.00.00`, name: task.title,
       sections: [
         S('Документация', 5, [{ fmt: (opt.formats || {}).obshiy_vid || 'А1', code: `${code} 00.00.00 ВО`, name: 'Чертёж общего вида', noPos: true }, { fmt: 'А4', code: `${code} 00.00.00 ПЗ`, name: 'Пояснительная записка', noPos: true }]),
-        S('Сборочные единицы', 15, [{ fmt: 'А1', code: `${code} 01.00.00`, name: 'Редуктор', qty: 1 }, { fmt: (opt.formats || {}).rama_sb || 'А2', code: `${code} 02.00.00`, name: 'Рама', qty: 1 }].concat(R.task === 6 ? [{ fmt: (opt.formats || {}).val_baraban_sb || 'А1', code: `${code} 03.00.00`, name: 'Вал приводной с барабаном', qty: 1 }] : [])),
+        S('Сборочные единицы', 15, [{ fmt: (opt.formats || {}).reduktor_sb || 'А1', code: `${code} 01.00.00`, name: 'Редуктор', qty: 1 }, { fmt: (opt.formats || {}).rama_sb || 'А2', code: `${code} 02.00.00`, name: 'Рама', qty: 1 }].concat(R.task === 6 ? [{ fmt: (opt.formats || {}).val_baraban_sb || 'А1', code: `${code} 03.00.00`, name: 'Вал приводной с барабаном', qty: 1 }] : [])),
         S('Стандартные изделия', 25, [{ name: `Электродвигатель ${R.motor.type}`, qty: 1 }, { name: R.cp ? R.cp.code.replace('Муфта упругая втулочно-пальцевая', 'Муфта') : 'Муфта упругая втулочно-пальцевая', qty: 1 }].concat(R.chn ? [{ name: `Цепь ${R.chn.code} ГОСТ 13568-75`, qty: 1 }] : [], [{ name: `Болт фундаментный М${H.d1 || 16}`, qty: 8 }]).sort((a, b) => a.name.localeCompare(b.name, 'ru', { numeric: true })))
       ]
     };
@@ -247,14 +247,16 @@
     const nd = !!(T || {}).noDims;   // «без размеров» — для ручной простановки
     const wf = (T || {}).wormFa === '1643' ? '1643' : '3675';   // допуск aw червячной передачи
     const su = !!(T || {}).scaleUniform;   // все виды СБ в одном масштабе
+    const sf = ['A4', 'A3', 'A2', 'A1', 'A0'].includes((T || {}).sheetFmt) ? T.sheetFmt : 'A1';   // формат листов чертежей
     const DEFV = root.DRWCORE ? root.DRWCORE.opts.VIEWS_DEF : { vo: {}, sb: {} }, tv = (T || {}).views || {};
     const vw = { vo: Object.assign({}, DEFV.vo, tv.vo || {}), sb: Object.assign({}, DEFV.sb, tv.sb || {}) };   // какие виды строить
-    const key = JSON.stringify({ c: codeOf(P, T || {}), s: (T || {}).student, t: (T || {}).teacher, nd, wf, su, vw });   // основная надпись в геометрию листов не входит — её поля кэш не сбрасывают
+    const key = JSON.stringify({ c: codeOf(P, T || {}), s: (T || {}).student, t: (T || {}).teacher, nd, wf, su, vw, sf });   // основная надпись в геометрию листов не входит — её поля кэш не сбрасывают
     const c = SHEETS.get(R); if (c && c.key === key) return c.v;
     // флаг действует только пока строятся листы (между шагами генератора — снят, чтобы не задеть рисунки записки)
-    const on = () => { if (root.DRWCORE) Object.assign(root.DRWCORE.opts, { noDims: nd, wormFa: wf, scaleUniform: su, views: vw }); }, off = () => { if (root.DRWCORE) Object.assign(root.DRWCORE.opts, { noDims: false, wormFa: '3675', scaleUniform: false, views: JSON.parse(JSON.stringify(DEFV)) }); };
+    const on = () => { if (root.DRWCORE) Object.assign(root.DRWCORE.opts, { fmt: sf, noDims: nd, wormFa: wf, scaleUniform: su, views: vw }); }, off = () => { if (root.DRWCORE) Object.assign(root.DRWCORE.opts, { fmt: 'A1', noDims: false, wormFa: '3675', scaleUniform: false, views: JSON.parse(JSON.stringify(DEFV)) }); };
     off(); yield 'Рабочие чертежи деталей'; on();
     const out = [];
+    const fit = build => root.DRWCORE ? root.DRWCORE.fitSheet(build) : build();   // формат меньше А1: лист с наложениями — мельче или на формат больше
     if (root.DRAWINGS && root.DRWASM) {
       let det = [];
       try { det = root.DRAWINGS.detailSheets(R, P, T || {}); } catch (e) { console.error(e); }
@@ -263,16 +265,18 @@
       try { sp = specs(R, P, T || {}, { formats })[0]; } catch (e) { console.error(e); }
       off(); yield 'Сборочный чертёж редуктора'; on();
       try {
-        const a = sp && root.DRWASM.asmSheet(R, P, T || {}, sp);
-        if (a) out.push({ id: 'reduktor_sb', file: 'reduktor_SB.cdw', code: sp.code + ' СБ', name: 'Редуктор\nСборочный чертёж', material: '', mass: '', scale: a.scale, fmt: a.fmt, landscape: true, sh: a.sh });
+        const a = sp && fit(() => root.DRWASM.asmSheet(R, P, T || {}, sp));
+        if (a) out.push({ id: 'reduktor_sb', file: 'reduktor_SB.cdw', code: sp.code + ' СБ', name: 'Редуктор\nСборочный чертёж', material: '', mass: '', scale: a.scale, fmt: a.fmt, landscape: a.sh.landscape, sh: a.sh });
+        if (a) formats.reduktor_sb = a.fmt.replace('A', 'А');
       } catch (e) { console.error(e); }
       off(); yield 'Чертежи корпуса'; on();
       try {
         if (sp) {
           // по 3D-модели — по одному листу за этап; иначе — общим вызовом
-          const b = root.DRWASM.housingSheets(R, P, T || {}, sp, { part: 'base' });
+          const one = part => { const r = fit(() => { const q = root.DRWASM.housingSheets(R, P, T || {}, sp, { part }); return q && q[0]; }); return r ? [r] : null; };
+          const b = one('base');
           let hs = null;
-          if (b) { off(); yield 'Чертёж крышки корпуса'; on(); const c2 = root.DRWASM.housingSheets(R, P, T || {}, sp, { part: 'cover' }); if (c2) hs = b.concat(c2); }
+          if (b) { off(); yield 'Чертёж крышки корпуса'; on(); const c2 = one('cover'); if (c2) hs = b.concat(c2); }
           if (!hs) hs = root.DRWASM.housingSheets(R, P, T || {}, sp);
           hs.forEach(d => { out.push(d); formats[d.id] = d.fmt.replace('A', 'А').replace('x', '×'); });
         }
@@ -280,17 +284,17 @@
       off(); yield 'Рама и общий вид'; on();
       try {
         const fs = root.DRWFRAME && specs(R, P, T || {}, { formats })[2];
-        const fr = fs && root.DRWFRAME.frameSheet(R, P, T || {}, codeOf(P, T || {}), fs);
+        const fr = fs && fit(() => root.DRWFRAME.frameSheet(R, P, T || {}, codeOf(P, T || {}), fs));
         if (fr) { out.push(fr); formats[fr.id] = fr.fmt.replace('A', 'А').replace('x', '×'); }
       } catch (e) { console.error(e); }
       try {
         const ds = R.task === 6 && root.DRWDRUM ? specs(R, P, T || {}, { formats }).find(q => /03\.00\.00$/.test(q.code)) : null;
-        const db = ds && root.DRWDRUM.sheet(R, P, T || {}, ds);
+        const db = ds && fit(() => root.DRWDRUM.sheet(R, P, T || {}, ds));
         if (db) { out.push(db); formats[db.id] = db.fmt.replace('A', 'А').replace('x', '×'); }
       } catch (e) { console.error(e); }
       try {
-        const dv = root.DRWDRIVE && root.DRWDRIVE.driveSheet(R, P, T || {}, specs(R, P, T || {}, { formats })[1]);
-        if (dv) { const code = codeOf(P, T || {}); out.splice(1, 0, Object.assign(dv, { code: `${code} 00.00.00 ВО`, name: dv.name + '\n' + dv.nameSub, material: '', mass: '' })); formats[dv.id] = 'А1'; }
+        const sp1v = root.DRWDRIVE && specs(R, P, T || {}, { formats })[1], dv = sp1v && fit(() => root.DRWDRIVE.driveSheet(R, P, T || {}, sp1v));
+        if (dv) { const code = codeOf(P, T || {}); out.splice(1, 0, Object.assign(dv, { code: `${code} 00.00.00 ВО`, name: dv.name + '\n' + dv.nameSub, material: '', mass: '' })); formats[dv.id] = dv.fmt.replace('A', 'А'); }
       } catch (e) { console.error(e); }
       try {
         // эскиз общего вида — только из чисел расчёта (без 3D-модели), для сдачи после компоновки (пп. 1.9–1.10).
@@ -300,8 +304,8 @@
           : [[R, { id: 'eskiz_vo', file: 'privod_VO_eskiz.cdw', nameSub: 'Эскиз общего вида' }]];
         let at = out.findIndex(d => d.id === 'obshiy_vid') + 1 || 1;
         list.forEach(([RR, meta]) => {
-          const ds = root.DRWSKETCH && root.DRWSKETCH.sketchSheet(RR, P, T || {}, sp1, meta);
-          if (ds) { out.splice(at++, 0, Object.assign(ds, { code: `${code} 00.00.00 ВО`, name: ds.name + '\n' + ds.nameSub, material: '', mass: '' })); formats[ds.id] = 'А1'; }
+          const ds = root.DRWSKETCH && fit(() => root.DRWSKETCH.sketchSheet(RR, P, T || {}, sp1, meta));
+          if (ds) { out.splice(at++, 0, Object.assign(ds, { code: `${code} 00.00.00 ВО`, name: ds.name + '\n' + ds.nameSub, material: '', mass: '' })); formats[ds.id] = ds.fmt.replace('A', 'А'); }
         });
       } catch (e) { console.error(e); }
       det.forEach(d => out.push(d));

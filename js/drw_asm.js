@@ -979,7 +979,7 @@
     const MX = extView(V.extra || null);
     // масштабы: основной вид (разрез) — как можно крупнее; неосновные виды при нехватке места — в уменьшенном масштабе
     // с сохранением проекционной связи (методичка, разд. 2.2), над ними — их масштаб
-    const SC = [[1, '1:1'], [0.5, '1:2'], [0.4, '1:2,5'], [0.25, '1:4'], [0.2, '1:5']];
+    const SC = C.scales(1);
     const F0 = (() => { try { return root.M3D.housing3d(R, P, T || {}).fasteners; } catch (e) { return null; } })();
     const FEET = (() => { try { return root.M3D.housing3d(R, P, T || {}).feet; } catch (e) { return null; } })();
     const geo = R.task === 1 && root.M3D ? (root.M3D.housing3d(R, P, T || {}) || {}).geo : null;
@@ -1075,7 +1075,9 @@
     };
     // все виды — в масштабе главного (ГОСТ 2.302: масштаб, указанный в основной надписи, общий для изображений);
     // виды раскладываются блоком в проекционной связи, масштаб уменьшается, только если блок не помещается на лист
-    for (const needE of (V.extra ? [true, false] : [false])) for (const fmt of ['A1']) for (const [k, kt] of SC) {
+    // формат — из настройки; третий вид сохраняется, пока масштаб не мельче 1:5, иначе лист строится без него
+    for (const fmt of C.fmts()) for (const needE of (V.extra ? [true, false] : [false])) for (const [k, kt] of SC) {
+      if (needE && k < 0.2) break;
       const B = build(k, k);
       if (needE && !B.E) continue;
       const { S, G2, E } = B;
@@ -1514,8 +1516,7 @@
       `3. Отверстия под подшипники обрабатывать совместно с ${part === 'cover' ? 'корпусом' : 'крышкой корпуса'} после затяжки стяжных болтов и установки штифтов.`,
       '4. *Размеры для справок. Неуказанные предельные отклонения размеров: отверстий H14, валов h14, остальных ±IT14/2.',
       '5. Внутренние необработанные поверхности окрасить маслостойкой краской.'];
-    const SC = [[1, '1:1'], [0.5, '1:2'], [0.4, '1:2,5'], [0.25, '1:4']];
-    for (const [k, kt] of SC) for (const fmt of ['A1']) {
+    for (const fmt of C.fmts()) for (const [k, kt] of C.scales(1)) {
       callouts.clear();
       const V3 = make(k);
       const sh = new Sheet(fmt, true), f = sh.frame;
@@ -1527,7 +1528,7 @@
       // главный вид, вид сверху (под ним) и разрез А–А (справа) — единым блоком в проекционной связи
       if (!DR.placeViews(sh, [{ p: V3.sM.p }, { p: V3.sT.p, rel: 'below', of: 0 }, { p: V3.sA.p, rel: 'right', of: 0 }], { gapGeo: 20 })) continue;
       const name = part === 'base' ? 'Корпус' : 'Крышка корпуса';
-      return { id: part === 'base' ? 'korpus' : 'kryshka_korpusa', file: part === 'base' ? 'korpus.cdw' : 'kryshka_korpusa.cdw', code, name, material: 'СЧ15 ГОСТ 1412-85', mass: '', scale: kt, fmt, landscape: true, sh };
+      return { id: part === 'base' ? 'korpus' : 'kryshka_korpusa', file: part === 'base' ? 'korpus.cdw' : 'kryshka_korpusa.cdw', code, name, material: 'СЧ15 ГОСТ 1412-85', mass: '', scale: kt, fmt, landscape: sh.landscape, sh };
     }
     return null;
   }
@@ -1563,10 +1564,11 @@
       '5. Внутренние необработанные поверхности окрасить маслостойкой краской.'];
     for (const part of ['base', 'cover']) {
       let done = null;
-      for (const [k, kt] of [[1, '1:1'], [0.5, '1:2'], [0.4, '1:2,5'], [0.25, '1:4']]) {
+      for (const fmt of C.fmts()) for (const [k, kt] of C.scales(1)) {
+        if (done) break;
         const G = housingGeom(A, R, k);
         const Pl = housingPlan(G, R, k, part), El = housingElev(G, A, R, k, part);
-        for (const fmt of ['A1']) {
+        {
           const sh = new Sheet(fmt, true), f = sh.frame;
           const notes = notesBase(part === 'cover');
           if (C && sh) {
@@ -1584,7 +1586,7 @@
       }
       if (!done) continue;
       const name = part === 'base' ? 'Корпус' : 'Крышка корпуса';
-      out.push({ id: part === 'base' ? 'korpus' : 'kryshka_korpusa', file: part === 'base' ? 'korpus.cdw' : 'kryshka_korpusa.cdw', code: codeOf(name), name, material: 'СЧ15 ГОСТ 1412-85', mass: '', scale: done.scale, fmt: done.fmt, landscape: true, sh: done.sh });
+      out.push({ id: part === 'base' ? 'korpus' : 'kryshka_korpusa', file: part === 'base' ? 'korpus.cdw' : 'kryshka_korpusa.cdw', code: codeOf(name), name, material: 'СЧ15 ГОСТ 1412-85', mass: '', scale: done.scale, fmt: done.fmt, landscape: done.sh.landscape, sh: done.sh });
     }
     return out;
   }

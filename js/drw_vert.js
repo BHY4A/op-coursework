@@ -186,9 +186,10 @@
     const out = [];
     for (const part of ['base', 'cover']) {
       let done = null;
-      for (const [k, kt] of [[1, '1:1'], [0.5, '1:2'], [0.4, '1:2,5'], [0.25, '1:4']]) {
+      for (const fmt of C.fmts()) for (const [k, kt] of C.scales(1)) {
+        if (done) break;
         const El = elevView(A, R, g, k, part), Pl = planView(A, R, g, k, part);
-        for (const fmt of ['A1']) {
+        {
           const sh = new Sheet(fmt, true), f = sh.frame;
           const notes = notesBase(part === 'cover');
           sh.occupy(sh.stamp, 2); sh.occupy(sh.reserved(), 2);
@@ -204,7 +205,7 @@
       }
       if (!done) continue;
       const name = part === 'base' ? 'Корпус' : 'Крышка корпуса';
-      out.push({ id: part === 'base' ? 'korpus' : 'kryshka_korpusa', file: part === 'base' ? 'korpus.cdw' : 'kryshka_korpusa.cdw', code: codeOf(name), name, material: 'СЧ15 ГОСТ 1412-85', mass: '', scale: done.scale, fmt: done.fmt, landscape: true, sh: done.sh });
+      out.push({ id: part === 'base' ? 'korpus' : 'kryshka_korpusa', file: part === 'base' ? 'korpus.cdw' : 'kryshka_korpusa.cdw', code: codeOf(name), name, material: 'СЧ15 ГОСТ 1412-85', mass: '', scale: done.scale, fmt: done.fmt, landscape: done.sh.landscape, sh: done.sh });
     }
     return out;
   }
