@@ -589,6 +589,7 @@
     if (o.textX !== undefined) { tx = o.textX; anchor = 'lb'; }
     if (inside) {
       this.line(x1, yd, x2, yd, 2); this.p[this.p.length - 1].dl = 1; this.arrow(x1, yd, 180); this.arrow(x2, yd, 0);
+      if (o.out === 'shelf') { this.textFree(shelfOpts(this, x1, yd, x2, yd, text, h, w), i0); return ret(); }
       if (o.out === 'left' || o.out === 'right') {
         const ds = []; for (let d = 0; d <= 120; d += 2.5) ds.push(d);
         const fn = d => o.out === 'left' ? () => { this.line(x1 - d - w - 3, yd, x1, yd, 2); this.text(x1 - 1.5 - d, yd + 0.9, text, { h, anchor: 'rb' }); }
@@ -612,6 +613,20 @@
     } else this.text(tx, yd + 0.9, text, { h, anchor });
     return ret();
   };
+  /* тесно и на продолжении размерной линии — размерное число на полке линии-выноски от размерной линии (ГОСТ 2.307, п. 2.29):
+     выноска под 45° из точки на размерной линии (x1, y1)–(x2, y2), полка горизонтальная, число над полкой */
+  function shelfOpts(sh, x1, y1, x2, y2, text, h, w) {
+    const fns = [], bad = [];
+    for (const L of [6, 10, 14, 19, 25, 32, 40]) for (const t of [0.5, 0.3, 0.7]) for (const [dx, dy] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+      const x = x1 + (x2 - x1) * t, y = y1 + (y2 - y1) * t, sx = x + dx * L * 0.707, sy = y + dy * L * 0.707, ex = dx > 0 ? sx + w + 1.5 : sx - w - 1.5;
+      // полка не должна лечь на горизонтальную линию изображения (перебор наложений это не ловит)
+      const xa = Math.min(sx, ex), xb = Math.max(sx, ex);
+      const onLine = sh.p.some(q => q.t === 'L' && q.g === undefined && Math.abs(q.a[1] - q.a[3]) < 0.05 && Math.abs(q.a[1] - sy) < 1 && Math.max(q.a[0], q.a[2]) > xa && Math.min(q.a[0], q.a[2]) < xb);
+      const fn = () => { sh.line(x, y, sx, sy, 2); sh.line(sx, sy, ex, sy, 2); sh.text(Math.min(sx, ex) + 0.75, sy + 0.9, text, { h }); };
+      (onLine ? bad : fns).push(fn);
+    }
+    return fns.concat(bad);
+  }
   /* вертикальный размер, размерная линия на абсциссе xd; текст слева от линии, снизу вверх */
   S.dimV = function (x1, y1, x2, y2, xd, text, o) {
     o = o || {};
@@ -632,6 +647,7 @@
     if (o.textY !== undefined) { ty = o.textY; anchor = 'lb'; }
     if (inside) {
       this.line(xd, y1, xd, y2, 2); this.p[this.p.length - 1].dl = 1; this.arrow(xd, y1, 270); this.arrow(xd, y2, 90);
+      if (o.out === 'shelf') { this.textFree(shelfOpts(this, xd, y1, xd, y2, text, h, w), i0); return ret(); }
       if (o.out === 'below' || o.out === 'above') {
         // текст на продолжении размерной линии — в первом свободном месте (ГОСТ 2.307, п. 2.10)
         const ds = []; for (let d = 0; d <= 120; d += 2.5) ds.push(d);
@@ -681,7 +697,13 @@
     // надпись над линией (со стороны «вверх» надписи), вдоль линии от стрелки к центру
     for (let t = r - AR - 1 - w / 2; t >= w / 2 - ext + 1; t -= 1.5) ds.push(t);
     if (!ds.length) ds.push(r / 2);
-    this.textFree(ds.map(t => () => this.text(cx + t * c + up[0] * 0.9, cy + t * s + up[1] * 0.9, text, { h, ang: ar, anchor: 'cb' })), i0);
+    const fns = ds.map(t => () => this.text(cx + t * c + up[0] * 0.9, cy + t * s + up[1] * 0.9, text, { h, ang: ar, anchor: 'cb' }));
+    // внутри тесно (малое отверстие в мелком масштабе) — надпись на продолжении размерной линии за окружностью (ГОСТ 2.307, п. 2.10)
+    for (let t = r + AR + 1.5 + w / 2; t <= r + 40; t += 2) fns.push(() => {
+      this.line(p1[0], p1[1], cx + (t + w / 2 + 1) * c, cy + (t + w / 2 + 1) * s, 2);
+      this.text(cx + t * c + up[0] * 0.9, cy + t * s + up[1] * 0.9, text, { h, ang: ar, anchor: 'cb' });
+    });
+    this.textFree(fns, i0);
     // для КОМПАС — объект «Линейный размер с обрывом»: (X1, Y1) — точка со стрелкой, (X2, Y2) — конец за центром
     this.p.push({ t: 'D', k: 'BR', a: [r3(p1[0]), r3(p1[1]), r3(p2[0]), r3(p2[1])], s: String(text), h });
     return this;

@@ -817,6 +817,8 @@
           if (s.horiz) opts.push(() => sh.dimV(p1[0], p1[1], p2[0], p2[1], p1[0], txt, { fixed: true }), () => sh.dimV(p1[0], p1[1], p2[0], p2[1], p1[0], txt, { out: 'above', fixed: true }), () => sh.dimV(p1[0], p1[1], p2[0], p2[1], p1[0], txt, { out: 'below', fixed: true }));
           else opts.push(() => sh.dimH(p1[0], p1[1], p2[0], p2[1], p1[1], txt, { fixed: true }), () => sh.dimH(p1[0], p1[1], p2[0], p2[1], p1[1], txt, { out: 'left', fixed: true }), () => sh.dimH(p1[0], p1[1], p2[0], p2[1], p1[1], txt, { out: 'right', fixed: true }));
         }
+        // последним — число на полке линии-выноски (когда на продолжении размерной линии всё занято изображением)
+        if (C.opts.shelf !== false) xs.slice(0, 3).forEach(xx => { const p1 = s.P(xx, -r), p2 = s.P(xx, r); opts.push(s.horiz ? () => sh.dimV(p1[0], p1[1], p2[0], p2[1], p1[0], txt, { out: 'shelf', fixed: true }) : () => sh.dimH(p1[0], p1[1], p2[0], p2[1], p1[1], txt, { out: 'shelf', fixed: true })); });
         sh.attempt(opts);
       };
       const gearAt = s.segs.filter(g => g.gear || g.role === 'gear' || g.role === 'hub');
@@ -1434,7 +1436,15 @@
       if (bores.length) {
         const b0 = bores[0], r0 = b0.r * k;
         // база А — ось расточки: знак на поверхности расточки, рамка внутри отверстия (не на стенках корпуса)
-        { const up = part === 'base' ? -1 : 1; sM.attempt([65, 115, 80, 100, 50, 130].flatMap(a => [3, 6].map(len => () => sM.datum(XM(b0.c) + r0 * Math.cos(up * a * D2R), YM(b0.c) + r0 * Math.sin(up * a * D2R), up * a + 180, 'А', { len })))); }
+        { const up = part === 'base' ? -1 : 1; const alt = [65, 115, 50, 130].flatMap(a => [3, 6].map(len => () => sM.datum(XM(b0.c) + r0 * Math.cos(up * a * D2R), YM(b0.c) + r0 * Math.sin(up * a * D2R), up * a + 180, 'А', { len })));
+          // малая расточка (рамка внутри не помещается) — знак на оси расточки за дугой (ГОСТ 2.308: база — ось)
+          const rB = (b0.r + 2.1 * (H.dks || 8)) * k;   // за приливом под крышку подшипника
+          if (r0 < 18) alt.length = 0;   // в малой расточке рамка у стенки задевает ось — сразу на ось за приливом
+          [6, 12].forEach(d => [0, 180].forEach(a => alt.push(() => { const yd = YM(b0.c) + up * (rB + d); sM.line(XM(b0.c), YM(b0.c), XM(b0.c), yd + up * 3, 3); sM.datum(XM(b0.c), yd, a, 'А', { len: 3 }); })));
+          // рамка у вертикальной оси расточки пересекла бы осевую — эти положения последними
+          if (r0 < 18) [65, 115, 50, 130].forEach(a => [3, 6].forEach(len => alt.push(() => sM.datum(XM(b0.c) + r0 * Math.cos(up * a * D2R), YM(b0.c) + r0 * Math.sin(up * a * D2R), up * a + 180, 'А', { len }))));
+          [80, 100].forEach(a => [3, 6].forEach(len => alt.push(() => sM.datum(XM(b0.c) + r0 * Math.cos(up * a * D2R), YM(b0.c) + r0 * Math.sin(up * a * D2R), up * a + 180, 'А', { len }))));
+          sM.attempt(alt); }
         bores.slice(1).forEach(b => { const tx = XM(b.c) + b.r * k * 0.7, ty = YM(b.c) + (part === 'base' ? -1 : 1) * b.r * k * 0.71; sM.attempt([[10, -18], [10, 18], [-30, -18], [-30, 18]].map(([dx, dy]) => () => sM.tol(tx + dx, ty + dy, ['par', '0,03', 'А'], { from: dx > 0 ? 'l' : 'r', to: [tx, ty] }))); });
         bores.forEach(b => sM.attempt([0.35, -0.35, 0.6].map(q => () => sM.rough(XM(b.c) + b.r * k * Math.cos((part === 'base' ? 270 : 90) * D2R + q), YM(b.c) + (part === 'base' ? -1 : 1) * b.r * k * Math.abs(Math.sin((part === 'base' ? 270 : 90) * D2R + q)), 'Ra 1,6'))));
       }

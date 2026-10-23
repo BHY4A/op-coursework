@@ -265,7 +265,17 @@
       try { sp = specs(R, P, T || {}, { formats })[0]; } catch (e) { console.error(e); }
       off(); yield 'Сборочный чертёж редуктора'; on();
       try {
-        const a = sp && fit(() => root.DRWASM.asmSheet(R, P, T || {}, sp));
+        // посадки с числом на полке выноски обычно убирают наложения, но иногда отнимают место у номеров позиций —
+        // при замечаниях лист строится и без полок, остаётся вариант с меньшим числом замечаний
+        const asm = () => sp && fit(() => root.DRWASM.asmSheet(R, P, T || {}, sp));
+        const nLint = x => x && root.DRWLINT ? root.DRWLINT.lint(x.sh).length : 0;   // до finalize: лист ещё дополняется
+        let a = asm();
+        const n1 = nLint(a);
+        if (n1 > 0 && root.DRWCORE) {
+          root.DRWCORE.opts.shelf = false;
+          let b = null; try { b = asm(); } finally { root.DRWCORE.opts.shelf = true; }
+          if (b && nLint(b) < n1) a = b;
+        }
         if (a) out.push({ id: 'reduktor_sb', file: 'reduktor_SB.cdw', code: sp.code + ' СБ', name: 'Редуктор\nСборочный чертёж', material: '', mass: '', scale: a.scale, fmt: a.fmt, landscape: a.sh.landscape, sh: a.sh });
         if (a) formats.reduktor_sb = a.fmt.replace('A', 'А');
       } catch (e) { console.error(e); }

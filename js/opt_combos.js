@@ -65,7 +65,7 @@
       [fl(O0[k]), fh(O0[k])].filter((v, i, a) => v !== O0[k] && a.indexOf(v) === i).forEach(v => add(k + '_' + String(v).replace('.', ''), `${name} = ${fnum(v)} (по умолч. ${fnum(O0[k])})`, { [k]: v }));
     });
     if (sel.drw) {
-      ['A4', 'A3', 'A2', 'A0'].forEach(f => add(f, 'листы ' + f.replace('A', 'А'), null, { sheetFmt: f }));
+      // другие форматы листов не проверяются: в приоритете А1 (по умолчанию)
       add('scale1', 'виды в одном масштабе', null, { scaleUniform: true });
       add('lines', 'обозначения отрезками', null, { kompasDims: 'lines' });
     }

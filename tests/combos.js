@@ -3,6 +3,7 @@
    все подходящие двигатели, константы методики на краях диапазона и настройки чертежей (js/opt_combos.js). Пользователь может выбрать любое из них —
    листы и макрос КОМПАС должны строиться без сбоев и без лишних наложений.
    node tests/combos.js [варианты | all] [--quick] [--no-emu] [--only подстрока]
+   --redo файл — только сочетания с замечаниями из вывода прошлого прогона.
    --only — только сочетания, в названии которых есть подстрока (например, --only двигатель).
    --quick — по три сочетания на вариант (по кругу), иначе все (≈1500, несколько часов). Для каждого сочетания: tests/variant.js (листы, линтер)
    и эмулятор КОМПАС (tests/kompas_emu.js). Ошибки и сбои — код выхода 1; замечания линтера сверх варианта по умолчанию — в сводке. */
@@ -11,9 +12,12 @@ const { load } = require('./load.js');
 const ctx = load(path.join(__dirname, '..'));
 const args = process.argv.slice(2);
 const sel = (args[0] && !args[0].startsWith('--') ? args[0] : 'all').toLowerCase();
-const vars = sel === 'all' ? Array.from({ length: 26 }, (_, i) => i + 1) : sel.split(',').map(Number);
+const vars = sel === 'all' || sel.startsWith('--') ? Array.from({ length: 26 }, (_, i) => i + 1) : sel.split(',').map(Number);
 const quick = args.includes('--quick'), emu = !args.includes('--no-emu');
 const only = args.includes('--only') ? args[args.indexOf('--only') + 1] : null;
+// --redo файл — только сочетания, отмеченные в выводе прошлого прогона (строки «△ № N, название» / «✗ № N, название»)
+const redo = args.includes('--redo') ? new Set(require('fs').readFileSync(args[args.indexOf('--redo') + 1], 'utf8').split('\n')
+  .map(l => /^[△✗] № (\d+), (.+)$/.exec(l.trim())).filter(Boolean).map(m => m[1] + '|' + m[2])) : null;
 
 // все сочетания — из js/opt_combos.js (их же предлагает отладочный KOMPAS Build на сайте)
 const combos = no => ctx.OPT_COMBOS(no);
@@ -24,7 +28,7 @@ const run = (file, a) => new Promise(res => execFile(process.execPath, [path.joi
 (async () => {
   const jobs = [];
   vars.forEach((no, i) => {
-    const all = combos(no).filter(c => !only || c.name.includes(only) || c.key.startsWith(only));
+    const all = combos(no).filter(c => (!only || c.name.includes(only) || c.key.startsWith(only)) && (!redo || redo.has(no + '|' + c.name)));
     const pick = quick ? [0, 1, 2].map(k => all[(3 * i + k) % all.length]) : all;
     pick.forEach(c => jobs.push({ no, c }));
   });
