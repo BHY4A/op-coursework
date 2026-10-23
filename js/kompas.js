@@ -581,6 +581,7 @@
     }
     sheets(R, P, T).list.forEach(sd => out.push({ path: 'Чертежи_предпросмотр/' + sd.file.replace('.cdw', '.svg'), desc: `${sd.code} — ${sd.name.replace(/\n(.)/, (m, c) => ', ' + c.toLowerCase())} (${sd.fmt.replace('A', 'А').replace('x', '×')}, ${sd.scale})`, gen: () => sheetSVG(sd, T, { px: 3000 }) }));
     out.push({ path: 'README.txt', desc: 'Как пользоваться файлами', gen: () => readme(d, R) });
+    if (opt && opt.debug) out.push({ path: '60_calibrate.py', desc: 'Калибровка эмулятора: пробные обозначения на пустых листах, их габариты и DXF (out/cal)', gen: () => py(K.drw + '\n\n' + K.cal, d, 'run_calibrate()') });
     if (opt && opt.debug) out.push({ path: 'sheets.json', desc: 'Листы чертежей так, как их рассчитала утилита (для сверки с построенными в КОМПАС)', gen: () => JSON.stringify(d.sheets) });
     // порядок в списке — как в инструкции: сначала bat-файлы запуска, затем макросы, данные, DXF и предпросмотр
     const rank = f => /^README/.test(f.path) ? 0 : /\.bat$/.test(f.path) ? 1 : /\.py$/.test(f.path) ? 2 : /\.json$/.test(f.path) ? 3 : /^DXF\//.test(f.path) ? 4 : 5;

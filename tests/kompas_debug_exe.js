@@ -17,7 +17,8 @@ const subs = [];
 for (const v of vars) {
   const P = TC.defaults(v), R = TC['task' + P.task](P);
   const sub = 'v' + String(v).padStart(2, '0'), dir = path.join(tmp, sub);
-  for (const f of ctx.KOMPAS.files(R, P, {})) {
+  for (const f of ctx.KOMPAS.files(R, P, {}, { debug: true })) {
+    if (subs.length && f.path === '60_calibrate.py') continue;   // калибровка — только в первой папке
     const p = path.join(dir, f.path);
     fs.mkdirSync(path.dirname(p), { recursive: true });
     fs.writeFileSync(p, f.gen());

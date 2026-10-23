@@ -10,7 +10,7 @@ import os, sys, re, json, queue, threading, subprocess, datetime, traceback, run
 
 APP = 'KOMPAS Build'
 EDU_URL = 'https://kompas.ru/kompas-educational/about/'   # КОМПАС-3D Учебная версия (бесплатная)
-VERSION = '1.3'
+VERSION = '1.4'
 
 # порядок как в 00_build_all.py: номера позиций чертежей берутся из спецификаций
 STEPS = [
@@ -19,7 +19,9 @@ STEPS = [
     ('40_spec.py', 'Спецификации', 'Спецификации редуктора, рамы и привода (.spw)'),
     ('30_drawings.py', 'Чертежи', 'Сборочные и рабочие чертежи с основной надписью (.cdw)'),
     ('50_snapshots.py', 'Снимки и архив', 'PNG всех файлов и архив для_отправки.zip'),
+    ('60_calibrate.py', 'Калибровка', 'Пробные обозначения на пустых листах: как КОМПАС их раскладывает (только в отладочном exe)'),
 ]
+DEBUG_ONLY = ('60_calibrate.py',)
 
 
 def here():
@@ -405,7 +407,7 @@ def main_gui():
         stl.pack(side='right')
         for w in (row, txt, tl):
             w.bind('<Button-1>', lambda e, v=var: (not st['running']) and v.set(not v.get()))
-        rows.append(dict(fn=fn, var=var, no=no, status=stl, bg=bg, n=i + 1))
+        rows.append(dict(fn=fn, var=var, no=no, status=stl, bg=bg, n=i + 1, row=row))
 
     def set_no(r, state):
         c = r['no']
@@ -534,7 +536,10 @@ def main_gui():
         stamp_cells['kompas'].configure(text={True: 'найден', False: 'не найден', None: '—'}[ki],
                                         fg=C['ok'] if ki else C['bad'] if ki is False else C['muted'])
         for r, h in zip(rows, have):
-            if not h:
+            if not h and r['fn'] in DEBUG_ONLY:
+                r['var'].set(False)
+                r['row'].pack_forget()
+            elif not h:
                 r['var'].set(False)
                 set_status(r, 'нет файла', 'muted')
                 set_no(r, 'off')
@@ -603,7 +608,9 @@ def main_gui():
     def worker(todo):
         q = st['q']
         was_running = kompas_running() if st['hidden'] else True
-        runs = [(sub, r) for sub in st['subs'] for r in todo] if st['subs'] else [(None, r) for r in todo]
+        # калибровка не зависит от варианта: её файл есть только в первой папке
+        runs = [(sub, r) for sub in st['subs'] for r in todo if os.path.exists(os.path.join(st['folder'], sub, r['fn']))] if st['subs'] \
+            else [(None, r) for r in todo]
         for k, (sub, r) in enumerate(runs):
             if st['stop']:
                 break
@@ -648,6 +655,9 @@ def main_gui():
                         for fn in (os.listdir(d) if os.path.isdir(d) else []):
                             if fn == 'log.txt' or (fn.startswith('geom_') and fn.endswith('.json')) or (fn.startswith('pos_') and fn.endswith('.json')):
                                 z.write(os.path.join(d, fn), sub + '/' + fn)
+                        cd = os.path.join(d, 'cal')   # калибровка: cal.json, листы .cdw и их DXF
+                        for fn in (os.listdir(cd) if os.path.isdir(cd) else []):
+                            z.write(os.path.join(cd, fn), sub + '/cal/' + fn)
                 q.put(('line', 'Журналы всех вариантов собраны в ' + os.path.join(out_dir(), 'log.txt') + '; для отправки — ' + zp))
             except Exception as e:
                 q.put(('line', 'Не удалось собрать журналы: ' + str(e)))
@@ -754,7 +764,7 @@ def main_gui():
     sheet.bind('<Configure>', rewrap)
     if st['subs']:   # отладка: по умолчанию без 3D — спецификации (номера позиций) и чертежи
         for r in rows:
-            r['var'].set(r['fn'] in ('40_spec.py', '30_drawings.py'))
+            r['var'].set(r['fn'] in ('40_spec.py', '30_drawings.py', '60_calibrate.py'))
     refresh()
     log_line('%s %s. Отметьте этапы и нажмите «Построить». Журнал также пишется в %s.' % (APP, VERSION, os.path.join(out_dir(), 'log.txt')), 'muted')
     root.after(80, pump)

@@ -375,7 +375,12 @@ class LineDimension(DObj):
         if int(P['TextType']) == 0 or int(P['TextPos']) <= 0:
             t0 = (a1 + a2) / 2.0 - w / 2.0
         else:
-            tp = int(P['TextPos'])
+            # журнал КОМПАС 25: новый TextPos у уже построенного размера (после первого Update) применяется не так, как у нового —
+            # в эмуляторе он просто не меняется: варианты TextPos надо пробовать новыми размерами
+            if self.ref and getattr(self, 'tp0', None) is not None:
+                tp = self.tp0
+            else:
+                tp = self.tp0 = int(P['TextPos'])
             if tp > 0:
                 n = a1 + d * (tp + GAP_TEXTPOS)
                 t0 = n if d > 0 else n - w
