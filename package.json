@@ -4,7 +4,8 @@
   "description": "Расчёт привода, пояснительная записка и чертежи для курсового проекта «Основы проектирования» (КНИТУ)",
   "scripts": {
     "test": "node tests/run.js",
-    "test:update": "node tests/run.js --update"
+    "test:update": "node tests/run.js --update",
+    "test:kompas": "node tests/kompas_emu.js"
   },
   "engines": { "node": ">=18" }
 }

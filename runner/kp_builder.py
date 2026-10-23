@@ -9,6 +9,7 @@
 import os, sys, re, json, queue, threading, subprocess, datetime, traceback, runpy
 
 APP = 'KOMPAS Build'
+EDU_URL = 'https://kompas.ru/kompas-educational/about/'   # КОМПАС-3D Учебная версия (бесплатная)
 VERSION = '1.2'
 
 # порядок как в 00_build_all.py: номера позиций чертежей берутся из спецификаций
@@ -533,12 +534,14 @@ def main_gui():
             msg, kind = ('В этой папке нет макросов. Скачайте KOMPAS Build заново на вкладке «КОМПАС» утилиты — '
                          'макросы вашего варианта будут внутри exe — или нажмите «Выбрать…» и укажите папку с макросами.'), 'bad'
         elif ki is False:
-            msg, kind = 'КОМПАС-3D не найден в системе. Макросы работают с установленным КОМПАС-3D v25.', 'bad'
+            msg, kind = ('КОМПАС-3D не найден в системе. Макросы работают с установленным КОМПАС-3D v25 — подойдёт бесплатная '
+                         'Учебная версия: ' + EDU_URL + ' (нажмите, чтобы открыть страницу).'), 'bad'
         elif any(ord(ch) > 127 for ch in out_dir()):
             msg, kind = ('В пути к папке есть кириллица или пробелы не на латинице — КОМПАС может не сохранить файлы. '
                          'Надёжнее распаковать архив в C:\\KP\\.'), 'warn'
         if msg:
-            note.configure(text=msg, fg=C[kind], bg=C[kind + '_soft'])
+            note.configure(text=msg, fg=C[kind], bg=C[kind + '_soft'], cursor='hand2' if ki is False else '')
+            note.bind('<Button-1>', (lambda e: __import__('webbrowser').open(EDU_URL)) if ki is False else (lambda e: None))
             note.pack(fill='x', pady=(10, 0), after=fold)
         else:
             note.pack_forget()
