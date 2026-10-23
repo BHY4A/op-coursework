@@ -227,7 +227,7 @@
       for (const fy of fys) {
         if (fr.face) {
           const tx = X(fr.face === 'R' ? s.x1 : s.x0), ty = Y(fr.fr), dir = fr.face === 'R' ? -1 : 1;
-          for (const dx of [8, 14, 22]) opts.push(() => { const att = tx + dir * dx; const x1 = att - 3.5; sh.tol(x1, fy, fr.cells, { from: 'b', fx: 3.5, via: [[att, ty]], to: [tx, ty] }); });
+          for (const dx of [8, 14, 22, 5, 11, 18, 28]) opts.push(() => { const att = tx + dir * dx; const x1 = att - 3.5; sh.tol(x1, fy, fr.cells, { from: 'b', fx: 3.5, via: [[att, ty]], to: [tx, ty] }); });
         } else {
           // точка у поверхности — по всей длине ступени: линия-выноска рамки не должна пересекать размеры паза и другие обозначения
           const ts = fr.bevel ? [0.6, 0.4, 0.75, 0.25] : [0.72, 0.6, 0.85, 0.45, 0.92, 0.3, 0.08, 0.2, 0.8, 0.5];
@@ -384,7 +384,8 @@
     const segs = prepSegs(pd);
     const notes = info.notes || [];
     const plan = [];
-    for (const kk of [2, 1]) for (const fmt of ['A3', 'A2']) plan.push([fmt, kk]);
+    // длинный вал — в натуральную величину на дополнительном формате А3×3, А3×4 (ГОСТ 2.301), а не в уменьшенном масштабе
+    for (const kk of [2, 1]) for (const fmt of kk === 1 ? ['A3', 'A2', 'A3x3', 'A3x4'] : ['A3', 'A2']) plan.push([fmt, kk]);
     for (const kk of [0.5, 0.4, 0.25, 0.2]) for (const fmt of ['A3', 'A2']) plan.push([fmt, kk]);
     for (const [fmt, k] of plan) {
       const tmp = new Sheet('A1', true); tmp.frame = { x1: -5000, y1: -5000, x2: 5000, y2: 5000 };

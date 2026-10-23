@@ -258,7 +258,7 @@
     if (root.DRAWINGS && root.DRWASM) {
       let det = [];
       try { det = root.DRAWINGS.detailSheets(R, P, T || {}); } catch (e) { console.error(e); }
-      const formats = {}; det.forEach(d => { formats[d.id] = d.fmt.replace('A', 'А'); });
+      const formats = {}; det.forEach(d => { formats[d.id] = d.fmt.replace('A', 'А').replace('x', '×'); });
       let sp = null;
       try { sp = specs(R, P, T || {}, { formats })[0]; } catch (e) { console.error(e); }
       off(); yield 'Сборочный чертёж редуктора'; on();
@@ -274,19 +274,19 @@
           let hs = null;
           if (b) { off(); yield 'Чертёж крышки корпуса'; on(); const c2 = root.DRWASM.housingSheets(R, P, T || {}, sp, { part: 'cover' }); if (c2) hs = b.concat(c2); }
           if (!hs) hs = root.DRWASM.housingSheets(R, P, T || {}, sp);
-          hs.forEach(d => { out.push(d); formats[d.id] = d.fmt.replace('A', 'А'); });
+          hs.forEach(d => { out.push(d); formats[d.id] = d.fmt.replace('A', 'А').replace('x', '×'); });
         }
       } catch (e) { console.error(e); }
       off(); yield 'Рама и общий вид'; on();
       try {
         const fs = root.DRWFRAME && specs(R, P, T || {}, { formats })[2];
         const fr = fs && root.DRWFRAME.frameSheet(R, P, T || {}, codeOf(P, T || {}), fs);
-        if (fr) { out.push(fr); formats[fr.id] = fr.fmt.replace('A', 'А'); }
+        if (fr) { out.push(fr); formats[fr.id] = fr.fmt.replace('A', 'А').replace('x', '×'); }
       } catch (e) { console.error(e); }
       try {
         const ds = R.task === 6 && root.DRWDRUM ? specs(R, P, T || {}, { formats }).find(q => /03\.00\.00$/.test(q.code)) : null;
         const db = ds && root.DRWDRUM.sheet(R, P, T || {}, ds);
-        if (db) { out.push(db); formats[db.id] = db.fmt.replace('A', 'А'); }
+        if (db) { out.push(db); formats[db.id] = db.fmt.replace('A', 'А').replace('x', '×'); }
       } catch (e) { console.error(e); }
       try {
         const dv = root.DRWDRIVE && root.DRWDRIVE.driveSheet(R, P, T || {}, specs(R, P, T || {}, { formats })[1]);
@@ -484,7 +484,7 @@
     const g3 = [{ key: 'asm', title: 'Сборка редуктора (' + M.asm.file + ')', req: true }];
     M.parts.filter(p => !GROUPS.some(g => g.test(p))).forEach(p => g3.push({ key: 'p:' + p.id, title: p.name + (p.code ? ' — ' + p.code : ''), note: p.file }));
     GROUPS.forEach(g => { const n = M.parts.filter(g.test).length; if (n) g3.push({ key: g.key, title: g.title, note: 'разных деталей: ' + n }); });
-    const g2 = SH.list.map(d => ({ key: 's:' + d.id, title: d.name.replace(/\n(.)/, (m, c) => ', ' + c.toLowerCase()) + ' — ' + d.code, note: d.fmt.replace('A', 'А') + ', ' + d.scale, req: req.includes(d.id) }));
+    const g2 = SH.list.map(d => ({ key: 's:' + d.id, title: d.name.replace(/\n(.)/, (m, c) => ', ' + c.toLowerCase()) + ' — ' + d.code, note: d.fmt.replace('A', 'А').replace('x', '×') + ', ' + d.scale, req: req.includes(d.id) }));
     const g1 = specs(R, P, T).map(s => ({ key: 'c:' + s.file, title: 'Спецификация: ' + s.name + ' — ' + s.code }));
     return [{ title: '3D-модели и сборка', items: g3 }, { title: 'Чертежи', items: g2 }, { title: 'Спецификации', items: g1 }];
   }
@@ -575,7 +575,7 @@
       const g = p.kind === 'shaft' ? dxfShaft(p) : p.kind === 'housing' ? dxfBox(p) : dxfWheel(p);
       out.push({ path: 'DXF/' + p.id + '.dxf', desc: `${p.code} ${p.name} — контур для импорта в КОМПАС`, gen: () => g });
     }
-    sheets(R, P, T).list.forEach(sd => out.push({ path: 'Чертежи_предпросмотр/' + sd.file.replace('.cdw', '.svg'), desc: `${sd.code} — ${sd.name.replace(/\n(.)/, (m, c) => ', ' + c.toLowerCase())} (${sd.fmt.replace('A', 'А')}, ${sd.scale})`, gen: () => sheetSVG(sd, T, { px: 3000 }) }));
+    sheets(R, P, T).list.forEach(sd => out.push({ path: 'Чертежи_предпросмотр/' + sd.file.replace('.cdw', '.svg'), desc: `${sd.code} — ${sd.name.replace(/\n(.)/, (m, c) => ', ' + c.toLowerCase())} (${sd.fmt.replace('A', 'А').replace('x', '×')}, ${sd.scale})`, gen: () => sheetSVG(sd, T, { px: 3000 }) }));
     out.push({ path: 'README.txt', desc: 'Как пользоваться файлами', gen: () => readme(d, R) });
     if (opt && opt.debug) out.push({ path: 'sheets.json', desc: 'Листы чертежей так, как их рассчитала утилита (для сверки с построенными в КОМПАС)', gen: () => JSON.stringify(d.sheets) });
     // порядок в списке — как в инструкции: сначала bat-файлы запуска, затем макросы, данные, DXF и предпросмотр

@@ -4,7 +4,11 @@
   'use strict';
   const D2R = Math.PI / 180;
   const FONT_K = 1122 / 714;   // кегль шрифта ГОСТ 2.304 тип А по высоте прописной h (cap height 714 из 1122 ед.)
-  const FMT = { A4: [210, 297], A3: [420, 297], A2: [594, 420], A1: [841, 594], A0: [1189, 841] };
+  const FMT = { A4: [210, 297], A3: [420, 297], A2: [594, 420], A1: [841, 594], A0: [1189, 841],
+    // дополнительные форматы ГОСТ 2.301 (кратность короткой стороны) — для длинных деталей без уменьшения масштаба
+    A3x3: [891, 420], A3x4: [1189, 420], A4x3: [630, 297], A4x4: [841, 297] };
+  /* обозначение формата для надписей: А3×3 */
+  const fmtName = f => String(f).replace('A', 'А').replace('x', '×');
   const r3 = x => Math.round(x * 1000) / 1000;
   const fmtNum = (x, dig) => { if (x === undefined || x === null || isNaN(x)) return ''; const k = Math.pow(10, dig === undefined ? 2 : dig); return String(Math.round(x * k) / k).replace('.', ','); };
 
@@ -1007,7 +1011,7 @@
       if (this.landscape) { L(f.x1, f.y2 - 14, f.x1 + 70, f.y2 - 14, 1); L(f.x1 + 70, f.y2 - 14, f.x1 + 70, f.y2, 1); T(f.x1 + 35, f.y2 - 7, s.code, 5, 'cm', 180); }
       else { L(f.x2 - 14, f.y2, f.x2 - 14, f.y2 - 70, 1); L(f.x2 - 14, f.y2 - 70, f.x2, f.y2 - 70, 1); T(f.x2 - 7, f.y2 - 35, s.code, 5, 'cm', 90); }
     }
-    T(x0 + 70, 1.2, 'Копировал', sm); T(x0 + 140, 1.2, 'Формат ' + this.fmt.replace('A', 'А'), sm);
+    T(x0 + 70, 1.2, 'Копировал', sm); T(x0 + 140, 1.2, 'Формат ' + fmtName(this.fmt), sm);
     return pv;
   };
   /* зона, закрытая графой 26 (не занимать изображением) */
@@ -1363,5 +1367,5 @@
     const b = root.GOST_FONT_A_ITALIC; if (!b || /@font-face/.test(svg)) return svg;
     return svg.replace(/(<svg[^>]*>)/, `$1<style>@font-face{font-family:'GOST 2.304 A';font-style:italic;src:url(data:font/ttf;base64,${b}) format('truetype')}</style>`);
   }
-  root.DRWCORE = { Sheet, View, tw, wrap, toSVG, embedFont, fmtNum, D2R, FMT, opts: OPTS };
+  root.DRWCORE = { Sheet, View, tw, wrap, toSVG, embedFont, fmtNum, D2R, FMT, fmtName, opts: OPTS };
 })(typeof window !== 'undefined' ? window : globalThis);
