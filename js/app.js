@@ -854,7 +854,7 @@
   }
   /* KOMPAS Build (runner/kp_builder.py, собран в dl/KOMPAS-Build.exe): макросы без установленного Python */
   const EDU_URL = 'https://kompas.ru/kompas-educational/about/';   // КОМПАС-3D Учебная версия (бесплатная, АСКОН)
-  const BUILDER_VER = '1.2';
+  const BUILDER_VER = '1.3';
   let builderBlob = null;
   /* одноразовый KOMPAS Build: в конец exe дописываются макросы варианта (zip; данные и настройки — уже в макросах):
      [exe][zip][длина zip — 8 байт little-endian]['KPBUILD1'] — построитель находит их в своём файле и распаковывает сам */

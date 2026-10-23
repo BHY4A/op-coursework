@@ -10,7 +10,7 @@ import os, sys, re, json, queue, threading, subprocess, datetime, traceback, run
 
 APP = 'KOMPAS Build'
 EDU_URL = 'https://kompas.ru/kompas-educational/about/'   # КОМПАС-3D Учебная версия (бесплатная)
-VERSION = '1.2'
+VERSION = '1.3'
 
 # порядок как в 00_build_all.py: номера позиций чертежей берутся из спецификаций
 STEPS = [
@@ -278,6 +278,14 @@ def main_gui():
         except Exception:
             pass
     out_dir = lambda: st['out'] or os.path.join(st['folder'], 'out')
+    # отладочный exe: в zip папки вариантов (v01, v02, …) и debug.json — этапы идут по всем вариантам подряд, журналы — в один
+    st['subs'] = []
+    try:
+        with open(os.path.join(st['folder'], 'debug.json'), encoding='utf-8') as fh:
+            st['subs'] = [d for d in json.load(fh).get('vars', []) if os.path.isdir(os.path.join(st['folder'], d))]
+    except Exception:
+        pass
+    mfold = lambda: os.path.join(st['folder'], st['subs'][0]) if st['subs'] else st['folder']
     hidden = tk.BooleanVar(value=True)
 
     # --- элементы в стиле сайта: плоские кнопки, отметки-квадраты, штамп
@@ -509,15 +517,19 @@ def main_gui():
         folder = st['folder']
         fold_lbl.configure(text=out_dir() if st['emb'] else folder)
         fold_t.configure(text='Результаты' if st['emb'] else 'Папка')
-        have = [os.path.exists(os.path.join(folder, r['fn'])) for r in rows]
+        have = [os.path.exists(os.path.join(mfold(), r['fn'])) for r in rows]
         info = {}
         try:
-            with open(os.path.join(folder, 'params.json'), encoding='utf-8') as fh:
+            with open(os.path.join(mfold(), 'params.json'), encoding='utf-8') as fh:
                 info = json.load(fh)
         except Exception:
             pass
-        stamp_cells['var'].configure(text=('задача %s, вар. %s' % (info.get('task'), info.get('v'))) if info.get('task') else '—')
-        stamp_cells['code'].configure(text=info.get('code') or '—')
+        if st['subs']:
+            stamp_cells['var'].configure(text='отладка: %d вариантов' % len(st['subs']))
+            stamp_cells['code'].configure(text='все варианты')
+        else:
+            stamp_cells['var'].configure(text=('задача %s, вар. %s' % (info.get('task'), info.get('v'))) if info.get('task') else '—')
+            stamp_cells['code'].configure(text=info.get('code') or '—')
         ki = kompas_installed()
         stamp_cells['kompas'].configure(text={True: 'найден', False: 'не найден', None: '—'}[ki],
                                         fg=C['ok'] if ki else C['bad'] if ki is False else C['muted'])
@@ -559,7 +571,7 @@ def main_gui():
     # --- запуск
 
     def start():
-        todo = [r for r in rows if r['var'].get() and os.path.exists(os.path.join(st['folder'], r['fn']))]
+        todo = [r for r in rows if r['var'].get() and os.path.exists(os.path.join(mfold(), r['fn']))]
         if not todo or st['running']:
             return
         out = out_dir()
@@ -578,7 +590,7 @@ def main_gui():
             if r in todo:
                 set_status(r, 'ожидает')
                 set_no(r, '')
-            elif os.path.exists(os.path.join(st['folder'], r['fn'])):
+            elif os.path.exists(os.path.join(mfold(), r['fn'])):
                 set_status(r, 'пропущен')
                 set_no(r, 'off')
         summary.configure(text='Запускаю КОМПАС-3D' + (' в фоне' if st['hidden'] else '') + '…', fg=C['muted'])
@@ -591,16 +603,21 @@ def main_gui():
     def worker(todo):
         q = st['q']
         was_running = kompas_running() if st['hidden'] else True
-        for r in todo:
+        runs = [(sub, r) for sub in st['subs'] for r in todo] if st['subs'] else [(None, r) for r in todo]
+        for k, (sub, r) in enumerate(runs):
             if st['stop']:
                 break
-            q.put(('begin', r))
-            path = os.path.join(st['folder'], r['fn'])
+            q.put(('begin', r, k, len(runs), sub))
+            folder = os.path.join(st['folder'], sub) if sub else st['folder']
+            out = os.path.join(out_dir(), sub) if sub else out_dir()
+            path = os.path.join(folder, r['fn'])
             cmd = self_cmd('--run', path)
-            env = dict(os.environ, PYTHONIOENCODING='utf-8', PYTHONUNBUFFERED='1', KP_KOMPAS_VISIBLE='0' if st['hidden'] else '1', KP_OUT=out_dir())
+            env = dict(os.environ, PYTHONIOENCODING='utf-8', PYTHONUNBUFFERED='1', KP_KOMPAS_VISIBLE='0' if st['hidden'] else '1', KP_OUT=out)
+            if sub:
+                env['KP_DEBUG'] = '1'
             flags = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
             try:
-                p = subprocess.Popen(cmd, cwd=st['folder'], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                p = subprocess.Popen(cmd, cwd=folder, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                                      stderr=subprocess.STDOUT, env=env, creationflags=flags)
             except Exception as e:
                 q.put(('line', 'Не удалось запустить ' + r['fn'] + ': ' + str(e)))
@@ -609,8 +626,31 @@ def main_gui():
             st['proc'] = p
             for raw in p.stdout:
                 q.put(('line', raw.decode('utf-8', 'replace')))
-            q.put(('end', r, p.wait()))
+            q.put(('end', r, p.wait(), k, len(runs)))
             st['proc'] = None
+        if st['subs']:
+            # один журнал на все варианты: log.txt в папке результатов, по разделу на вариант
+            try:
+                with open(os.path.join(out_dir(), 'log.txt'), 'w', encoding='utf-8') as fo:
+                    for sub in st['subs']:
+                        lg = os.path.join(out_dir(), sub, 'log.txt')
+                        if os.path.exists(lg):
+                            fo.write('\n######## %s ########\n' % sub)
+                            with open(lg, encoding='utf-8', errors='replace') as fi:
+                                fo.write(fi.read())
+                # всё для разбора одним файлом: журналы и geom_*.json (размещение обозначений КОМПАС против листа утилиты)
+                import zipfile
+                zp = os.path.join(out_dir(), 'debug_logs.zip')
+                with zipfile.ZipFile(zp, 'w', zipfile.ZIP_DEFLATED) as z:
+                    z.write(os.path.join(out_dir(), 'log.txt'), 'log.txt')
+                    for sub in st['subs']:
+                        d = os.path.join(out_dir(), sub)
+                        for fn in (os.listdir(d) if os.path.isdir(d) else []):
+                            if fn == 'log.txt' or (fn.startswith('geom_') and fn.endswith('.json')) or (fn.startswith('pos_') and fn.endswith('.json')):
+                                z.write(os.path.join(d, fn), sub + '/' + fn)
+                q.put(('line', 'Журналы всех вариантов собраны в ' + os.path.join(out_dir(), 'log.txt') + '; для отправки — ' + zp))
+            except Exception as e:
+                q.put(('line', 'Не удалось собрать журналы: ' + str(e)))
         if st['hidden']:
             q.put(('line', 'КОМПАС: ' + ('закрываю (его запустило построение)' if not was_running else 'снова показываю окно')))
             try:
@@ -638,21 +678,20 @@ def main_gui():
                 ev = q.get_nowait()
                 kind = ev[0]
                 if kind == 'begin':
-                    r = ev[1]
+                    r, k, n, sub = ev[1], ev[2], ev[3], ev[4]
                     st['cur'] = r
-                    st['results'][r['fn']] = dict(fail=0, warn=0, mis=0, tb=False)
-                    set_status(r, 'идёт…', 'accent2')
+                    st['results'].setdefault(r['fn'], dict(fail=0, warn=0, mis=0, tb=False))
+                    set_status(r, ('идёт: %s' % sub) if sub else 'идёт…', 'accent2')
                     set_no(r, 'run')
-                    log_line('>>> ' + r['fn'], 'head')
-                    i = st['todo'].index(r)
-                    draw_prog((i + 0.15) / len(st['todo']))
-                    summary.configure(text='Этап %d из %d: %s' % (i + 1, len(st['todo']), STEPS[r['n'] - 1][1]), fg=C['fg'])
+                    log_line('>>> ' + (sub + ' · ' if sub else '') + r['fn'], 'head')
+                    draw_prog((k + 0.15) / n)
+                    summary.configure(text='%s %d из %d: %s' % ('Запуск' if sub else 'Этап', k + 1, n, STEPS[r['n'] - 1][1] + (' · ' + sub if sub else '')), fg=C['fg'])
                 elif kind == 'line':
                     text = ev[1]
                     res = st['results'].get(st.get('cur', {}).get('fn'))
                     m = RX_SUM.search(text)
-                    if m and res is not None:
-                        res.update(fail=int(m.group(1)), warn=int(m.group(2)), mis=int(m.group(3)))
+                    if m and res is not None:   # в отладке по всем вариантам — сумма
+                        res.update(fail=res['fail'] + int(m.group(1)), warn=res['warn'] + int(m.group(2)), mis=res['mis'] + int(m.group(3)))
                     if res is not None and ('Traceback' in text or 'СБОЙ МАКРОСА' in text):
                         res['tb'] = True
                     log_line(text)
@@ -674,7 +713,7 @@ def main_gui():
                     else:
                         set_status(r, 'готово', 'ok')
                         set_no(r, 'ok')
-                    draw_prog((st['todo'].index(r) + 1) / len(st['todo']))
+                    draw_prog((ev[3] + 1) / ev[4])
                 elif kind == 'done':
                     st['running'] = False
                     res = st['results'].values()
@@ -713,6 +752,9 @@ def main_gui():
         h2.configure(wraplength=max(300, e.width - 90))
         note.configure(wraplength=max(300, e.width - 70))
     sheet.bind('<Configure>', rewrap)
+    if st['subs']:   # отладка: по умолчанию без 3D — спецификации (номера позиций) и чертежи
+        for r in rows:
+            r['var'].set(r['fn'] in ('40_spec.py', '30_drawings.py'))
     refresh()
     log_line('%s %s. Отметьте этапы и нажмите «Построить». Журнал также пишется в %s.' % (APP, VERSION, os.path.join(out_dir(), 'log.txt')), 'muted')
     root.after(80, pump)
