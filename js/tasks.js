@@ -467,9 +467,9 @@
     R.cp = cr;
     R.sections = S;
     R.summary = [
-      ['Двигатель', `${mo.type}, ${fnum(mo.P, 0)} кВт, ${mo.n} мин⁻¹`], ['Передаточное отношение редуктора', fnum(g.uf, 0)], ['Червячная пара', `aw = ${fnum(g.aw)} мм, m = ${fnum(g.m, 0)} мм, q = ${fnum(g.q, 0)}, z1/z2 = ${g.z1}/${g.z2}`],
-      ['Материал венца', `${mt.mat.name}`], ['Цепь', `${chn.code} ГОСТ 13568-75, z1/z2 = ${chn.z1}/${chn.z2}`], ['Подшипники', `${(R.b1 || b1).id}, ${(R.b2 || b2).id}`], ['Муфта', cr.code], ['Температура масла', `${fnum(th.t)} °C`]];
-    R.kpis = [['Двигатель', mo.type], ['uч', fnum(g.uf, 0)], ['aw', fnum(g.aw) + ' мм'], ['m / q', fnum(g.m, 0) + ' / ' + fnum(g.q, 0)], ['σH / [σH]', fnum(st.sigH) + ' / ' + fnum(ck.sH) + ' МПа'], ['ηч', fnum(ck.eta, 3)], ['Цепь', chn.code], ['tм', fnum(th.t) + ' °C']];
+      ['Двигатель', `${mo.type}, ${fnum(mo.P, 0)} кВт, ${mo.n} мин⁻¹`], ['Передаточное отношение редуктора', fnum(g.uf, 0)], ['Червячная пара', `a<sub>w</sub> = ${fnum(g.aw)} мм, m = ${fnum(g.m, 0)} мм, q = ${fnum(g.q, 0)}, z<sub>1</sub>/z<sub>2</sub> = ${g.z1}/${g.z2}`],
+      ['Материал венца', `${mt.mat.name}`], ['Цепь', `${chn.code} ГОСТ 13568-75, z<sub>1</sub>/z<sub>2</sub> = ${chn.z1}/${chn.z2}`], ['Подшипники', `${(R.b1 || b1).id}, ${(R.b2 || b2).id}`], ['Муфта', cr.code], ['Температура масла', `${fnum(th.t)} °C`]];
+    R.kpis = [['Двигатель', mo.type], ['u<sub>ч</sub>', fnum(g.uf, 0)], ['a<sub>w</sub>', fnum(g.aw) + ' мм'], ['m / q', fnum(g.m, 0) + ' / ' + fnum(g.q, 0)], ['σ<sub>H</sub> / [σ]<sub>H</sub>', fnum(st.sigH) + ' / ' + fnum(ck.sH) + ' МПа'], ['η<sub>ч</sub>', fnum(ck.eta, 3)], ['Цепь', chn.code], ['t<sub>м</sub>', fnum(th.t) + ' °C']];
     return R;
   }
 

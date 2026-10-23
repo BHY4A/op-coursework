@@ -40,7 +40,7 @@
   }, true);
 
   /* ---------- стиль оформления ---------- */
-  var SKEY = 'suite-style', SVER = '202610222330';
+  var SKEY = 'suite-style', SVER = '202610231300';
   var STYLES = [
     { id: 'journal', name: 'Журнал', sw: 'linear-gradient(135deg,#fbfcfd 0 56%,#dfe5ea 56%)' },
     { id: 'azure', name: 'Лазурь', fonts: 'PT+Mono&family=PT+Sans:ital,wght@0,400;0,700;1,400',
@@ -274,7 +274,7 @@
 
   /* превью переключателя «Сверка с ручным расчётом» — одинаковое во всех утилитах; f — формула этой утилиты, mine — «ваше» значение */
   function chkEx(f, mine) {
-    var box = function (lbl, body, on) { return '<div class="ex' + (on ? ' on' : '') + '"><div class="ex-h">' + lbl + (on ? '<span>сейчас</span>' : '') + '</div><div class="ex-b">' + body + '</div></div>'; };
+    var box = function (lbl, body, on) { return '<div class="ex' + (on ? ' on' : '') + '"><div class="ex-h"><span class="ex-l">' + lbl + '</span>' + (on ? '<span class="ex-now">сейчас</span>' : '') + '</div><div class="ex-b">' + body + '</div></div>'; };
     var ff = '<div class="ex-f">' + f + '</div>';
     return '<div class="opt-ex">' + box('Выключено', ff, true) + box('Включено', ff + '<div class="ex-chk">Ваше значение <i>' + mine + '</i> <b>✓ совпадает</b></div>', false) + '</div>';
   }

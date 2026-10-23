@@ -224,6 +224,7 @@
     try { R = compute(Object.assign({}, S.P, { O: Object.assign({}, S.P.O, patchO) })); } catch (e) { R = null; }
     altCache.set(key, R); return R;
   }
+  const segOrder = sg => sg ? [...sg.querySelectorAll('button[data-val]')].map(b => b.dataset.val) : null;
   const exF = t => `<div class="ex-f">${t}</div>`;
   /* PV[key] = { vals: [[value, label]], show: R => [строки] } */
   const motorLine = R => `Двигатель ${R.motor.type}: ${fnum(R.motor.P, 0)} кВт, ${R.motor.n} мин⁻¹`;
@@ -231,9 +232,9 @@
   const PV = {
     sync: { vals: [[1500, '1500 мин⁻¹'], [1000, '1000 мин⁻¹'], [3000, '3000 мин⁻¹']], show: R => [motorLine(R), R.task === 3 ? `u<sub>ч</sub> = ${fnum(R.g.uf, 0)}, a<sub>w</sub> = ${fnum(R.g.aw)} мм` : R.task === 6 ? `u<sub>б</sub>/u<sub>т</sub> = ${fnum(R.gB.uf, 3)}/${fnum(R.gT.uf, 3)}, a<sub>w.т</sub> = ${fnum(R.gT.aw)} мм` : `d<sub>e1</sub> = ${fnum(R.gC.de1)} мм, a<sub>w</sub> = ${fnum(R.gT.aw)} мм`] },
     uChain: { vals: [[2, '2'], [2.5, '2,5'], [3, '3']], show: R => [`цепь ${R.chn.code}, z<sub>1</sub>/z<sub>2</sub> = ${R.chn.z1}/${R.chn.z2}`, R.task === 3 ? `u<sub>ч</sub> = ${fnum(R.g.uf, 0)}, a<sub>w</sub> = ${fnum(R.g.aw)} мм` : `u<sub>б</sub>/u<sub>т</sub> = ${fnum(R.gB.uf, 3)}/${fnum(R.gT.uf, 3)}`] },
-    wormAw: { vals: [['ch', 'Чернавский (4.19)'], ['met', 'Методичка, Ka = 610']], show: R => [`a<sub>w</sub> расч. = ${fnum(R.g.awr)} мм → ${fnum(R.g.aw)} мм`, `m = ${fnum(R.g.m, 0)} мм, q = ${fnum(R.g.q, 0)}`, `σ<sub>H</sub> = ${fnum(R.st.sigH)} МПа`] },
+    wormAw: { vals: [['ch', 'Чернавский (4.19)'], ['met', 'Методичка, K<sub>a</sub> = 610']], show: R => [`a<sub>w</sub> расч. = ${fnum(R.g.awr)} мм → ${fnum(R.g.aw)} мм`, `m = ${fnum(R.g.m, 0)} мм, q = ${fnum(R.g.q, 0)}`, `σ<sub>H</sub> = ${fnum(R.st.sigH)} МПа`] },
     wormSH: { vals: [['met', 'Формулы методички'], ['ch', 'Таблицы 4.8, 4.9 [Ч]']], show: R => [`[σ]<sub>H</sub> = ${fnum(R.ck.sH)} МПа`, `[σ]<sub>F</sub> = ${fnum(R.mt.sF)} МПа`, `a<sub>w</sub> = ${fnum(R.g.aw)} мм`] },
-    KHLmode: { vals: [['met', 'K<sub>HL</sub> = 1 при N > 10⁷'], ['ch', 'По формуле, ≥ 0,67']], show: R => [`[σ]<sub>H</sub> = ${fnum(R.ck.sH)} МПа`, `a<sub>w</sub> = ${fnum(R.g.aw)} мм, m = ${fnum(R.g.m, 0)} мм`] },
+    KHLmode: { vals: [['met', 'K<sub>HL</sub> = 1 при N > 10⁷'], ['ch', 'По формуле, ≥ 0,67']], cur: () => S.P.O.KHLmode || 'met', show: R => [`[σ]<sub>H</sub> = ${fnum(R.ck.sH)} МПа`, `a<sub>w</sub> = ${fnum(R.g.aw)} мм, m = ${fnum(R.g.m, 0)} мм`] },
     etaWpre: { vals: [[0.7, '0,70'], [0.75, '0,75'], [0.8, '0,80']], show: R => [`P<sub>расч</sub> = ${fnum(R.eta0.Preq)} кВт → ${R.motor.type}`, `η<sub>ч</sub> уточн. = ${fnum(R.ck.eta, 3)}`] },
     wormDeg: { vals: [['auto', 'По v<sub>s</sub>'], [7, '7-я'], [8, '8-я']], show: R => [`степень ${R.st.deg}, K<sub>v</sub> = ${fnum(R.st.Kv, 0)}`, `σ<sub>H</sub> = ${fnum(R.st.sigH)} МПа`] },
     wormNe: { vals: [['simple', 'N = 60·n·t<sub>Σ</sub>'], ['load', 'По графику нагрузки']], show: R => [`K<sub>FL</sub> = ${fnum(R.mt.KFL, 3)}, [σ]<sub>F</sub> = ${fnum(R.mt.sF)} МПа`] },
@@ -242,19 +243,21 @@
     wKey: { vals: [['met', 'd<sub>расч</sub> = 0,9d'], ['net', 'W с учётом паза']], show: R => { const c = (R.ch2 || R.ch1).secs.find(s => s.si !== undefined) || (R.ch2 || R.ch1).secs[0]; return [`вал II: σ<sub>экв</sub> = ${fnum(c.se)} / [σ] = ${fnum(c.allow)} МПа`]; } },
     keyExact: { vals: [[false, '4,4T/(d·h·l<sub>р</sub>)'], [true, '2T/(d(h−t₁)l<sub>р</sub>)']], show: R => R.keys.slice(0, 3).map(k => `${esc(k.title.split('—')[1] || k.title)}: σ<sub>см</sub> = ${fnum(k.s)} МПа`) },
     FmMode: { vals: [['gost', 'ГОСТ 16162'], ['met', '(0,2…0,5)·2T/D₀']], show: R => [`F<sub>м</sub> = ${fnum(R.Fm || 0)} Н`] },
-    awT6: { vals: [['met', 'Момент колеса'], ['pin', 'Момент шестерни']], show: R => [`aw.б = ${fnum(R.gB.aw)} мм, aw.т = ${fnum(R.gT.aw)} мм`, `σH.т = ${fnum(R.cT.sH)} МПа`] },
-    wormSHcheck: { vals: [['met', 'Методичка'], ['ch', 'Чернавский (4.23)']], show: R => [`σH = ${fnum(R.st.sigH)} / [σH] = ${fnum(R.ck.sH)} МПа`, `aw = ${fnum(R.g.aw)} мм`] },
+    awT6: { vals: [['met', 'Момент колеса'], ['pin', 'Момент шестерни']], show: R => [`a<sub>w.б</sub> = ${fnum(R.gB.aw)} мм, a<sub>w.т</sub> = ${fnum(R.gT.aw)} мм`, `σ<sub>H.т</sub> = ${fnum(R.cT.sH)} МПа`] },
+    wormSHcheck: { vals: [['met', 'Методичка'], ['ch', 'Чернавский (4.23)']], show: R => [`σ<sub>H</sub> = ${fnum(R.st.sigH)} / [σ]<sub>H</sub> = ${fnum(R.ck.sH)} МПа`, `a<sub>w</sub> = ${fnum(R.g.aw)} мм`] },
     t1Coup: { vals: [['met', 'T<sub>2Т</sub> = T<sub>в</sub>/η<sub>м</sub>'], ['scheme', 'T<sub>2Т</sub> = T<sub>в</sub>']], show: R => [`T<sub>2Т</sub> = ${fnum(R.K.T2T)} Н·м, T<sub>1Б</sub> = ${fnum(R.K.T1B)} Н·м`] },
     autoFix: { vals: [[true, 'Включено (как в методичке)'], [false, 'Выключено']], cur: () => S.P.O.autoFix !== false, show: R => { let bad = 0; for (const s of R.sections) for (const it of s.items) if (it.k === 'check' && !it.ok) bad++; return R.summary.slice(1).map(([k, v]) => `${esc(k)}: ${v}`).concat(bad ? `не выполняется проверок: ${bad}` : 'все проверки выполняются'); } },
     Fm1: { vals: [[false, 'Нет'], [true, 'Да']], show: R => { const c = R.ch1.secs[0]; return [`R<sub>A</sub> = ${fnum(R.B1.RA)} Н, R<sub>B</sub> = ${fnum(R.B1.RB)} Н`, `σ<sub>экв</sub> = ${fnum(c.se)} МПа`]; } }
   };
-  function pvHtml(key) {
+  /* карточки вариантов идут в том же порядке, что и кнопки переключателя */
+  const byOrder = (vals, order) => order && order.length ? vals.slice().sort((a, b) => (order.indexOf(String(a[0])) + 1 || 99) - (order.indexOf(String(b[0])) + 1 || 99)) : vals;
+  function pvHtml(key, order) {
     const d = PV[key], cur = d.cur ? d.cur() : S.P.O[key] === undefined ? (key === 'dec' ? S.P.dec : undefined) : S.P.O[key];
-    const items = d.vals.map(([v, l]) => {
+    const items = byOrder(d.vals, order).map(([v, l]) => {
       const on = String(v) === String(cur);
       const R = on ? S.R : altR({ [key]: v });
       const body = R ? d.show(R).map(exF).join('') : exF('расчёт с этой настройкой не выполняется');
-      return `<div class="ex${on ? ' on' : ''}"><div class="ex-h">${l}${on ? '<span>сейчас</span>' : ''}</div><div class="ex-b">${body}</div></div>`;
+      return `<div class="ex${on ? ' on' : ''}"><div class="ex-h"><span class="ex-l">${l}</span>${on ? '<span class="ex-now">сейчас</span>' : ''}</div><div class="ex-b">${body}</div></div>`;
     });
     return `<div class="ex-multi" style="--n:${items.length}">${items.join('')}</div>`;
   }
@@ -277,22 +280,22 @@
     listings: { vals: [[false, 'Без листингов'], [true, 'С листингами']], page: v => dPaper(`<p class="h">Список использованных источников</p><p class="cap">1. Чернавский С. А. Курсовое проектирование деталей машин…</p>${v ? '<p class="h">Приложение Г. Листинги макросов КОМПАС</p><pre>import pythoncom\nfrom win32com.client import Dispatch</pre>' : ''}`) },
     codePlain: { vals: [[false, 'Courier New'], [true, 'Times New Roman']], page: v => dPaper(`<pre class="${v ? 'serif' : 'mono'}">kompas = Dispatch("Kompas.Application.7")\napp.Visible = True</pre>`) }
   };
-  function dpvHtml(key) {
+  function dpvHtml(key, order) {
     const d = DPV[key], cur = S.T[key] === undefined ? T_DEF[key] : S.T[key];
-    const items = d.vals.map(([v, l]) => { const on = String(v) === String(cur); return `<div class="ex${on ? ' on' : ''}"><div class="ex-h">${l}${on ? '<span>сейчас</span>' : ''}</div><div class="ex-b">${d.page(v)}</div></div>`; });
+    const items = byOrder(d.vals, order || segOrder($(`.seg[data-key="${key}"]`))).map(([v, l]) => { const on = String(v) === String(cur); return `<div class="ex${on ? ' on' : ''}"><div class="ex-h"><span class="ex-l">${l}</span>${on ? '<span class="ex-now">сейчас</span>' : ''}</div><div class="ex-b">${d.page(v)}</div></div>`; });
     return items.length === 2 ? items.join('') : `<div class="ex-multi" style="--n:${items.length}">${items.join('')}</div>`;
   }
   function refreshDpv(key) { const el = $(`.opt-ex[data-dpv="${key}"]`); if (el && DPV[key]) el.innerHTML = dpvHtml(key); }
   /* строка настройки записки — с превью листа, как в остальных утилитах */
   function docRow(title, desc, ctl) {
     const key = (ctl.match(/data-t?key="(\w+)"/) || [])[1];
-    return optRow(title, desc, ctl, null, key && DPV[key] ? dpvHtml(key) : '').replace('<div class="opt-ex">', `<div class="opt-ex" data-dpv="${key}">`);
+    return optRow(title, desc, ctl, null, key && DPV[key] ? dpvHtml(key, [...ctl.matchAll(/data-val="([^"]*)"/g)].map(m => m[1])) : '').replace('<div class="opt-ex">', `<div class="opt-ex" data-dpv="${key}">`);
   }
   async function fillPv() {
     for (const el of $$('.opt-ex[data-pv]')) {
       await sleep(0);
       if (!document.body.contains(el)) return;
-      try { el.innerHTML = pvHtml(el.dataset.pv); } catch (e) { console.error(e); el.innerHTML = ''; }
+      try { el.innerHTML = pvHtml(el.dataset.pv, segOrder(el.parentElement.querySelector('.seg'))); } catch (e) { console.error(e); el.innerHTML = ''; }
     }
   }
   function decPv() {
@@ -585,7 +588,7 @@
   /* ---------- вкладки расчёта ---------- */
   function kpis() {
     const R = S.R;
-    return (R.kpis || []).map(([a, b]) => `<div class="kpi"><div class="k">${esc(a)}</div><div class="v">${pw(esc(b))}</div></div>`).join('');
+    return (R.kpis || []).map(([a, b]) => `<div class="kpi"><div class="k">${a}</div><div class="v">${pw(esc(b))}</div></div>`).join('');
   }
   function figNums() {   // сквозная нумерация рисунков по всему расчёту
     const nums = {}; let k = 0;
@@ -898,7 +901,7 @@
           const SF = ['A4', 'A3', 'A2', 'A1', 'A0'], sf = SF.includes(S.T.sheetFmt) ? S.T.sheetFmt : 'A1';
           const FSZ = { A4: [210, 297], A3: [420, 297], A2: [594, 420], A1: [841, 594], A0: [1189, 841] };
           const sheetPv = f => { const [w, h] = FSZ[f], y0 = 850 - h; return `<svg viewBox="0 0 1200 850" style="display:block;width:100%;height:64px" aria-hidden="true"><rect x="1" y="${y0}" width="${w - 2}" height="${h - 1}" fill="#fff" stroke="#7d8996" stroke-width="6"/><rect x="20" y="${y0 + 5}" width="${w - 25}" height="${h - 10}" fill="none" stroke="#1b232c" stroke-width="5"/><rect x="${w - 190}" y="${850 - 60}" width="185" height="55" fill="none" stroke="#1b232c" stroke-width="5"/></svg>`; };
-          const fmtEx = `<div class="ex-multi" style="--n:5">${SF.map(f => `<div class="ex${f === sf ? ' on' : ''}"><div class="ex-h">${f.replace('A', 'А')}${f === sf ? '<span>сейчас</span>' : ''}</div><div class="ex-b">${sheetPv(f)}<div class="ex-f">${FSZ[f][0]}×${FSZ[f][1]} мм</div></div></div>`).join('')}</div>`;
+          const fmtEx = `<div class="ex-multi" style="--n:5">${SF.map(f => `<div class="ex${f === sf ? ' on' : ''}"><div class="ex-h"><span class="ex-l">${f.replace('A', 'А')}</span>${f === sf ? '<span class="ex-now">сейчас</span>' : ''}</div><div class="ex-b">${sheetPv(f)}<div class="ex-f">${FSZ[f][0]}×${FSZ[f][1]} мм</div></div></div>`).join('')}</div>`;
           const fmtSeg = `<div class="seg" role="radiogroup" aria-label="Формат листов чертежей" id="sheetfmt">${SF.map(f => `<button type="button" role="radio" aria-checked="${f === sf}" data-val="${f}">${f.replace('A', 'А')}</button>`).join('')}</div>`;
           return `<div class="opts dw-opts">
             <div class="opt has-seg"><div class="opt-t"><b>Формат листов чертежей</b><span>ГОСТ 2.301. Масштаб каждого листа — наибольший стандартный по ГОСТ 2.302, при котором виды в проекционной связи, размеры и надписи ложатся без наложений; он же пишется в основной надписи. Если на формате меньше А1 так не выходит, лист переходит на следующий формат. Спецификации — всегда А4.</span></div><div class="opt-c">${fmtSeg}</div><div class="opt-ex">${fmtEx}</div></div>
