@@ -1137,10 +1137,10 @@
     for (let it = 0; it < 6; it++) {
       let best = 0;
       for (const q of G) {
-        if (q.t !== 'L') continue;
+        if (q.t !== 'L' || q.s === 3) continue;   // по осевой линии не продолжать: выносная от оси начинается в точке оси
         const [x1, y1, x2, y2] = q.a, ex = x2 - x1, ey = y2 - y1, l = Math.hypot(ex, ey); if (l < 1e-6) continue;
         if (Math.abs(ex * uy - ey * ux) / l > 1e-4) continue;
-        if (!onPrim(px, py, q, 0.05)) continue;
+        if (!onPrim(px, py, q, 0.3)) continue;   // допуск — как у проверки «линия на контуре» (0,3 мм)
         best = Math.max(best, (x1 - px) * ux + (y1 - py) * uy, (x2 - px) * ux + (y2 - py) * uy);
       }
       if (best < 0.05) break;
@@ -1155,7 +1155,7 @@
         if (q.t !== 'L' || q.s === 3) continue;
         const [x1, y1, x2, y2] = q.a, ex = x2 - x1, ey = y2 - y1, l = Math.hypot(ex, ey); if (l < 0.5) continue;
         if (Math.abs(ex * uy - ey * ux) / l > 1e-4) continue;
-        if (Math.abs((x1 - px) * uy - (y1 - py) * ux) > 0.05) continue;
+        if (Math.abs((x1 - px) * uy - (y1 - py) * ux) > 0.3) continue;
         const t1 = (x1 - px) * ux + (y1 - py) * uy, t2 = (x2 - px) * ux + (y2 - py) * uy;
         if (Math.min(t1, t2) < -0.05 || Math.max(t1, t2) > tlim - 1) continue;
         far = Math.max(far, t1, t2);

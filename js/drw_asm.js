@@ -1450,7 +1450,8 @@
         if (R.task === 3 && R.g && bores.length) {
           const yW = (us - R.g.aw) * k, xw = XM(bores[0].c);
           sM.line(bxM.x1 - 6, yW, bxM.x2 + 6, yW, 3);
-          sM.attempt([30, -30, 50, -50].map(d => () => sM.dimV(xw, yJ, xw, yW, xw + d, awText(R, R.g.aw))));
+          // выносная от оси колеса идёт по плоскости разъёма — по контуру фланца; поэтому и справа, за габаритными размерами
+          sM.attempt([...[30, -30, 50, -50].map(d => () => sM.dimV(xw, yJ, xw, yW, xw + d, awText(R, R.g.aw))), ...[36, 48].map(d => () => sM.dimV(xw, yJ, xw, yW, bxM.x2 + d, awText(R, R.g.aw)))]);
           sM.attempt([0, 9].map(d => () => sM.dimV(bxM.x1, zB * k, bxM.x1 + 2, yW, bxM.x1 - 20 - d, nf(us - R.g.aw - zB, 1) + '±0,2')));
         }
         sM.dimV(bxM.x1, zB * k, bxM.x1, H3.lvl.zFoot * k, bxM.x1 - 10, nf(H3.lvl.zFoot - zB, 0));
