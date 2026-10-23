@@ -1421,11 +1421,13 @@
       bores.forEach(b => { const x = XM(b.c), y = YM(b.c), L = (b.r + 2.1 * (H.dks || 8) + 12) * k; sM.line(x - L, y, x + L, y, 3).line(x, part === 'base' ? y - L : y - 4, x, part === 'base' ? y + 4 : y + L, 3); });
       callHoles(sM, vM, Um, Vm, Nm, true);
       // диаметры расточек, межосевые расстояния, база А и параллельность осей, шероховатость
-      bores.forEach((b, i) => { const x = XM(b.c), y = YM(b.c), r = b.r * k, sg = part === 'base' ? 1 : -1; sM.attempt([6, 14, 22].map(d => () => sM.dimH(x - r, y, x + r, y, y + sg * (d + (i % 2) * 8), `⌀${nf(2 * b.r, 0)}H7`))); });
-      for (let i = 0; i + 1 < bores.length; i++) { const a = bores[i], b = bores[i + 1], aw = Math.abs(dot(b.c, Um) - dot(a.c, Um)); const yOut = part === 'base' ? Math.max(...bores.map(q => YM(q.c) + q.r * k)) + 32 : Math.min(...bores.map(q => YM(q.c) - q.r * k)) - 32; sM.attempt([0, 9, 18].map(d => () => sM.dimH(XM(a.c), YM(a.c), XM(b.c), YM(b.c), yOut + (part === 'base' ? d : -d), awText(R, aw)))); }
+      // диаметры расточек — размером с обрывом внутри полуокружности (линия за центр): не пересекают межосевые размеры под видом
+      bores.forEach(b => { const x = XM(b.c), y = YM(b.c), r = b.r * k, up = part === 'base' ? -1 : 1; sM.attempt([135, 45, 120, 60, 150, 30, 105, 75].map(a => () => sM.dimBreak(x, y, r, up * a, Math.min(8, r * 0.3), `⌀${nf(2 * b.r, 0)}H7`))); });
+      for (let i = 0; i + 1 < bores.length; i++) { const a = bores[i], b = bores[i + 1], aw = Math.abs(dot(b.c, Um) - dot(a.c, Um)); const yOut = part === 'base' ? Math.max(...bores.map(q => YM(q.c) + q.r * k)) + 32 : bxM.y1 - 12; sM.attempt([0, 9, 18].map(d => () => sM.dimH(XM(a.c), YM(a.c), XM(b.c), YM(b.c), yOut + (part === 'base' ? d : -d), awText(R, aw)))); }
       if (bores.length) {
         const b0 = bores[0], r0 = b0.r * k;
-        sM.datum(XM(b0.c) - r0, YM(b0.c), part === 'base' ? 270 : 90, 'А', { len: 10 });
+        // база А — ось расточки: знак на поверхности расточки, рамка внутри отверстия (не на стенках корпуса)
+        { const up = part === 'base' ? -1 : 1; sM.attempt([65, 115, 80, 100, 50, 130].flatMap(a => [3, 6].map(len => () => sM.datum(XM(b0.c) + r0 * Math.cos(up * a * D2R), YM(b0.c) + r0 * Math.sin(up * a * D2R), up * a + 180, 'А', { len })))); }
         bores.slice(1).forEach(b => { const tx = XM(b.c) + b.r * k * 0.7, ty = YM(b.c) + (part === 'base' ? -1 : 1) * b.r * k * 0.71; sM.attempt([[10, -18], [10, 18], [-30, -18], [-30, 18]].map(([dx, dy]) => () => sM.tol(tx + dx, ty + dy, ['par', '0,03', 'А'], { from: dx > 0 ? 'l' : 'r', to: [tx, ty] }))); });
         bores.forEach(b => sM.attempt([0.35, -0.35, 0.6].map(q => () => sM.rough(XM(b.c) + b.r * k * Math.cos((part === 'base' ? 270 : 90) * D2R + q), YM(b.c) + (part === 'base' ? -1 : 1) * b.r * k * Math.abs(Math.sin((part === 'base' ? 270 : 90) * D2R + q)), 'Ra 1,6'))));
       }
@@ -1435,7 +1437,7 @@
       if (part === 'base') sM.attempt([0.18, 0.82].map(fx => () => sM.rough(bxM.x1 + (bxM.x2 - bxM.x1) * fx, yJ, 'Ra 1,6')));
       else sM.attempt([0.12, 0.88].map(fx => () => { const x = bxM.x1 + (bxM.x2 - bxM.x1) * fx; sM.roughLeader(x, yJ, x + 8, yJ - 12, 'Ra 1,6'); }));
       // габариты и высоты
-      sM.dimH(bxM.x1, bxM.y1, bxM.x2, bxM.y1, bxM.y1 - 12, nf((bxM.x2 - bxM.x1) / k, 0) + '*');
+      sM.dimH(bxM.x1, bxM.y1, bxM.x2, bxM.y1, Math.min(bxM.y1, sM.bbox(0).y1) - 12, nf((bxM.x2 - bxM.x1) / k, 0) + '*');
       { const hv = (bxM.y2 - bxM.y1) / k, hp = us - zB; sM.dimV(bxM.x2, bxM.y1, bxM.x2, bxM.y2, bxM.x2 + 24, (part === 'base' && Math.abs(hv - hp) < 1 ? nf(hp, 1) : nf(hv, 0)) + '*'); }   // габарит основания = высота разъёма, без расхождения в округлении
       if (part === 'base') {
         sM.dimV(bxM.x2, zB * k, bxM.x2, yJ, bxM.x2 + 12, nf(us - zB, 1) + '±0,2');
@@ -1516,15 +1518,8 @@
       sh.occupy({ x1: f.x2 - 62, y1: f.y2 - 28, x2: f.x2, y2: f.y2 }, 0);
       const hN = notesH(notes, 185);
       sh.notes(sh.stamp.x1 + 2, sh.stamp.y2 + 6, 180, notes); sh.occupy({ x1: sh.stamp.x1, y1: sh.stamp.y2 + 4, x2: f.x2 - 2, y2: sh.stamp.y2 + 8 + hN }, 2);
-      const mb = V3.sM.bbox(0), sL = Math.max(0, mb.x1 - V3.sT.bbox(0).x1);
-      const p1 = DR.placeGroup(sh, V3.sM.p, { near: [f.x1 + 10 + sL + (mb.x2 - mb.x1) / 2, f.y2 - 10 - (mb.y2 - mb.y1) / 2] });
-      if (!p1) continue;
-      const tb = V3.sT.bbox(0);
-      const p2 = DR.placeGroup(sh, V3.sT.p, { fixX: p1.dx, near: [0, p1.box.y1 - 10 - (tb.y2 - tb.y1) / 2] });
-      if (!p2) continue;
-      const ab = V3.sA.bbox(0);
-      const p3 = DR.placeGroup(sh, V3.sA.p, { fixY: p1.dy, near: [p1.box.x2 + 20 + (ab.x2 - ab.x1) / 2, 0] });
-      if (!p3) continue;
+      // главный вид, вид сверху (под ним) и разрез А–А (справа) — единым блоком в проекционной связи
+      if (!DR.placeViews(sh, [{ p: V3.sM.p }, { p: V3.sT.p, rel: 'below', of: 0 }, { p: V3.sA.p, rel: 'right', of: 0 }], { gapGeo: 20 })) continue;
       const name = part === 'base' ? 'Корпус' : 'Крышка корпуса';
       return { id: part === 'base' ? 'korpus' : 'kryshka_korpusa', file: part === 'base' ? 'korpus.cdw' : 'kryshka_korpusa.cdw', code, name, material: 'СЧ15 ГОСТ 1412-85', mass: '', scale: kt, fmt, landscape: true, sh };
     }

@@ -656,6 +656,25 @@
     this.p.push({ t: 'D', k: 'BR', a: [r3(x), r3(y1), r3(x), r3(yEnd)], s: String(text), h });
     return this;
   };
+  /* диаметр с обрывом размерной линии (ГОСТ 2.307 п. 2.? — окружность изображена не полностью): стрелка на окружности (cx, cy, r)
+     в направлении ang, линия через центр и за него на ext мм; надпись — вдоль линии между окружностью и центром */
+  S.dimBreak = function (cx, cy, r, ang, ext, text, o) {
+    o = o || {};
+    const h = o.h || 3.5, i0 = this.p.length, c = Math.cos(ang * D2R), s = Math.sin(ang * D2R);
+    const p1 = [cx + r * c, cy + r * s], p2 = [cx - ext * c, cy - ext * s];
+    this._lastAnch = [p1];
+    this.line(p1[0], p1[1], p2[0], p2[1], 2); this.p[this.p.length - 1].dl = 1;
+    this.arrow(p1[0], p1[1], ang);
+    let ar = ang; while (ar > 90) ar -= 180; while (ar <= -90) ar += 180;
+    const up = [-Math.sin(ar * D2R), Math.cos(ar * D2R)], w = twx(text, h), ds = [];
+    // надпись над линией (со стороны «вверх» надписи), вдоль линии от стрелки к центру
+    for (let t = r - AR - 1 - w / 2; t >= w / 2 - ext + 1; t -= 1.5) ds.push(t);
+    if (!ds.length) ds.push(r / 2);
+    this.textFree(ds.map(t => () => this.text(cx + t * c + up[0] * 0.9, cy + t * s + up[1] * 0.9, text, { h, ang: ar, anchor: 'cb' })), i0);
+    // для КОМПАС — объект «Линейный размер с обрывом»: (X1, Y1) — точка со стрелкой, (X2, Y2) — конец за центром
+    this.p.push({ t: 'D', k: 'BR', a: [r3(p1[0]), r3(p1[1]), r3(p2[0]), r3(p2[1])], s: String(text), h });
+    return this;
+  };
   /* размер, параллельный отрезку p1–p2 (наклонный), размерная линия на расстоянии off по нормали (nx, ny); ta — угол надписи */
   S.dimAligned = function (p1, p2, nx, ny, off, text, ta, o) {
     o = o || {};
@@ -1256,6 +1275,7 @@
     wrapAnn('dimAng', () => [], 5);
     wrapAnn('dimAligned', (p1, p2) => [p1, p2], 5);
     wrapAnn('posMark', () => [], -1);
+    wrapAnn('dimBreak', (cx, cy, r, ang) => [[cx + r * Math.cos(ang * D2R), cy + r * Math.sin(ang * D2R)]], 5);
     wrapAnn('dimHalfV', (x, y1) => [[x, y1]], 3);
     wrapAnn('leader', (x, y, sx, sy, ab, be, o) => (o && o.dot ? [] : [[x, y]]), 4);
     wrapAnn('rough', (x, y) => [[x, y]], 2);

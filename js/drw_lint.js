@@ -4,7 +4,7 @@
 (function (root) {
   'use strict';
   const D2R = Math.PI / 180;
-  const KIND = { dimH: 'размер', dimV: 'размер', dimAng: 'угловой размер', leader: 'выноска', rough: 'знак шероховатости', roughLeader: 'шероховатость на выноске', tol: 'допуск формы/расположения', datum: 'обозначение базы', cutV: 'линия сечения', viewArrow: 'стрелка вида', roughCorner: 'шероховатость остальных поверхностей', dimAligned: 'размер', dimHalfV: 'размер', posMark: 'позиция' };
+  const KIND = { dimH: 'размер', dimV: 'размер', dimAng: 'угловой размер', leader: 'выноска', rough: 'знак шероховатости', roughLeader: 'шероховатость на выноске', tol: 'допуск формы/расположения', datum: 'обозначение базы', cutV: 'линия сечения', viewArrow: 'стрелка вида', roughCorner: 'шероховатость остальных поверхностей', dimAligned: 'размер', dimHalfV: 'размер', posMark: 'позиция', dimBreak: 'размер' };
 
   function distSeg(px, py, x1, y1, x2, y2) {
     const dx = x2 - x1, dy = y2 - y1, L2 = dx * dx + dy * dy;
