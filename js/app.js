@@ -792,18 +792,22 @@
       return `<div class="dbg-g"><b>Задание ${t} — ${esc(D.TASKS[t].short)}</b> <button class="btn sm" data-dbgt="${t}">все</button><div>${nos.map(no => { const v = D.byListNo(no).v; return `<label class="dbg-c"><input type="checkbox" data-dbgno="${no}"${[4, 12, 22].includes(no) ? ' checked' : ''}> № ${no} (вар. ${v})</label>`; }).join('')}</div></div>`;
     }).join('');
     return `<h2 id="dbg">7. Отладка: прогон нескольких вариантов в КОМПАС</h2>
-      <div class="note">Скрытое меню (включается и выключается сочетанием Ctrl+Shift+D). Архив OP_KP_DEBUG содержит макросы выбранных вариантов с настройками по умолчанию и общий запуск <code>02_run_debug.bat</code>. После прогона в папке появится <b>debug_для_отправки.zip</b>: журналы, PNG-снимки, DXF-копии построенных листов, сами чертежи .cdw/.spw и данные листов из утилиты — по ним проверяется, где на реальных чертежах стоят осевые линии, размеры, знаки шероховатости и выноски.</div>
-      <p><button class="btn sm" data-dbgp="3">По одному на задание (№ 4, 12, 22)</button> <button class="btn sm" data-dbgp="all">Все 26</button> <button class="btn sm" data-dbgp="none">Снять все</button> <button class="btn sm" data-dbgp="cur">Только текущий (№ ${S.P.listNo})</button></p>
+      <div class="note">Скрытое меню (включается и выключается сочетанием Ctrl+Shift+D). Сначала отметьте варианты, затем скачайте отладочный exe или архив: в оба попадут <b>только отмеченные</b> варианты, с настройками по умолчанию.</div>
+      <h3>Шаг 1. Варианты</h3>
+      <p><button class="btn sm" data-dbgp="all">Все 26</button> <button class="btn sm" data-dbgp="3">По одному на задание (№ 4, 12, 22)</button> <button class="btn sm" data-dbgp="cur">Только текущий (№ ${S.P.listNo})</button> <button class="btn sm" data-dbgp="none">Снять все</button> <span id="dbgn" class="hint"></span></p>
       ${rows}
-      <p><button class="btn primary" id="dbgexe">${dlIcon()} Скачать KOMPAS-Build-debug.exe</button> <button class="btn" id="dbgzip">${dlIcon()} Скачать OP_KP_DEBUG.zip</button> <span id="dbgst" class="hint"></span></p>
-      <p class="hint">Отладочный KOMPAS Build — те же макросы выбранных вариантов внутри одного exe, без Python. По умолчанию отмечены только спецификации и чертежи (без 3D), этапы идут по всем вариантам подряд, журнал подробный. В конце в папке результатов появится <b>debug_logs.zip</b> — журналы и данные размещения обозначений; его и пришлите.</p>
-      <p class="hint">Один вариант строится в КОМПАС примерно 5–15 минут; все 26 — несколько часов.</p>`;
+      <h3>Шаг 2. Скачать — выберите один способ</h3>
+      <div class="opt"><div class="opt-t"><b>Отладочный KOMPAS Build (.exe) — рекомендуется</b><span>Python не нужен. В окне уже отмечены спецификации, чертежи и калибровка эмулятора, 3D выключено (его можно включить). Варианты идут подряд, журнал подробный. В конце в папке результатов появится <b>debug_logs.zip</b> — его и пришлите. Время: калибровка ≈ 5 мин, затем ≈ 1 мин на вариант (все 26 — около получаса); с 3D — 5–15 мин на вариант.</span></div><div class="opt-c"><button class="btn primary" id="dbgexe">${dlIcon()} KOMPAS-Build-debug.exe</button></div></div>
+      <div class="opt"><div class="opt-t"><b>Архив с макросами и bat (.zip)</b><span>Нужен свой Python с pywin32. Строит всё, включая 3D, PNG-снимки и DXF-копии листов; в конце — <b>debug_для_отправки.zip</b>. Время: 5–15 мин на вариант, все 26 — несколько часов.</span></div><div class="opt-c"><button class="btn" id="dbgzip">${dlIcon()} OP_KP_DEBUG.zip</button></div></div>
+      <p><span id="dbgst" class="hint"></span></p>`;
   }
   function bindDebug(main) {
     if (!dbgOn() || !$('#dbgzip', main)) return;
     const boxes = () => $$('[data-dbgno]', main);
-    $$('[data-dbgt]', main).forEach(b => b.onclick = () => boxes().forEach(c => { if (D.byListNo(+c.dataset.dbgno).task === +b.dataset.dbgt) c.checked = true; }));
-    $$('[data-dbgp]', main).forEach(b => b.onclick = () => { const m = b.dataset.dbgp; boxes().forEach(c => { const no = +c.dataset.dbgno; c.checked = m === 'all' ? true : m === 'none' ? false : m === 'cur' ? no === S.P.listNo : [4, 12, 22].includes(no); }); });
+    const cnt = () => { const n = boxes().filter(c => c.checked).length; $('#dbgn', main).textContent = `Отмечено вариантов: ${n} из 26`; };
+    boxes().forEach(c => c.addEventListener('change', cnt)); cnt();
+    $$('[data-dbgt]', main).forEach(b => b.onclick = () => boxes().forEach(c => { if (D.byListNo(+c.dataset.dbgno).task === +b.dataset.dbgt) c.checked = true; }) || cnt());
+    $$('[data-dbgp]', main).forEach(b => b.onclick = () => { const m = b.dataset.dbgp; boxes().forEach(c => { const no = +c.dataset.dbgno; c.checked = m === 'all' ? true : m === 'none' ? false : m === 'cur' ? no === S.P.listNo : [4, 12, 22].includes(no); }); cnt(); });
     $('#dbgexe', main).onclick = async () => {
       const btn = $('#dbgexe', main), st = $('#dbgst', main);
       const list = boxes().filter(c => c.checked).map(c => Object.assign({ no: +c.dataset.dbgno }, D.byListNo(+c.dataset.dbgno)));
