@@ -13,7 +13,9 @@
 import math, os, json
 
 EMU = None
-GAP_TEXTPOS = 0.0   # гипотеза: зазор между выносной линией и надписью при ручном TextPos
+# журнал КОМПАС 25 (пробный размер 100…120, «88888888»): TextPos +30 — правый край габарита на 6,3 мм дальше 130 + ширина надписи;
+# TextPos −30 — надпись не слева (левый край — 93,2: стрелка снаружи и продолжение линии 6,8 мм), т. е. отрицательный TextPos не принят (гипотеза: как 0)
+GAP_TEXTPOS = 5.8
 
 
 def tw(s, h):
@@ -370,7 +372,7 @@ class LineDimension(DObj):
         lo, hi = min(a1, a2), max(a1, a2)
         d = 1.0 if a2 >= a1 else -1.0
         out = P['ArrowPos'] == 1
-        if int(P['TextType']) == 0 or int(P['TextPos']) == 0:
+        if int(P['TextType']) == 0 or int(P['TextPos']) <= 0:
             t0 = (a1 + a2) / 2.0 - w / 2.0
         else:
             tp = int(P['TextPos'])
@@ -381,7 +383,7 @@ class LineDimension(DObj):
                 n = a2 - d * (-tp + GAP_TEXTPOS)
                 t0 = n - w if d > 0 else n
         t1 = t0 + w
-        ext = 8.0 if out else 0.0
+        ext = 6.8 if out else 0.0
         dl0, dl1 = min(lo - ext, t0 - (0.5 if t0 < lo else 0)), max(hi + ext, t1 + (0.5 if t1 > hi else 0))
         sb1 = 1.0 if bd >= b1 else -1.0
         sb2 = 1.0 if bd >= b2 else -1.0
@@ -412,21 +414,24 @@ class BreakLineDimension(LineDimension):
         x1, y1, x2, y2, x3, y3 = P['X1'], P['Y1'], P['X2'], P['Y2'], P['X3'], P['Y3']
         nx, ny = x3 - x1, y3 - y1
         nl = math.hypot(nx, ny)
-        # размерная линия перпендикулярна отрезку «точка привязки — точка на линии»; без смещения — горизонтальная (как в журнале КОМПАС)
-        ux, uy = (-ny / nl, nx / nl) if nl > 1e-6 else (1.0, 0.0)
-        t2 = (x2 - x3) * ux + (y2 - y3) * uy
-        ex, ey = x3 + ux * t2, y3 + uy * t2
         w, h = self.text_wh()
+        if nl < 0.5:
+            # (X3, Y3) у самой точки привязки: КОМПАС кладёт размер горизонтально (журнал КОМПАС 25: сдвиг на 0,01 и 1 мм поперёк — горизонтальная линия)
+            return [L(x1, y1, x1 + w + 5, y1)] + arrow(x1, y1, 180) + [T(x1 + 5, y1 + 2.11, self.label(), h, 0, w)]
+        # размерная линия — через точку привязки (стрелка) и (X3, Y3), до проекции (X2, Y2) (гипотеза по тому же журналу)
+        ux, uy = nx / nl, ny / nl
+        t2 = max((x2 - x1) * ux + (y2 - y1) * uy, nl)
+        ex, ey = x1 + ux * t2, y1 + uy * t2
         ang = math.degrees(math.atan2(uy, ux))
-        if ang > 90.01 or ang <= -90:
-            ang = (ang + 180) % 360 - 180 if ang > 90.01 else ang + 180
-        pr = [L(x1, y1, x3, y3), L(x3, y3, ex, ey)] + arrow(x3, y3, math.degrees(math.atan2(y3 - ey, x3 - ex)))
-        mx, my = (x3 + ex) / 2.0, (y3 + ey) / 2.0
+        if ang > 90.01:
+            ang -= 180
+        elif ang <= -90:
+            ang += 180
+        pr = [L(x1, y1, ex, ey)] + arrow(x1, y1, math.degrees(math.atan2(-uy, -ux)))
         ca, sa = math.cos(math.radians(ang)), math.sin(math.radians(ang))
+        d = 5 + 1 + w / 2
+        mx, my = x1 + ux * d, y1 + uy * d
         pr.append(T(mx - ca * w / 2 - sa * 2.11, my - sa * w / 2 + ca * 2.11, self.label(), h, ang, w))
-        if (abs(t2) < w + 5 and nl < 1e-6) or nl < 1e-6:
-            # без смещения КОМПАС кладёт размер горизонтально у точки привязки (журнал КОМПАС 25)
-            pr = [L(x1, y1, x1 + w + 5, y1)] + arrow(x1, y1, 180) + [T(x1 + 5, y1 + 2.11, self.label(), h, 0, w)]
         return pr
 
 
@@ -522,18 +527,15 @@ class Rough(DObj, Branchs):
         DObj.__init__(self, view, **kw)
         self.init_br()
 
-    # IRough.BranchX0/BranchY0 и IBranchs.X0/Y0 — одна и та же точка
-    def g_BranchX0(self):
-        return self.p['X0']
+    # журнал КОМПАС 25: знак стоит в начале ветвей IBranchs (X0, Y0), по умолчанию — в (0, 0);
+    # IRough.BranchX0/BranchY0 — конец выноски у поверхности, без длины выноски знак не двигает; AddBranchByPoint не проходит
+    def init_br(self):
+        Branchs.init_br(self)
+        self.p.setdefault('BranchX0', 0.0)
+        self.p.setdefault('BranchY0', 0.0)
 
-    def s_BranchX0(self, v):
-        self.p['X0'] = float(v)
-
-    def g_BranchY0(self):
-        return self.p['Y0']
-
-    def s_BranchY0(self, v):
-        self.p['Y0'] = float(v)
+    def m_AddBranchByPoint(self, idx, x, y):
+        return False
 
     def g_RoughParamText(self):
         return _txt_attr(self, 'RoughParamText')
@@ -551,39 +553,34 @@ class Rough(DObj, Branchs):
         return _txt_attr(self, 'TrendText')
 
     def sign(self, x, y, a):
-        """Знак ГОСТ 2.309 с остриём в (x, y); a — угол оси знака на листе (90 — знак стоит прямо)."""
+        """Знак с остриём в (x, y); a — угол оси знака на листе (90 — знак стоит прямо).
+        Размеры — по журналу КОМПАС 25: знак с «Ra 1,6» (h 3,5) занимает от −2,9 до 18,4 мм по ширине и 8,5 мм по высоте."""
         tl = [l for l in _txt_attr(self, 'RoughParamText').lines if l.g_Str()]
         h = tl[0].height() if tl else 3.5
-        Hh, t = h * 2.2, math.tan(math.radians(30))
-        w = (tl[0].width() + 1.2) if tl else 0.0
+        Hh, t = 8.5, math.tan(math.radians(30))
+        w = (tl[0].width() + 1.6) if tl else 0.0
         r = a - 90
         def P(u, v):
             q = rot(u, v, r)
             return x + q[0], y + q[1]
-        pL, pR, pE = P(-h * t, h), P(Hh * t, Hh), P(Hh * t + w, Hh)
+        pL, pR, pE = P(-2.9, 2.9 / t), P(Hh * t, Hh), P(Hh * t + w, Hh)
         pr = [L(pL[0], pL[1], x, y, 1), L(x, y, pR[0], pR[1], 1)]
         if w:
             pr.append(L(pR[0], pR[1], pE[0], pE[1], 1))
-            tp = P(Hh * t + 0.6, Hh + 0.9)
-            pr.append(T(tp[0], tp[1], tl[0].g_Str(), h, r, w - 1.2))
+            tp = P(Hh * t + 0.8, Hh - h - 0.8)
+            pr.append(T(tp[0], tp[1], tl[0].g_Str(), h, r, w - 1.6))
         return pr
 
     def geom(self):
         P = self.p
         x0, y0 = P['X0'], P['Y0']
-        if self.branches:
-            # знак на полке в начале ветвей, ветви — к поверхностям со стрелкой (гипотеза: как у линии-выноски)
+        bx, by = P['BranchX0'], P['BranchY0']
+        if abs(bx) + abs(by) > 1e-6 and P['LeaderLength'] > 0:
+            # с выноской (гипотеза): знак прямо в (X0, Y0), выноска от него к (BranchX0, BranchY0) со стрелкой
             pr = self.sign(x0, y0, 90)
-            for br in self.branches:
-                pts = [(x0, y0)] + br
-                for (ax, ay), (bx, by) in zip(pts, pts[1:]):
-                    pr.append(L(ax, ay, bx, by))
-                (ax, ay), (bx, by) = pts[-2], pts[-1]
-                pr += arrow(bx, by, math.degrees(math.atan2(by - ay, bx - ax)))
+            pr.append(L(x0, y0, bx, by))
+            pr += arrow(bx, by, math.degrees(math.atan2(by - y0, bx - x0)))
             return pr
-        if P['LeaderLength'] > 0:
-            # длина и угол выноски без ответвлений: в КОМПАС 25 знак уходит к началу координат (журнал: габарит от (−543, 12) до (−10, 466))
-            return [L(-x0 - 74, 12.0, -10.0, y0)]
         return self.sign(x0, y0, P['Angle'])
 
 
@@ -633,7 +630,7 @@ class Table(Impl):
             self.emu.err('ITable.Cell(%d, %d): нет ячейки (%d×%d)' % (r, c, len(self.H), len(self.W)))
             return None
         if (r, c) not in self.cells:
-            self.cells[(r, c)] = Cell(self)
+            self.cells[(r, c)] = Cell(self, r, c)
         return self.cells[(r, c)]
 
     def m_Range(self, r1, c1, r2, c2):
@@ -645,15 +642,29 @@ class Table(Impl):
 
 
 class Cell(Impl):
-    IFACES = ('ITableCell',)
+    IFACES = ('ITableCell', 'ICellFormat')
 
-    def __init__(self, t):
+    def __init__(self, t, r=0, c=0):
         Impl.__init__(self)
+        self.t, self.r, self.c = t, r, c
         self.text = Text()
         self.text.lines = [TextLine()]
 
     def g_Text(self):
         return self.text
+
+    # ICellFormat ячейки (гипотеза: в отличие от формата диапазона КОМПАС 25 его размеры применяет)
+    def g_Width(self):
+        return self.t.W[self.c]
+
+    def s_Width(self, v):
+        self.t.W[self.c] = float(v)
+
+    def g_Height(self):
+        return self.t.H[self.r]
+
+    def s_Height(self, v):
+        self.t.H[self.r] = float(v)
 
 
 class Range(Impl):
@@ -676,9 +687,9 @@ class CellFormat(Impl):
         self.rng = rng
 
     def _apply(self):
-        """Гипотеза по журналу КОМПАС 25: размеры ячеек, заданные до создания таблицы в документе (первого Update), не применяются."""
+        """Журнал КОМПАС 25: размеры через формат диапазона не применяются ни до, ни после первого Update (у таблицы допуска формы — применяются)."""
         o = self.rng.t.owner
-        return o is None or o.ref
+        return o is None
 
     def g_Width(self):
         r1, c1, r2, c2 = self.rng.r

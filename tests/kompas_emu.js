@@ -45,7 +45,7 @@ for (const v of vars) {
   if (rep) for (const s of rep.sheets) for (const o of s.overlaps.slice(0, 3)) console.log(`   наложение на ${s.file}: «${o[0]}» и «${o[2]}», ${o[4]} мм²`);
   if (pngDir) {
     fs.mkdirSync(path.join(pngDir, 'v' + v), { recursive: true });
-    for (const f of fs.readdirSync(out)) if (/\.png$/.test(f)) fs.copyFileSync(path.join(out, f), path.join(pngDir, 'v' + v, f));
+    for (const f of fs.readdirSync(out)) if (/\.png$|^log\.txt$/.test(f)) fs.copyFileSync(path.join(out, f), path.join(pngDir, 'v' + v, f));
   }
 }
 console.log('\nИтого по видам обозначений (объектами КОМПАС / отрезками):');
