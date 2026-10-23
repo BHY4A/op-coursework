@@ -54,7 +54,8 @@ const run = (file, a) => new Promise(res => execFile(process.execPath, [path.joi
       const hard = msgs.some(m => !/замечаний линтера/.test(m));
       if (hard) bad++;
       lines.push(`${hard ? '✗' : msgs.length ? '△' : '✓'} № ${j.no}, ${j.c.name}${msgs.length ? '\n    ' + msgs.join('\n    ') : ''}`);
-      process.stdout.write(hard ? 'x' : '.');
+      // замечания печатаются сразу (длинный прогон идёт часами), итог — ещё раз в конце
+      if (msgs.length) console.log('\n' + lines[lines.length - 1]); else process.stdout.write('.');
     }
   }
   await Promise.all(Array.from({ length: N }, worker));
