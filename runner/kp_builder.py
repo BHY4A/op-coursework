@@ -486,7 +486,11 @@ def main_gui():
     def open_path(p):
         if os.path.exists(p):
             try:
-                os.startfile(p)
+                if os.path.isdir(p):
+                    # папка — через Проводник: os.startfile('…\\OP_KP_01-04_KOMPAS') нашёл бы одноимённый exe рядом и запустил его
+                    subprocess.Popen(['explorer', os.path.normpath(p)])
+                else:
+                    os.startfile(p)
             except Exception as e:
                 log_line('Не удалось открыть ' + p + ': ' + str(e), 'bad')
         else:
