@@ -145,6 +145,7 @@
       for (const ids of grid.values()) for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) {
         const a = AL[ids[i]], b = AL[ids[j]];
         if (a.g === b.g || (a.og !== undefined && (a.og === b.g || a.og === b.og)) || (b.og !== undefined && b.og === a.g)) continue;
+        if (a.ex && b.ex) continue;   // выносные линии между собой пересекаться могут
         const key = Math.min(a.g, b.g) + '/' + Math.max(a.g, b.g); if (done.has(key)) continue;
         const pt = cross(a, b); if (!pt) continue;
         done.add(key);

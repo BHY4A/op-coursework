@@ -222,6 +222,7 @@
       if (q.t !== 'L' || q.g === undefined || q.s === 3) continue;
       for (const b of AL) {
         if (b.g === q.g || (q.og !== undefined && (q.og === b.g || q.og === b.og)) || (b.og !== undefined && b.og === q.g)) continue;
+        if (q.ex && b.ex) continue;   // выносная с выносной — допускается (ГОСТ 2.307 запрещает пересекать размерные линии)
         if (segCross(q.a, b.a)) { n += 2; if (stopAt1) return n; }
       }
     }
@@ -411,8 +412,8 @@
     if (!o.fixed) yd = dimShift(this, true, yd, x1, x2, yd >= Math.max(y1, y2) ? 1 : yd <= Math.min(y1, y2) ? -1 : 0);
     const h = o.h || 3.5, len = x2 - x1, w = twx(text, h);
     const up = yd >= Math.max(y1, y2) ? 1 : yd <= Math.min(y1, y2) ? -1 : 0;
-    if (!o.noExt1 && Math.abs(yd - y1) > 0.5) this.line(x1, y1 + (up ? up * (o.gap || 0) : 0), x1, yd + (up || (yd > y1 ? 1 : -1)) * EXT, 2);
-    if (!o.noExt2 && Math.abs(yd - y2) > 0.5) this.line(x2, y2 + (up ? up * (o.gap || 0) : 0), x2, yd + (up || (yd > y2 ? 1 : -1)) * EXT, 2);
+    if (!o.noExt1 && Math.abs(yd - y1) > 0.5) { this.line(x1, y1 + (up ? up * (o.gap || 0) : 0), x1, yd + (up || (yd > y1 ? 1 : -1)) * EXT, 2); this.p[this.p.length - 1].ex = 1; }
+    if (!o.noExt2 && Math.abs(yd - y2) > 0.5) { this.line(x2, y2 + (up ? up * (o.gap || 0) : 0), x2, yd + (up || (yd > y2 ? 1 : -1)) * EXT, 2); this.p[this.p.length - 1].ex = 1; }
     const inside = len >= 2 * AR + 2;
     const fits = len >= w + 2 * AR + 2;
     // что измеряет размер — для КОМПАС (размер создаётся объектом «Линейный размер», а не отрезками); ai — стрелки внутри
@@ -456,8 +457,8 @@
     if (!o.fixed) xd = dimShift(this, false, xd, y1, y2, xd >= Math.max(x1, x2) ? 1 : xd <= Math.min(x1, x2) ? -1 : 0);
     const h = o.h || 3.5, len = y2 - y1, w = twx(text, h);
     const rt = xd >= Math.max(x1, x2) ? 1 : xd <= Math.min(x1, x2) ? -1 : 0;
-    if (!o.noExt1 && Math.abs(xd - x1) > 0.5) this.line(x1, y1, xd + (rt || (xd > x1 ? 1 : -1)) * EXT, y1, 2);
-    if (!o.noExt2 && Math.abs(xd - x2) > 0.5) this.line(x2, y2, xd + (rt || (xd > x2 ? 1 : -1)) * EXT, y2, 2);
+    if (!o.noExt1 && Math.abs(xd - x1) > 0.5) { this.line(x1, y1, xd + (rt || (xd > x1 ? 1 : -1)) * EXT, y1, 2); this.p[this.p.length - 1].ex = 1; }
+    if (!o.noExt2 && Math.abs(xd - x2) > 0.5) { this.line(x2, y2, xd + (rt || (xd > x2 ? 1 : -1)) * EXT, y2, 2); this.p[this.p.length - 1].ex = 1; }
     const inside = len >= 2 * AR + 2, fits = len >= w + 2 * AR + 2;
     const D = { t: 'D', k: 'V', a: [o.noExt1 ? xd : x1, y1, o.noExt2 ? xd : x2, y2, xd], s: String(text), h, ai: inside ? 1 : 0 };
     const ret = () => { this.p.push(D); return this; };
@@ -505,6 +506,7 @@
     o = o || {};
     const h = o.h || 3.5, i0 = this.p.length, a = Math.atan2(p2[1] - p1[1], p2[0] - p1[0]) / D2R;
     this.line(p1[0] + nx, p1[1] + ny, p1[0] + nx * (off + 2), p1[1] + ny * (off + 2), 2).line(p2[0] + nx, p2[1] + ny, p2[0] + nx * (off + 2), p2[1] + ny * (off + 2), 2);
+    this.p[this.p.length - 1].ex = this.p[this.p.length - 2].ex = 1;
     const q1 = [p1[0] + nx * off, p1[1] + ny * off], q2 = [p2[0] + nx * off, p2[1] + ny * off];
     this.line(q1[0], q1[1], q2[0], q2[1], 2); this.arrow(q1[0], q1[1], 180 + a); this.arrow(q2[0], q2[1], a);
     this.text((q1[0] + q2[0]) / 2 + nx * 0.8, (q1[1] + q2[1]) / 2 + ny * 0.8, text, { h, ang: ta === undefined ? a : ta, anchor: 'cb' });
