@@ -307,7 +307,7 @@
     // заведомо не помещается — без перестановки обозначений (она дорогая и габарит почти не меняет)
     { const b = primsBox(sh, prims), f = sh.frame; if (b.x2 - b.x1 > (f.x2 - f.x1) * 1.08 || b.y2 - b.y1 > (f.y2 - f.y1) * 1.08) return null; }
     if (prims && prims._sh && prims._sh.repair && !prims._sh._repaired) { prims._sh.repair(); prims._sh._repaired = true; }
-    const boxes = prims.map(q => primBox(sh, q)).filter(Boolean);
+    const bq = prims.filter(q => primBox(sh, q)), boxes = bq.map(q => primBox(sh, q));
     let gx1 = Infinity, gy1 = Infinity, gx2 = -Infinity, gy2 = -Infinity;
     boxes.forEach(b => { gx1 = Math.min(gx1, b.x1); gy1 = Math.min(gy1, b.y1); gx2 = Math.max(gx2, b.x2); gy2 = Math.max(gy2, b.y2); });
     const f = sh.frame, occ = sh.occ || [];
@@ -319,7 +319,9 @@
       const R = { x1: gx1 + dx, y1: gy1 + dy, x2: gx2 + dx, y2: gy2 + dy };
       if (R.x1 < f.x1 + 1 || R.x2 > f.x2 - 1 || R.y1 < f.y1 + 1 || R.y2 > f.y2 - 1) continue;
       const near = occ.filter(z => overlaps(R, z));
-      if (near.length && boxes.some(b => { const bb = { x1: b.x1 + dx, y1: b.y1 + dy, x2: b.x2 + dx, y2: b.y2 + dy }; return near.some(z => overlaps(bb, z)); })) continue;
+      // отрезок — по самому отрезку, а не по его габариту (длинная наклонная выноска не «занимает» прямоугольник)
+      if (near.length && boxes.some((b, i) => { const bb = { x1: b.x1 + dx, y1: b.y1 + dy, x2: b.x2 + dx, y2: b.y2 + dy }; const q = bq[i];
+        return near.some(z => overlaps(bb, z) && (q.t !== 'L' || C.segHitsRect(q.a[0] + dx, q.a[1] + dy, q.a[2] + dx, q.a[3] + dy, z))); })) continue;
       if (o.dry) return { dx, dy, box: R };
       prims.forEach(q => sh.p.push(shiftPrim(q, dx, dy)));
       boxes.forEach(b => sh.occupy({ x1: b.x1 + dx, y1: b.y1 + dy, x2: b.x2 + dx, y2: b.y2 + dy }, 1.5));

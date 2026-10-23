@@ -1367,5 +1367,5 @@
     const b = root.GOST_FONT_A_ITALIC; if (!b || /@font-face/.test(svg)) return svg;
     return svg.replace(/(<svg[^>]*>)/, `$1<style>@font-face{font-family:'GOST 2.304 A';font-style:italic;src:url(data:font/ttf;base64,${b}) format('truetype')}</style>`);
   }
-  root.DRWCORE = { Sheet, View, tw, wrap, toSVG, embedFont, fmtNum, D2R, FMT, fmtName, opts: OPTS };
+  root.DRWCORE = { Sheet, View, tw, wrap, toSVG, embedFont, fmtNum, D2R, FMT, fmtName, segHitsRect, opts: OPTS };
 })(typeof window !== 'undefined' ? window : globalThis);

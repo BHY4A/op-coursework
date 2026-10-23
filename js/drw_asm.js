@@ -883,8 +883,8 @@
         const ns = String(it.pos).split('/'), opts = [];
         const mk = (sd2, slot, off) => () => { const [sx, sy, side] = at(sd2, slot, off); sh.posMark(it.pt[0], it.pt[1], sx, sy, ns, side, sd2 === 'b' ? -1 : 1, 'p' + (++PGSEQ)); };
         for (const off of [14, 26, 38]) for (const dv of [0, 6, -6, 12, -12, 18, -18, 27, -27]) opts.push(mk(sd, slots[i] + dv, off));
-        for (const off of [14, 26, 38, 50]) for (const dv of [36, -36, 45, -45, 56, -56]) opts.push(mk(sd, slots[i] + dv, off));   // дальше вдоль ряда — короче, чем через весь вид сбоку
         for (const sd2 of other) { const kp = sd2 === 't' || sd2 === 'b' ? it.pt[0] : it.pt[1]; for (const off of [14, 26]) for (const dv of [0, 8, -8, 16, -16]) opts.push(mk(sd2, kp + dv, off)); }
+        for (const off of [14, 26, 38, 50]) for (const dv of [36, -36, 45, -45, 56, -56]) opts.push(mk(sd, slots[i] + dv, off));   // последним — дальше вдоль своего ряда
         sh.attempt(opts);
       });
     });
