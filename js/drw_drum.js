@@ -87,10 +87,10 @@
     // стрелка вида А — с торца опоры A (со стороны глухой крышки)
     { const xa = (g.L + 34) * k, ya = g.Rh * 0.5 * k; sh.viewArrow(xa, ya, 180, 'А'); }
     // размеры
-    const yb = -g.H0;
-    sh.dimH(...P(0, -g.dr.dv / 2), ...P(g.L, -g.dr.dp / 2), (yb - 18) * k, nf(g.L) + '*');
-    sh.attempt([0, 8].map(d => () => sh.dimH(...P(g.xB, yb), ...P(g.xA, yb), (yb - 30) * k - d, nf(g.xA - g.xB))));
-    sh.attempt([0, 8].map(d => () => sh.dimH(...P(S.c, yb), ...P(g.xB, yb), (yb - 30) * k - d, nf(g.xB - S.c))));
+    const yb = -g.H0, yr = Math.min(yb, -g.Db / 2);   // ряды размеров — ниже барабана: иначе их пересекает размерная линия ⌀ барабана
+    sh.dimH(...P(0, -g.dr.dv / 2), ...P(g.L, -g.dr.dp / 2), (yr - 18) * k, nf(g.L) + '*');
+    sh.attempt([0, 8].map(d => () => sh.dimH(...P(g.xB, yb), ...P(g.xA, yb), (yr - 30) * k - d, nf(g.xA - g.xB))));
+    sh.attempt([0, 8].map(d => () => sh.dimH(...P(S.c, yb), ...P(g.xB, yb), (yr - 30) * k - d, nf(g.xB - S.c))));
     sh.attempt([0, 8, -8].map(d => () => sh.dimH(...P(xc - g.Bb / 2, g.Db / 2), ...P(xc + g.Bb / 2, g.Db / 2), (g.Db / 2 + 12) * k + d, nf(g.Bb))));
     sh.attempt([0.25, 0.32, 0.18].map(f => () => sh.dimV(...P(xc - g.Bb * f, -g.Db / 2), ...P(xc - g.Bb * f, g.Db / 2), (xc - g.Bb * f) * k, '⌀' + nf(g.Db))));
     sh.attempt([0, 10].map(d => () => sh.dimV(...P(S.c + rim, -rr), ...P(S.c + rim, rr), (S.c - rim) * k - 14 - d, '⌀' + nf(S.De, 1) + '*')));
