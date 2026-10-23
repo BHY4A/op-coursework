@@ -1515,7 +1515,7 @@
       '4. *Размеры для справок. Неуказанные предельные отклонения размеров: отверстий H14, валов h14, остальных ±IT14/2.',
       '5. Внутренние необработанные поверхности окрасить маслостойкой краской.'];
     const SC = [[1, '1:1'], [0.5, '1:2'], [0.4, '1:2,5'], [0.25, '1:4']];
-    for (const [k, kt] of SC) for (const fmt of ['A2', 'A1']) {
+    for (const [k, kt] of SC) for (const fmt of ['A1']) {
       callouts.clear();
       const V3 = make(k);
       const sh = new Sheet(fmt, true), f = sh.frame;
@@ -1566,7 +1566,7 @@
       for (const [k, kt] of [[1, '1:1'], [0.5, '1:2'], [0.4, '1:2,5'], [0.25, '1:4']]) {
         const G = housingGeom(A, R, k);
         const Pl = housingPlan(G, R, k, part), El = housingElev(G, A, R, k, part);
-        for (const fmt of ['A2', 'A1']) {
+        for (const fmt of ['A1']) {
           const sh = new Sheet(fmt, true), f = sh.frame;
           const notes = notesBase(part === 'cover');
           if (C && sh) {

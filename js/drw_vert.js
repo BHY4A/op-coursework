@@ -188,7 +188,7 @@
       let done = null;
       for (const [k, kt] of [[1, '1:1'], [0.5, '1:2'], [0.4, '1:2,5'], [0.25, '1:4']]) {
         const El = elevView(A, R, g, k, part), Pl = planView(A, R, g, k, part);
-        for (const fmt of ['A2', 'A1']) {
+        for (const fmt of ['A1']) {
           const sh = new Sheet(fmt, true), f = sh.frame;
           const notes = notesBase(part === 'cover');
           sh.occupy(sh.stamp, 2); sh.occupy(sh.reserved(), 2);

@@ -386,14 +386,12 @@
     const segs = prepSegs(pd);
     const notes = info.notes || [];
     const plan = [];
-    // только основные форматы ГОСТ 2.301; длинный вал — в натуральную величину на А1, а не в уменьшенном масштабе
-    for (const kk of [2, 1]) for (const fmt of kk === 1 ? ['A3', 'A2', 'A1'] : ['A3', 'A2']) plan.push([fmt, kk]);
-    for (const kk of [0.5, 0.4, 0.25, 0.2]) for (const fmt of ['A3', 'A2']) plan.push([fmt, kk]);
+    // все чертежи — на А1 (требование пользователя); масштаб — наибольший стандартный, при котором изображение помещается
+    for (const kk of [4, 2.5, 2, 1, 0.5, 0.4, 0.25, 0.2]) plan.push(['A1', kk]);
     for (const [fmt, k] of plan) {
       const tmp = new Sheet('A1', true); tmp.frame = { x1: -5000, y1: -5000, x2: 5000, y2: 5000 };
       const M = shaftMain(tmp, segs, 0, 0, k, info);
       const mb = tmp.bbox(0);
-      if (k === 2 && segs[segs.length - 1].x1 > 140) continue;
       for (const ttPos of ['stamp', 'left']) {
         const sh = new Sheet(fmt, true);
         if (mb.x2 - mb.x1 > sh.frame.x2 - sh.frame.x1 - 6 || mb.y2 - mb.y1 > sh.frame.y2 - sh.frame.y1 - 6) break;
@@ -786,10 +784,8 @@
     const notes = info.notes || [];
     const tipD = kind === 'sprocket' ? g.De : kind === 'wormwheel' ? g.daM : kind === 'bevel' ? g.dae : g.da;
     const plan = [];
-    for (const kk of [2, 1]) for (const fmt of ['A3', 'A2']) plan.push([fmt, kk]);
-    for (const kk of [0.5, 0.4, 0.25, 0.2]) for (const fmt of ['A3', 'A2']) plan.push([fmt, kk]);
+    for (const kk of [4, 2.5, 2, 1, 0.5, 0.4, 0.25, 0.2]) plan.push(['A1', kk]);   // все чертежи — на А1
     for (const [fmt, k] of plan) {
-      if (k === 2 && tipD > 110) continue;
       const tmp = new Sheet('A1', true); tmp.frame = { x1: -5000, y1: -5000, x2: 5000, y2: 5000 };
       wheelMain(tmp, g, kind, k, info);
       const mb = tmp.bbox(0);
