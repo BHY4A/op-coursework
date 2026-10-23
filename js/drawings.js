@@ -386,8 +386,8 @@
     const segs = prepSegs(pd);
     const notes = info.notes || [];
     const plan = [];
-    // длинный вал — в натуральную величину на дополнительном формате А3×3, А3×4 (ГОСТ 2.301), а не в уменьшенном масштабе
-    for (const kk of [2, 1]) for (const fmt of kk === 1 ? ['A3', 'A2', 'A3x3', 'A3x4'] : ['A3', 'A2']) plan.push([fmt, kk]);
+    // только основные форматы ГОСТ 2.301; длинный вал — в натуральную величину на А1, а не в уменьшенном масштабе
+    for (const kk of [2, 1]) for (const fmt of kk === 1 ? ['A3', 'A2', 'A1'] : ['A3', 'A2']) plan.push([fmt, kk]);
     for (const kk of [0.5, 0.4, 0.25, 0.2]) for (const fmt of ['A3', 'A2']) plan.push([fmt, kk]);
     for (const [fmt, k] of plan) {
       const tmp = new Sheet('A1', true); tmp.frame = { x1: -5000, y1: -5000, x2: 5000, y2: 5000 };
