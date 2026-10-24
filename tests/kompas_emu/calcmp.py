@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Сверка эмулятора с настоящим КОМПАС по калибровке.
    python3 calcmp.py РЕАЛЬНЫЙ_cal.json [ЭМУЛЯТОР_cal.json] [--all] [--rev=КОММИТ] [--g=ГРУППА] [--save=ФАЙЛ]
+   python3 calcmp.py --check cal/ЖУРНАЛ.meta.json — проверка, что модель не стала хуже (для tests/kompas_emu.js)
    Калибровочный макрос (60_calibrate.py) ставит одни и те же пробы в одном и том же порядке, поэтому записи сравниваются по номеру.
    Без второго файла макрос прогоняется в эмуляторе заново. Печатает по группам, сколько проб совпало по габариту (±0,3 мм),
    и худшие расхождения: что задано, что получил КОМПАС, что выдал эмулятор.
@@ -30,7 +31,27 @@ def dev(a, b):
     return max(abs(a[i] - b[i]) for i in range(4))
 
 
+def check(meta_path):
+    """Совпавших проб в каждой группе — не меньше, чем записано в meta (min); код выхода 1 — регресс."""
+    meta = json.load(open(meta_path, encoding='utf-8'))
+    real = json.load(open(os.path.join(os.path.dirname(os.path.abspath(meta_path)), meta['cal']), encoding='utf-8'))['rec']
+    emu = json.load(open(emu_cal(meta.get('rev')), encoding='utf-8'))['rec']
+    ok = {}
+    for r, e in zip(real, emu):
+        ok.setdefault(r['g'], [0, 0])
+        ok[r['g']][1] += 1
+        ok[r['g']][0] += dev(r.get('gab'), e.get('gab')) <= 0.3
+    bad = [g for g, n in meta['min'].items() if ok.get(g, [0, 0])[0] < n]
+    print('калибровка %s: %s' % (meta['cal'], ', '.join('%s %d/%d%s' % (g, a, b, ' (было %d)' % meta['min'][g] if g in bad else '')
+                                                       for g, (a, b) in ok.items() if g in meta['min'])))
+    if bad:
+        print('РЕГРЕСС модели эмулятора: ' + ', '.join(bad))
+    sys.exit(1 if bad else 0)
+
+
 def main():
+    if '--check' in sys.argv:
+        return check(sys.argv[sys.argv.index('--check') + 1])
     args = [a for a in sys.argv[1:] if not a.startswith('--')]
     real = json.load(open(args[0], encoding='utf-8'))['rec']
     rev = next((a.split('=', 1)[1] for a in sys.argv[1:] if a.startswith('--rev=')), None)

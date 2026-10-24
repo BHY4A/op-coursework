@@ -2,7 +2,7 @@
 /* Прогон макроса чертежей (30_drawings) в эмуляторе КОМПАС (tests/kompas_emu) по вариантам.
    node tests/kompas_emu.js [варианты через запятую | all] [--png папка]
    Ошибки, которые настоящий КОМПАС тоже выдал бы (нет свойства, не тот тип, не передан аргумент, нет интерфейса),
-   и падения макроса — код выхода 1. Обозначения, нарисованные отрезками вместо объектов КОМПАС, — в сводке. */
+   и падения макроса — код выхода 1; так же — если модель хуже сходится с журналами калибровки настоящего КОМПАС (kompas_emu/cal). Обозначения, нарисованные отрезками вместо объектов КОМПАС, — в сводке. */
 const fs = require('fs'), path = require('path'), os = require('os'), cp = require('child_process');
 const { load } = require('./load.js');
 const ROOT = path.join(__dirname, '..');
@@ -55,4 +55,12 @@ for (const v of vars) {
 console.log('\nИтого по видам обозначений (объектами КОМПАС / отрезками):');
 for (const [k, [a, b]] of Object.entries(tot).sort()) console.log(`  ${k}: ${a} / ${b}`);
 console.log(`\nВариантов: ${vars.length}, с ошибками: ${bad}`);
-process.exit(bad ? 1 : 0);
+// модель эмулятора против журналов калибровки настоящего КОМПАС (tests/kompas_emu/cal/*.meta.json): не стала ли хуже
+let calBad = 0;
+const calDir = path.join(__dirname, 'kompas_emu', 'cal');
+for (const f of fs.existsSync(calDir) ? fs.readdirSync(calDir).filter(f => f.endsWith('.meta.json')).sort() : []) {
+  const r = cp.spawnSync('python3', [path.join(__dirname, 'kompas_emu', 'calcmp.py'), '--check', path.join(calDir, f)], { encoding: 'utf8', cwd: ROOT });
+  process.stdout.write(r.stdout || '');
+  if (r.status) { calBad++; process.stdout.write(r.stderr || ''); }
+}
+process.exit(bad || calBad ? 1 : 0);
