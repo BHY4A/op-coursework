@@ -550,10 +550,16 @@
   /* горизонтальный размер между точками (листовые мм), размерная линия на высоте yd */
   /* варианты размещения текста на продолжении размерной линии (ГОСТ 2.307, п. 2.10–2.11): сначала с предпочтительной стороны,
      затем с другой; всё дальше от стрелки — до первого свободного места */
+  const KOUT = 5;   // КОМПАС 25: надпись, что не помещается между выносными линиями, — в 5 мм от выносной линии
   function outV(sh, xd, y1, y2, ext, text, h, w, below) {
     const c = [];
     if (w + 1 <= y2 - y1) c.push(() => sh.text(xd - 0.9, (y1 + y2) / 2, text, { h, anchor: 'cb', ang: 90 }));
 
+    // сначала — как ставит КОМПАС (калибровка КОМПАС 25): надпись в 5 мм от выносной линии, размерная линия — на 2 мм за надпись;
+    // так размер на листе КОМПАС строится объектом «Размер», а не отрезками
+    for (const b of below ? [true, false] : [false, true]) c.push(b
+      ? () => { sh.line(xd, y1 - KOUT - w - 2, xd, y1 - ext, 2); sh.text(xd - 0.9, y1 - KOUT, text, { h, anchor: 'rb', ang: 90 }); }
+      : () => { sh.line(xd, y2 + ext, xd, y2 + KOUT + w + 2, 2); sh.text(xd - 0.9, y2 + KOUT, text, { h, anchor: 'lb', ang: 90 }); });
     for (let d = 0; d <= 30; d += 2.5) for (const b of below ? [true, false] : [false, true]) c.push(b
       ? () => { sh.line(xd, y1 - ext - d - w - 1.5, xd, y1 - ext, 2); sh.text(xd - 0.9, y1 - ext - 0.75 - d, text, { h, anchor: 'rb', ang: 90 }); }
       : () => { sh.line(xd, y2 + ext, xd, y2 + ext + d + w + 1.5, 2); sh.text(xd - 0.9, y2 + ext + 0.75 + d, text, { h, anchor: 'lb', ang: 90 }); });
@@ -563,6 +569,9 @@
     const c = [];
     if (w + 1 <= x2 - x1) c.push(() => sh.text((x1 + x2) / 2, yd + 0.9, text, { h, anchor: 'cb' }));   // текст помещается между выносными линиями
 
+    for (const l of left ? [true, false] : [false, true]) c.push(l   // как КОМПАС (см. outV)
+      ? () => { sh.line(x1 - KOUT - w - 2, yd, x1 - ext, yd, 2); sh.text(x1 - KOUT, yd + 0.9, text, { h, anchor: 'rb' }); }
+      : () => { sh.line(x2 + ext, yd, x2 + KOUT + w + 2, yd, 2); sh.text(x2 + KOUT, yd + 0.9, text, { h, anchor: 'lb' }); });
     for (let d = 0; d <= 30; d += 2.5) for (const l of left ? [true, false] : [false, true]) c.push(l
       ? () => { sh.line(x1 - ext - d - w - 1.5, yd, x1 - ext, yd, 2); sh.text(x1 - ext - 0.75 - d, yd + 0.9, text, { h, anchor: 'rb' }); }
       : () => { sh.line(x2 + ext, yd, x2 + ext + d + w + 1.5, yd, 2); sh.text(x2 + ext + 0.75 + d, yd + 0.9, text, { h, anchor: 'lb' }); });
