@@ -685,6 +685,8 @@
     [x, y1] = snapPt(this, x, y1, 0, yEnd > y1 ? -1 : 1, 3); this._lastAnch = [[x, y1]];
     this.line(x, y1, x, yEnd, 2); this.arrow(x, y1, yEnd > y1 ? 270 : 90);
     const w = twx(text, h), lo = Math.min(y1, yEnd), hi = Math.max(y1, yEnd), ds = [];
+    // сначала — по центру линии: так надпись ставит КОМПАС (журнал калибровки 4), и размер на листе КОМПАС строится объектом
+    if (hi - lo >= w + 1) ds.push((lo + hi - w) / 2);
     for (let yy = lo + AR + 1; yy + w <= hi - 0.5 + 1e-9; yy += 1.5) ds.push(yy);
     if (!ds.length) ds.push(lo + AR + 1);
     this.textFree(ds.map(yy => () => this.text(x - 0.9, yy, text, { h, anchor: 'lb', ang: 90 })), i0);
@@ -704,6 +706,8 @@
     let ar = ang; while (ar > 90) ar -= 180; while (ar <= -90) ar += 180;
     const up = [-Math.sin(ar * D2R), Math.cos(ar * D2R)], w = twx(text, h), ds = [];
     // надпись над линией (со стороны «вверх» надписи), вдоль линии от стрелки к центру
+    // сначала — по центру линии (так ставит КОМПАС, журнал калибровки 4), потом — от стрелки к центру
+    if (r + ext >= w + 1) ds.push((r - ext) / 2);
     for (let t = r - AR - 1 - w / 2; t >= w / 2 - ext + 1; t -= 1.5) ds.push(t);
     if (!ds.length) ds.push(r / 2);
     const fns = ds.map(t => () => this.text(cx + t * c + up[0] * 0.9, cy + t * s + up[1] * 0.9, text, { h, ang: ar, anchor: 'cb' }));

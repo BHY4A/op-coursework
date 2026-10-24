@@ -401,25 +401,43 @@ class LineDimension(DObj):
         d = 1.0 if a2 >= a1 else -1.0
         out = P['ArrowPos'] == 1
         ext = DIM_EXT if out else 0.0
+        # точка надписи (X3 / Y3), заданная макросом; после Update() там читается начало надписи — его не путать с заданной
+        k3 = 'X3' if H else 'Y3'
+        if getattr(self, 't3w', None) is None or abs(P[k3] - self.t3w) > 1e-6:
+            self.t3s = P[k3]
+        t3 = self.t3s
         if int(P['TextType']) != 0:
-            # калибровка КОМПАС 25: при ручном размещении TextPos читается как 0, а надпись уходит на полку за размер
-            # (габарит длиннее на 25–100 мм); как именно — не снято, здесь — полка у второй выносной линии
+            # калибровка КОМПАС 25 (журнал 4): при ручном размещении (X3, Y3) остаётся, где задана, а надпись — на полке у неё:
+            # левее середины — полка влево (ширина + 4 мм), правее — вправо (ширина + 25 мм)
             self.emu.note('размер «%s»: ручное размещение надписи (TextType = 1) — КОМПАС 25 выносит надпись на полку' % self.label())
-            t0 = hi + 6.0
-            t1 = t0 + w
-            dl0, dl1 = lo - ext, t1 + 25.0 - w
-        elif hi - lo >= w + 10.0:
-            # надпись по центру (гипотеза порога: между стрелками остаётся место на две стрелки)
-            t0 = (a1 + a2) / 2.0 - w / 2.0
-            t1 = t0 + w
-            dl0, dl1 = lo - ext, hi + ext
+            if t3 < (lo + hi) / 2.0:
+                t0, t1 = t3 - 4.0 - w, t3
+            else:
+                t0, t1 = t3 + 25.0, t3 + 25.0 + w
+            dl0, dl1 = min(lo - ext, t0), max(hi + ext, t1)
+            P[k3] = t3
+            self.t3w = None
         else:
-            # не помещается: снаружи у первой точки привязки (калибровка — X1 левее X2; для X1 правее — гипотеза: справа)
-            t0 = a1 - DIM_OUT - w if d > 0 else a1 + DIM_OUT
-            t1 = t0 + w
-            dl0, dl1 = min(lo - ext, t0 - DIM_OUT_TAIL), max(hi + ext, t1 + DIM_OUT_TAIL)
-        # чтение после Update: X3 (Y3) — начало надписи вдоль размера
-        P['X3' if H else 'Y3'] = round(t0, 3)
+            # калибровка КОМПАС 25 (журнал 4): надпись — по центру, если L ≥ ширина + 0,3 мм (порог между −0,3 и 0,9);
+            # точка надписи за выносной линией — надпись снаружи с той стороны в 5 мм от линии (даже если помещается);
+            # не помещается — снаружи у первой точки привязки (X1 правее X2 — справа)
+            if t3 < lo - 0.01:
+                side = -1
+            elif t3 > hi + 0.01:
+                side = 1
+            elif hi - lo >= w + 0.3:
+                side = 0
+            else:
+                side = -1 if d > 0 else 1
+            if side == 0:
+                t0 = (a1 + a2) / 2.0 - w / 2.0
+                t1 = t0 + w
+                dl0, dl1 = lo - ext, hi + ext
+            else:
+                t0 = lo - DIM_OUT - w if side < 0 else hi + DIM_OUT
+                t1 = t0 + w
+                dl0, dl1 = min(lo - ext, t0 - DIM_OUT_TAIL), max(hi + ext, t1 + DIM_OUT_TAIL)
+            P[k3] = self.t3w = round(t0, 3)
         sb1 = 1.0 if bd >= b1 else -1.0
         sb2 = 1.0 if bd >= b2 else -1.0
         segs = [(a1, b1, a1, bd + 2 * sb1), (a2, b2, a2, bd + 2 * sb2), (dl0, bd, dl1, bd)]
@@ -445,8 +463,8 @@ class BreakLineDimension(LineDimension):
     """Размер с обрывом. Калибровка КОМПАС 25 (25 проб, надпись «⌀40k6»):
     (X1, Y1) — точка привязки, (X2, Y2) задаёт направление выносной линии e; после Update() X2, Y2 — проекция (X3, Y3) на эту линию,
     размерная линия — через неё перпендикулярно e, стрелка там же. Сторона линии n = (e.y, −e.x), если (X3, Y3) на выносной линии
-    (тогда X3 читается как X2 + 5n); иначе — сторона, где (X3, Y3): если до неё не меньше ширины надписи + 7 мм, линия идёт до неё
-    и надпись на ней (у стрелки — гипотеза), а если ближе — линия продолжается и за стрелку на ширину + 7 мм, надпись там.
+    (тогда X3 читается как X2 + 5n); иначе — сторона, где (X3, Y3): если до неё не меньше ширины надписи + 1 мм, линия идёт до неё
+    и надпись по её центру (журнал 4), а если ближе — линия продолжается и за стрелку на ширину + 7 мм, надпись там.
     Надпись — «над» линией по направлению чтения (габарит от 0,9 до 6,17 мм от линии), с 6 мм от стрелки."""
     IFACES = ('IBreakLineDimension', 'IDimensionText', 'IDimensionParams', 'IDimension2D')
 
@@ -468,10 +486,12 @@ class BreakLineDimension(LineDimension):
         off = (x3 - px) * nx + (y3 - py) * ny
         w, h = self.text_wh()
         need = w + 7.0
+        # журнал 4: (X3, Y3) в 15 мм при надписи 12,3 — линия до неё и надпись на ней (по центру); в журнале 3 — 8 мм, надпись за стрелкой
+        far_min = w + 1.0
         if abs(off) < 0.01:
             sx, sy, far = nx, ny, None
             P['X3'], P['Y3'] = round(px + 5 * nx, 3), round(py + 5 * ny, 3)
-        elif abs(off) >= need:
+        elif abs(off) >= far_min:
             (sx, sy), far = ((nx, ny) if off > 0 else (-nx, -ny)), abs(off)
         else:
             (sx, sy), far = ((-nx, -ny) if off > 0 else (nx, ny)), None
@@ -483,6 +503,8 @@ class BreakLineDimension(LineDimension):
         if abs(t) > 0.5:
             sg = 1.0 if t > 0 else -1.0
             pr.append(L(x1, y1, px + ex * sg * 2, py + ey * sg * 2))
+        elif far:
+            pr.append(L(px, py, px - sy * 2, py + sx * 2))       # журнал 4: выход 2 мм — поворот стороны на +90° (18 проб из 20)
         else:
             pr.append(L(px, py, px + sy * 2, py - sx * 2))
         ang = math.degrees(math.atan2(sy, sx))
@@ -493,7 +515,10 @@ class BreakLineDimension(LineDimension):
             ar += 180
         same = abs(((ang - ar) + 180) % 360 - 180) < 1
         ca, sa = math.cos(math.radians(ar)), math.sin(math.radians(ar))
-        st = 6.0 if same else 6.0 + w            # левый край надписи по направлению чтения
+        if far:
+            st = (far - w) / 2.0 if same else (far + w) / 2.0   # журнал 4: надпись по центру линии
+        else:
+            st = 6.0 if same else 6.0 + w            # левый край надписи по направлению чтения
         bx, by = px + sx * st, py + sy * st
         bx, by = bx - sa * DIM_TB, by + ca * DIM_TB
         pr.append(T(bx, by, self.label(), h, ar, w))
@@ -614,6 +639,15 @@ class Rough(DObj, Branchs):
     def m_AddBranchByPoint(self, idx, x, y):
         return False
 
+    # журналы 3 и 4: у знака с заданным направлением полки Y0 сразу читается на 10 мм выше заданного
+    # (макрос, что считал длину выноски от прочитанного Y0, получал знак на 10 мм выше)
+    def s_ShelfDirection(self, v):
+        self.p['ShelfDirection'] = v
+        self.shelf_set = True
+
+    def s_Y0(self, v):
+        self.p['Y0'] = float(v) + (10.0 if getattr(self, 'shelf_set', False) else 0.0)
+
     def g_RoughParamText(self):
         return _txt_attr(self, 'RoughParamText')
 
@@ -653,11 +687,14 @@ class Rough(DObj, Branchs):
         P = self.p
         bx, by = P['BranchX0'], P['BranchY0']
         if abs(bx) + abs(by) > 1e-6:
-            # с выноской (калибровка КОМПАС 25, «Ra 1,6» h 3,5): после Update() Y0 читается на 10 мм выше заданного, длину и угол выноски
-            # КОМПАС считает сам — от (BranchX0, BranchY0) к (X0, Y0); знак на полке в (X0, Y0): полка длиной ширина + 11,34 мм
+            # с выноской (калибровка КОМПАС 25, «Ra 1,6» h 3,5): длину и угол выноски КОМПАС пересчитывает — от (BranchX0, BranchY0) к знаку; знак на полке в (X0, Y0): полка длиной ширина + 11,34 мм
             # вправо (ShelfDirection 1) или влево, верх знака — на 8,5 мм над полкой
+            # журнал 4: знак — в (BranchX0, BranchY0) + LeaderLength · (cos, sin) LeaderAngle, если длина выноски задана;
+            # иначе — в (X0, Y0); Y0 после задания полки читается на 10 мм выше (s_Y0)
             if not getattr(self, 'rl_up', False):
-                P['Y0'] += 10.0
+                if P['LeaderLength'] > 0:
+                    P['X0'] = bx + P['LeaderLength'] * math.cos(math.radians(P['LeaderAngle']))
+                    P['Y0'] = by + P['LeaderLength'] * math.sin(math.radians(P['LeaderAngle']))
                 self.rl_up = True
             x0, y0 = P['X0'], P['Y0']
             P['LeaderLength'] = round(math.hypot(x0 - bx, y0 - by), 3)
