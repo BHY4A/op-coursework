@@ -310,7 +310,7 @@
     const bq = prims.filter(q => primBox(sh, q)), boxes = bq.map(q => primBox(sh, q));
     let gx1 = Infinity, gy1 = Infinity, gx2 = -Infinity, gy2 = -Infinity;
     boxes.forEach(b => { gx1 = Math.min(gx1, b.x1); gy1 = Math.min(gy1, b.y1); gx2 = Math.max(gx2, b.x2); gy2 = Math.max(gy2, b.y2); });
-    const f = sh.frame, occ = sh.occ || [];
+    const f = sh.frame, occ = (sh.occ || []).concat(sh.occG || []);
     const cand = [];
     if (o.fixY !== undefined) { for (let x = f.x1 + 3 - gx1; x + gx2 <= f.x2 - 3; x += 2) cand.push([x, o.fixY]); }
     else for (let y = f.y2 - 3 - gy2; y + gy1 >= f.y1 + 3; y -= 4) { if (o.fixX !== undefined) { cand.push([o.fixX, y]); continue; } for (let x = f.x1 + 3 - gx1; x + gx2 <= f.x2 - 3; x += 4) cand.push([x, y]); }
@@ -325,6 +325,13 @@
       if (o.dry) return { dx, dy, box: R };
       prims.forEach(q => sh.p.push(shiftPrim(q, dx, dy)));
       boxes.forEach(b => sh.occupy({ x1: b.x1 + dx, y1: b.y1 + dy, x2: b.x2 + dx, y2: b.y2 + dy }, 1.5));
+      // поле внутри контура изображения тоже занято: другое изображение (выносной элемент, сечение) туда не ставится (ГОСТ 2.305)
+      const gq = bq.filter(q => (q.t === 'L' || q.t === 'C' || q.t === 'A') && q.g === undefined && q.s === 1);
+      if (gq.length) {
+        const gb = gq.map(q => primBox(sh, q));
+        // отдельным списком: обозначения внутри контура (размерные числа диаметров) этим не штрафуются
+        (sh.occG = sh.occG || []).push({ x1: Math.min(...gb.map(b => b.x1)) + dx - 1.5, y1: Math.min(...gb.map(b => b.y1)) + dy - 1.5, x2: Math.max(...gb.map(b => b.x2)) + dx + 1.5, y2: Math.max(...gb.map(b => b.y2)) + dy + 1.5 });
+      }
       return { dx, dy, box: R };
     }
     return null;
