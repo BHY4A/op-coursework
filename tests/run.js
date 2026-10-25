@@ -42,6 +42,8 @@ function runOne(no) {
     Object.keys(b).forEach(id => { if (!r.sheets[id]) { report.push(`✗ вар. ${r.no}: пропал лист ${id}`); bad++; } });
   }
   console.log(report.join('\n'));
+  // сброс кеша браузера: ?v= в index.html — по содержимому файлов (tests/bust.js)
+  console.log('index.html: обновлено ссылок на файлы — ' + require('./bust.js').bust());
   console.log(`\nВариантов: ${results.length}, ошибок: ${bad}, изменений размеров: ${changed}, замечаний линтера: ${lintNow}${Object.keys(base).length ? ` (эталон ${lintBase})` : ''}, время ${((Date.now() - t0) / 1000).toFixed(0)} с`);
   if (update && !only.length) {
     const nb = {}; results.forEach(r => { nb[r.no] = {}; Object.entries(r.sheets).forEach(([id, sd]) => { nb[r.no][id] = { lint: sd.lint, dims: sd.dims }; }); });
