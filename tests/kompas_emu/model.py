@@ -15,7 +15,9 @@ import math, os, json
 
 EMU = None
 # ширина символов шрифта «GOST type A» в КОМПАС 25, доли высоты (калибровка: 44 надписи h 2,5…7, ошибка подгонки до 0,4 мм при h 7):
-# ширина надписи = h · (0,371 + Σ по символам); чего в калибровке не было — оценка по похожим символам
+# ширина надписи = h · (0,371 + Σ по символам); чего в калибровке не было — оценка по похожим символам.
+# Журнал 6 (chars, по 10 одинаковых цифр): цифры разной ширины (1 — 0,42, 5 — 0,55, 6 — 0,66), но подстановка их по одной ломает
+# прочие пробы (⌀ и база подогнаны под общую ширину цифры) — нужна совместная подгонка всех надписей
 KW = {'1': 0.418, ' ': 0.227, ',': 0.227, '.': 0.227, ':': 0.227, ';': 0.227, "'": 0.227, '!': 0.227, '|': 0.227,
       '/': 0.736, '-': 0.642, '−': 0.642, '–': 0.642, '—': 0.9, '⌀': 0.564, '∅': 0.564, '(': 0.36, ')': 0.36, '[': 0.36, ']': 0.36,
       '×': 0.6, '±': 0.6, '°': 0.4, '√': 0.6, '*': 0.5, '+': 0.633, '=': 0.633}
@@ -367,6 +369,12 @@ class LineDimension(DObj):
     def g_NominalText(self):
         return _tl_attr(self, 'NominalText')
 
+    def s_ShelfX(self, v):
+        self.p['ShelfX'], self.shelf = float(v), True
+
+    def s_ShelfY(self, v):
+        self.p['ShelfY'], self.shelf = float(v), True
+
     def g_HighDeviation(self):
         return _tl_attr(self, 'HighDeviation')
 
@@ -412,17 +420,46 @@ class LineDimension(DObj):
         if getattr(self, 't3w', None) is None or abs(P[k3] - self.t3w) > 1e-6:
             self.t3s = P[k3]
         t3 = self.t3s
-        if int(P['TextType']) != 0:
-            # калибровка КОМПАС 25 (журнал 4): при ручном размещении (X3, Y3) остаётся, где задана, а надпись — на полке у неё:
-            # левее середины — полка влево (ширина + 4 мм), правее — вправо (ширина + 25 мм)
-            self.emu.note('размер «%s»: ручное размещение надписи (TextType = 1) — КОМПАС 25 выносит надпись на полку' % self.label())
-            if t3 < (lo + hi) / 2.0:
-                t0, t1 = t3 - 4.0 - w, t3
-            else:
-                t0, t1 = t3 + 25.0, t3 + 25.0 + w
-            dl0, dl1 = min(lo - ext, t0), max(hi + ext, t1)
+        extra = []
+        if getattr(self, 'shelf', False):
+            # журнал 6 (полка: ShelfX / ShelfY после Update, TextType читается 2): выноска из (X3, Y3) в точку полки,
+            # полка от неё влево (у вертикального — вниз) на ширину + 4 мм, надпись над полкой, правый край — в 2 мм от точки
+            P['TextType'] = 2
+            ka, kb = (P['ShelfX'], P['ShelfY']) if H else (P['ShelfY'], P['ShelfX'])
+            t1 = ka - 2.0
+            t0 = t1 - w
+            dl0, dl1 = lo - ext, hi + ext
+            extra = [(t3, bd, ka, kb), (ka, kb, t0 - 2.0, kb)]
+            tb = kb
             P[k3] = t3
             self.t3w = None
+        elif int(P['TextType']) != 0:
+            # журнал 6 (ручное размещение, TextType = 1; точки по возрастанию): точка надписи до первой точки — надпись на
+            # продолжении линии, правый край в 2 мм от точки, линия — на 2 мм дальше надписи; точка между выносными — надпись
+            # с другой стороны: X3 читается как точка + длина, надпись в (ширина + 6) мм за ней, оторванная линия до надписи
+            # и лишний отрезок 5 мм у первой выносной; точка за второй выносной — как на (L − 5,1) от первой.
+            # Точки в обратном порядке не калиброваны — зеркально (с пометкой)
+            L0 = hi - lo
+            u = (t3 - a1) * d
+            if d < 0:
+                self.emu.note('размер «%s»: ручная надпись при X1 > X2 не калибрована' % self.label())
+            if u < 0:
+                v1 = u - 2.0
+                v0 = v1 - w
+                dl = (v0 - 2.0, 0.0)
+                P[k3] = t3
+            else:
+                ue = (u if u <= L0 else L0 - 5.1) + L0
+                v0 = ue + w + 6.0
+                v1 = v0 + w
+                dl = (0.0, L0)
+                extra = [(a1 + d * ue, bd, a1 + d * (v0 - 2.0), bd), (a1, b1, a1 - d * 5.0, b1)]
+                P[k3] = a1 + d * ue
+            t0, t1 = sorted((a1 + d * v0, a1 + d * v1))
+            e0, e1 = sorted((a1 + d * dl[0], a1 + d * dl[1]))
+            dl0, dl1 = min(lo - ext, e0), max(hi + ext, e1)
+            tb = bd
+            self.t3w = P[k3]
         else:
             # калибровка КОМПАС 25 (журнал 4): надпись — по центру, если L ≥ ширина + 0,3 мм (порог между −0,3 и 0,9);
             # точка надписи за выносной линией — надпись снаружи с той стороны в 5 мм от линии (даже если помещается);
@@ -444,19 +481,20 @@ class LineDimension(DObj):
                 t1 = t0 + w
                 dl0, dl1 = min(lo - ext, t0 - DIM_OUT_TAIL), max(hi + ext, t1 + DIM_OUT_TAIL)
             P[k3] = self.t3w = round(t0, 3)
+            tb = bd
         sb1 = 1.0 if bd >= b1 else -1.0
         sb2 = 1.0 if bd >= b2 else -1.0
         # журнал 6: точка привязки на самой размерной линии — выносной линии (и выхода 2 мм) нет
-        segs = [sg for sg, b in (((a1, b1, a1, bd + 2 * sb1), b1), ((a2, b2, a2, bd + 2 * sb2), b2)) if abs(bd - b) > 0.01] + [(dl0, bd, dl1, bd)]
+        segs = [sg for sg, b in (((a1, b1, a1, bd + 2 * sb1), b1), ((a2, b2, a2, bd + 2 * sb2), b2)) if abs(bd - b) > 0.01] + [(dl0, bd, dl1, bd)] + extra
         pr = []
         for s in segs:
             pr.append(L(s[0], s[1], s[2], s[3]) if H else L(s[1], s[0], s[3], s[2]))
         if H:
             pr += arrow(lo, bd, 0 if out else 180) + arrow(hi, bd, 180 if out else 0)
-            pr.append(T(t0, bd + DIM_TB, self.label(), h, 0, w))
+            pr.append(T(t0, tb + DIM_TB, self.label(), h, 0, w))
         else:
             pr += arrow(bd, lo, 90 if out else 270) + arrow(bd, hi, 270 if out else 90)
-            pr.append(T(bd - DIM_TB, t0, self.label(), h, 90, w))
+            pr.append(T(tb - DIM_TB, t0, self.label(), h, 90, w))
         return pr
 
     def geom_par(self):
