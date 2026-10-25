@@ -40,7 +40,7 @@
   }, true);
 
   /* ---------- стиль оформления ---------- */
-  var SKEY = 'suite-style', SVER = '202610231300';
+  var SKEY = 'suite-style', SVER = '202610251500';
   var STYLES = [
     { id: 'journal', name: 'Журнал', sw: 'linear-gradient(135deg,#fbfcfd 0 56%,#dfe5ea 56%)' },
     { id: 'azure', name: 'Лазурь', fonts: 'PT+Mono&family=PT+Sans:ital,wght@0,400;0,700;1,400',
