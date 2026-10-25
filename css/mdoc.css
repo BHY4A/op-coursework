@@ -1,0 +1,117 @@
+/* mdoc.css — общий для всех утилит файл (одинаковый в каждом репозитории): блоки «Теория» у разделов расчёта
+   и панель встроенного просмотра методички (js/mdoc.js). Цвета — только из переменных палитры утилиты,
+   поэтому панель одинаково выглядит в обеих темах и в обоих стилях оформления. */
+
+/* ---------- блок «Теория» ---------- */
+.mdth { margin: 8px 0 12px; border: 1px solid var(--line); border-left: 3px solid var(--accent-2, var(--accent)); border-radius: 0 var(--r) var(--r) 0; background: var(--sheet-2); font-size: 14px; }
+.mdth > summary { display: flex; align-items: baseline; gap: 10px; padding: 7px 12px; cursor: pointer; list-style: none; color: var(--muted); }
+.mdth > summary::-webkit-details-marker { display: none; }
+.mdth > summary::after { content: ""; flex: none; align-self: center; margin-left: auto; width: 8px; height: 8px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg) translate(-2px, -2px); transition: transform .18s var(--ease, ease); }
+.mdth[open] > summary::after { transform: rotate(-135deg) translate(-2px, -2px); }
+.mdth > summary:hover { color: var(--fg); }
+.mdth-l { flex: none; font: 600 10.5px/1 var(--f-body); text-transform: uppercase; letter-spacing: .1em; color: var(--accent-2, var(--accent)); }
+.mdth-s { min-width: 0; font-size: 13px; line-height: 1.35; }
+.mdth[open] .mdth-s { color: var(--fg); font-weight: 500; }
+.mdth-b { padding: 0 14px 10px 12px; line-height: 1.55; }
+.mdth-b p { margin: 0 0 7px; }
+.mdth-b p:last-child { margin-bottom: 0; }
+.mdth-b ul, .mdth-b ol { margin: 0 0 7px; padding-left: 20px; }
+.mdth-b li { margin: 2px 0; }
+.mdth-b .katex { font-size: 1.05em; }
+.mdth-refs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+.mdth-ref { display: inline-flex; align-items: center; gap: 6px; min-height: var(--ctl-h-sm, 30px); padding: 3px 10px; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--sheet); color: var(--accent); font: 500 12.5px/1.2 var(--f-body); cursor: pointer; }
+.mdth-ref:hover { border-color: var(--accent); background: var(--accent-soft); }
+.mdth-ref svg { flex: none; }
+
+/* ---------- панель методички ---------- */
+.mdoc { position: fixed; z-index: 30; top: 0; right: 0; bottom: 0; width: var(--mdoc-w, 560px); display: flex; flex-direction: column; background: var(--sheet); border-left: 1px solid var(--line-strong); box-shadow: -10px 0 30px rgba(0, 0, 0, .08); }
+.mdoc[hidden] { display: none; }
+html.mdoc-on body { padding-right: var(--mdoc-w, 560px); }
+.md-grip { position: absolute; z-index: 2; left: -4px; top: 0; bottom: 0; width: 8px; cursor: col-resize; touch-action: none; }
+.md-grip:hover, .mdoc.resizing .md-grip { background: linear-gradient(90deg, transparent 3px, var(--accent) 3px 5px, transparent 5px); }
+.mdoc.resizing { user-select: none; }
+.mdoc.resizing .md-body { pointer-events: none; }
+.md-head { flex: none; display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--sheet) 92%, transparent); }
+.md-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.md-t { display: inline-flex; align-items: center; gap: 7px; flex: none; margin-right: 4px; font: 700 15px/1 var(--f-disp); letter-spacing: .02em; }
+.md-t svg { color: var(--accent); }
+.md-sel { flex: 1 1 auto; min-width: 0; height: var(--ctl-h, 36px); padding: 0 8px; border: 1px solid var(--line-strong); border-radius: var(--r); background: var(--sheet); font-size: 13.5px; text-overflow: ellipsis; }
+.md-b { flex: none; display: inline-grid; place-items: center; width: var(--ctl-h-sm, 30px); height: var(--ctl-h-sm, 30px); padding: 0; border: 1px solid var(--line-strong); border-radius: var(--r); background: var(--sheet); color: var(--fg); cursor: pointer; }
+.md-row:first-child .md-b { width: var(--ctl-h, 36px); height: var(--ctl-h, 36px); }
+.md-b:hover { border-color: var(--accent); color: var(--accent); }
+.md-b.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.md-b[hidden], .md-sel[hidden] { display: none; }
+.md-tools { flex-wrap: wrap; gap: 8px; }
+.md-grp { display: inline-flex; align-items: center; gap: 4px; }
+.md-pg { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.md-pn { width: 46px; height: var(--ctl-h-sm, 30px); padding: 0 4px; border: 1px solid var(--line-strong); border-radius: var(--r); background: var(--sheet); text-align: center; font-variant-numeric: tabular-nums; }
+.md-find { flex: 1 1 210px; display: flex; align-items: center; gap: 4px; min-width: 0; height: var(--ctl-h-sm, 30px); padding: 0 2px 0 8px; border: 1px solid var(--line-strong); border-radius: var(--r); background: var(--sheet); }
+.md-find:focus-within { border-color: var(--accent); }
+.md-fi { display: inline-grid; color: var(--muted); }
+.md-q { flex: 1 1 auto; min-width: 0; height: 100%; border: 0; outline: 0; background: transparent; font-size: 13px; }
+.md-q:focus-visible, .md-pn:focus-visible { outline: none; }
+.md-pn:focus { border-color: var(--accent); }
+.md-q::-webkit-search-cancel-button { display: none; }
+.md-hc { flex: none; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.md-find .md-b { width: 24px; height: 24px; border-color: transparent; }
+.mdoc:not(.has-hits) .md-find .md-b { display: none; }
+.mdoc.empty .md-tools { display: none; }
+
+.md-body { position: relative; flex: 1 1 auto; overflow: auto; overscroll-behavior: contain; background: var(--bg); }
+.md-pages { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 12px; min-width: min-content; }
+.md-p { position: relative; flex: none; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .16), 0 0 0 1px rgba(0, 0, 0, .04); }
+.md-p canvas { display: block; }
+.md-pno { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font: 600 22px/1 var(--f-disp); color: #b6bec8; }
+.md-p.ok .md-pno { display: none; }
+.md-wait { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 10px; background: color-mix(in srgb, var(--bg) 80%, transparent); font-size: 14px; color: var(--muted); }
+.md-wait[hidden] { display: none; }
+.md-empty { display: flex; justify-content: center; padding: 28px 18px; }
+.md-empty[hidden] { display: none; }
+.md-drop { max-width: 440px; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 26px 22px; border: 1.5px dashed var(--line-strong); border-radius: 10px; background: var(--sheet); text-align: center; }
+.md-drop > svg { color: var(--accent); }
+.md-drop h3 { margin: 0; font: 700 19px/1.2 var(--f-disp); }
+.md-drop p { margin: 0; font-size: 14px; color: var(--muted); }
+.md-drop .md-priv { font-size: 13px; }
+.md-drop .md-dnd { font-size: 12.5px; }
+.mdoc.drag .md-drop, .mdoc.drag .md-body { border-color: var(--accent); background: var(--accent-soft); }
+.md-need { align-self: stretch; text-align: left; font-size: 13px; padding: 10px 12px; border-radius: var(--r); background: var(--sheet-2); }
+.md-need ul { margin: 6px 0 0; padding-left: 18px; }
+.md-need li { margin: 3px 0; }
+.md-need li span { display: block; color: var(--muted); font-size: 12px; }
+
+/* текстовый слой pdf.js: выделение текста и подсветка найденного */
+.textLayer { position: absolute; inset: 0; overflow: hidden; line-height: 1; text-size-adjust: none; -webkit-text-size-adjust: none; forced-color-adjust: none; transform-origin: 0 0; z-index: 2; }
+.textLayer span, .textLayer br { color: transparent; position: absolute; white-space: pre; cursor: text; transform-origin: 0% 0%; }
+.textLayer span.markedContent { top: 0; height: 0; }
+.textLayer ::selection { background: rgba(0, 90, 200, .28); }
+.textLayer .md-hit { background: rgba(255, 196, 0, .45); border-radius: 2px; }
+.textLayer .md-hit-cur { background: rgba(255, 128, 0, .55); box-shadow: 0 0 0 2px rgba(255, 128, 0, .55); }
+.textLayer .endOfContent { display: block; position: absolute; inset: 100% 0 0; z-index: -1; cursor: default; user-select: none; }
+
+/* шапка при открытой панели уже: длинное название обрезается многоточием, подписи у списков скрываются */
+@media (min-width: 641px) {
+  .top .brand b, .top .brand small { display: block; }
+  html.mdoc-on .var-ctl label { display: none; }
+}
+@media (min-width: 961px) {
+  html.mdoc-on .wrap, html.mdoc-on .top-in { max-width: none; }
+}
+@media (min-width: 961px) and (max-width: 1280px) {
+  html.mdoc-on .brand small { display: none; }
+}
+@media (max-width: 960px) {
+  .mdoc { z-index: 45; width: auto; left: 0; border-left: 0; box-shadow: none; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+  html.mdoc-on body { padding-right: 0; overflow: hidden; }
+  .md-grip { display: none; }
+}
+@media (max-width: 640px) {
+  .top-in:has(#mdoc-btn) .var-ctl { flex-basis: calc(100% - var(--ctl-h, 36px) - 10px); }
+  .top #mdoc-btn { order: 6; }
+  .md-head { padding: 8px 10px; }
+  .md-t { font-size: 0; gap: 0; margin-right: 0; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .mdoc:not([hidden]) { animation: md-in .22s var(--ease-out, ease-out); }
+  @keyframes md-in { from { opacity: 0; transform: translateX(24px); } }
+}
+@media print { .mdoc, #mdoc-btn, .mdth { display: none !important; } html.mdoc-on body { padding-right: 0; } }

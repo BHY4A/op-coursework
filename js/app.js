@@ -609,7 +609,7 @@
     let h = ''; const seen = {};
     for (const it of items) {
       switch (it.k) {
-        case 'h': h += it.lvl === 1 ? `<h2 class="h1">${esc(it.no)} ${esc(it.t)}</h2>` : it.lvl === 3 ? `<h3>${esc(it.no)} ${esc(it.t)}</h3>` : `<h2>${esc(it.no)} ${esc(it.t)}</h2>`; break;
+        case 'h': h += (it.lvl === 1 ? `<h2 class="h1">${esc(it.no)} ${esc(it.t)}</h2>` : it.lvl === 3 ? `<h3>${esc(it.no)} ${esc(it.t)}</h3>` : `<h2>${esc(it.no)} ${esc(it.t)}</h2>`) + (window.MDOC ? MDOC.theory('t' + S.P.task + '|' + S.tab, it.t) : ''); break;
         case 'p': h += `<p>${pw(refsWeb(figRefs(it.t, nums)))}</p>`; break;
         case 'list': h += `<ul class="lst">${it.lines.map(l => `<li>${pw(refsWeb(l))}</li>`).join('')}</ul>`; break;
         case 'note': h += `<div class="note ${it.kind}">${pw(refsWeb(it.t))}</div>`; break;
