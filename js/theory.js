@@ -99,10 +99,10 @@
   ];
   root.THEORY = {
     docs: [
-      { id: 'z1', title: 'Методические рекомендации, задание 1', note: 'Документ Word сохраните как PDF: «Файл → Сохранить как → PDF»', match: /задани\D{0,3}1(?!\d)|zadanie.?1(?!\d)/i },
-      { id: 'z3', title: 'Методические рекомендации, задание 3', match: /задани\D{0,3}3(?!\d)|zadanie.?3(?!\d)/i },
-      { id: 'z6', title: 'Методические рекомендации, задание 6', match: /задани\D{0,3}6(?!\d)|zadanie.?6(?!\d)/i },
-      { id: 'met', title: 'Методичка (общие положения и оформление)', match: /методич|metod/i }
+      { id: 'z1', src: 'docs/zadanie1.pdf', title: 'Методические рекомендации, задание 1', note: 'Документ Word сохраните как PDF: «Файл → Сохранить как → PDF»', match: /задани\D{0,3}1(?!\d)|zadanie.?1(?!\d)/i },
+      { id: 'z3', src: 'docs/zadanie3.pdf', title: 'Методические рекомендации, задание 3', match: /задани\D{0,3}3(?!\d)|zadanie.?3(?!\d)/i },
+      { id: 'z6', src: 'docs/zadanie6.pdf', title: 'Методические рекомендации, задание 6', match: /задани\D{0,3}6(?!\d)|zadanie.?6(?!\d)/i },
+      { id: 'met', src: 'docs/metodichka.pdf', title: 'Методичка (общие положения и оформление)', match: /методич|metod/i }
     ],
     docFor: tab => ({ t1: 'z1', t3: 'z3', t6: 'z6' })[String(tab).split('|')[0]] || '',
     tabs: { '*': ALL }

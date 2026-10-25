@@ -3,7 +3,8 @@
  *     этой утилиты (window.THEORY) есть подходящая статья. Статьи привязаны к тексту заголовка регулярным выражением,
  *     поэтому смена нумерации разделов их не ломает. Блок только на сайте — в отчёты Word теория не попадает;
  *  2) встроенный просмотр методички: кнопка «Методичка» в шапке открывает справа панель с PDF (pdf.js из общего
- *     каталога хаба vendor/pdfjs, грузится только при открытии). PDF выбирает сам пользователь — файл хранится
+ *     каталога хаба vendor/pdfjs, грузится только при открытии). Методички утилиты лежат в её каталоге docs/
+ *     (THEORY.docs[].src) и открываются сразу; свой PDF можно добавить кнопкой «+» — он хранится
  *     только в этом браузере (IndexedDB) и никуда не отправляется. Ссылки «Методичка: (1.14)» в блоках теории
  *     ищут текст в PDF и открывают нужную страницу с подсветкой.
  * Подключается после suite.js обычным скриптом в конце <body> (до app.js). */
@@ -82,6 +83,19 @@
       return tx('readwrite', function (s) { return s.put(rec); }).then(function () { return rec; });
     });
   }
+  /* встроенные методички из docs/ утилиты; документ без файла в репозитории в список не попадает */
+  var bip = null;
+  function builtins() {
+    if (bip) return bip;
+    var ds = ((window.THEORY && THEORY.docs) || []).filter(function (d) { return d.src; });
+    bip = Promise.all(ds.map(function (d) {
+      return fetch(d.src, { method: 'HEAD' }).then(function (r) { return r.ok; }, function () { return false; }).then(function (ok) {
+        d.have = ok;
+        return ok ? { key: 'doc:' + d.id, id: d.id, name: d.title, src: d.src, builtin: true } : null;
+      });
+    })).then(function (a) { return a.filter(Boolean); });
+    return bip;
+  }
   function delFile(key) { return tx('readwrite', function (s) { return s.delete(key); }); }
 
   /* =================== 3. pdf.js (лениво, из общего каталога хаба) =================== */
@@ -113,7 +127,7 @@
   var V = { el: null, files: [], cur: null, pdf: null, pages: [], text: [], scale: 1, zoom: lsGet(LS.zoom) || 'fit', io: null, hits: [], hit: -1, q: '', pending: null, loadSeq: 0 };
 
   function docsHint() {
-    var T = window.THEORY, d = (T && T.docs) || [];
+    var T = window.THEORY, d = ((T && T.docs) || []).filter(function (x) { return !x.have; });
     if (!d.length) return '';
     return '<div class="md-need"><b>Для этой утилиты:</b><ul>' + d.map(function (x) { return '<li>' + x.title + (x.note ? '<span>' + x.note + '</span>' : '') + '</li>'; }).join('') + '</ul></div>';
   }
@@ -127,7 +141,7 @@
         '<div class="md-row"><span class="md-t">' + BOOK + 'Методичка</span>' +
           '<select class="md-sel" aria-label="Документ"></select>' +
           '<button type="button" class="md-b" data-md="del" title="Убрать этот PDF из браузера" aria-label="Убрать этот PDF">' + I.trash + '</button>' +
-          '<button type="button" class="md-b" data-md="add" title="Открыть PDF с компьютера" aria-label="Открыть PDF">' + I.plus + '</button>' +
+          '<button type="button" class="md-b" data-md="add" title="Добавить свой PDF с компьютера" aria-label="Добавить PDF">' + I.plus + '</button>' +
           '<button type="button" class="md-b" data-md="close" title="Закрыть" aria-label="Закрыть методичку">' + I.x + '</button></div>' +
         '<div class="md-row md-tools">' +
           '<div class="md-grp"><button type="button" class="md-b" data-md="pprev" aria-label="Предыдущая страница">' + I.prev + '</button>' +
@@ -146,7 +160,7 @@
           '<h3>Откройте PDF методички</h3>' +
           '<p>Методичка откроется здесь, рядом с расчётом: листайте, ищите формулы по номеру, а ссылки «Методичка» в блоках «Теория» сразу покажут нужное место.</p>' +
           '<p class="md-priv">Файл остаётся только в этом браузере: он никуда не отправляется и не публикуется. Открыть его нужно один раз.</p>' +
-          docsHint() +
+          '<div class="md-needc"></div>' +
           '<button type="button" class="btn primary" data-md="add">' + I.plus + 'Выбрать PDF</button><p class="md-dnd">или перетащите файл сюда</p></div></div>' +
         '<div class="md-wait" hidden><span class="spinner"></span><span class="md-wt">Загрузка…</span></div>' +
       '</div>' +
@@ -179,11 +193,13 @@
   }
   /* список файлов → выбор документа → показ */
   function refresh() {
-    return listFiles().then(function (fs) {
+    return Promise.all([builtins(), listFiles().catch(function (e) { console.error(e); return []; })]).then(function (r) {
+      var fs = r[0].concat(r[1]);
       V.files = fs;
+      $('.md-needc').innerHTML = docsHint();
       var sel = $('.md-sel');
       sel.innerHTML = fs.map(function (f) { return '<option value="' + esc(f.key) + '">' + esc(f.name.replace(/\.pdf$/i, '')) + '</option>'; }).join('');
-      sel.hidden = !fs.length; $('[data-md="del"]').hidden = !fs.length;
+      sel.hidden = !fs.length; delBtn();
       V.el.classList.toggle('empty', !fs.length);
       if (!fs.length) { $('.md-empty').hidden = false; $('.md-pages').innerHTML = ''; V.cur = null; V.pdf = null; V.pending = null; return; }
       $('.md-empty').hidden = true;
@@ -200,9 +216,10 @@
   function pickDoc(id) {
     var T = window.THEORY, d = null;
     ((T && T.docs) || []).forEach(function (x) { if (x.id === id) d = x; });
-    if (!d || !d.match) return null;
+    if (!d) return null;
     var hit = null;
-    V.files.forEach(function (f) { if (!hit && d.match.test(f.name)) hit = f; });
+    V.files.forEach(function (f) { if (!hit && f.id === id) hit = f; });
+    V.files.forEach(function (f) { if (!hit && !f.builtin && d.match && d.match.test(f.name)) hit = f; });
     return hit;
   }
   function load(f) {
@@ -210,12 +227,17 @@
     wait('Открываю ' + f.name + '…');
     if (V.io) { V.io.disconnect(); V.io = null; }
     $('.md-pages').innerHTML = ''; V.pages = []; V.text = []; V.hits = []; V.hit = -1; showHits();
-    return lib().then(function (L) {
+    var data = f.data ? Promise.resolve(f.data) : fetch(f.src).then(function (r) {
+      if (!r.ok) throw new Error('Не удалось загрузить ' + f.name);
+      return r.arrayBuffer();
+    }).then(function (b) { f.data = b; return b; });
+    return Promise.all([lib(), data]).then(function (x) {
+      var L = x[0];
       return L.getDocument({ data: new Uint8Array(f.data.slice(0)), cMapUrl: BASE + 'cmaps/', cMapPacked: true, standardFontDataUrl: BASE + 'standard_fonts/', isEvalSupported: false }).promise;
     }).then(function (pdf) {
       if (seq !== V.loadSeq) return;
       if (V.pdf && V.pdf.destroy) V.pdf.destroy();
-      V.pdf = pdf; V.cur = f.key; lsSet(LS.doc, f.key);
+      V.pdf = pdf; V.cur = f.key; lsSet(LS.doc, f.key); delBtn();
       return pdf.getPage(1).then(function (p1) { V.base = p1.getViewport({ scale: 1 }); layout(); });
     }).then(function () {
       if (seq !== V.loadSeq) return;
@@ -224,6 +246,10 @@
       if (!V.pending) goPage(last, true);
       return afterLoad();
     }).catch(function (e) { console.error(e); wait(null); toast(e && e.message ? e.message : 'Не удалось открыть PDF'); });
+  }
+  function delBtn() {
+    var f = V.files.filter(function (x) { return x.key === V.cur; })[0];
+    $('[data-md="del"]').hidden = !V.files.length || !!(f && f.builtin);
   }
   function afterLoad() {
     if (V.pending) { var p = V.pending; V.pending = null; $('.md-q').value = p.q; return find(p.q, p.tried || [V.cur]); }
@@ -365,7 +391,7 @@
         case 'add': fi.click(); break;
         case 'close': close(); break;
         case 'del': {
-          var f = V.files.filter(function (x) { return x.key === V.cur; })[0]; if (!f) break;
+          var f = V.files.filter(function (x) { return x.key === V.cur; })[0]; if (!f || f.builtin) break;
           if (!confirm('Убрать «' + f.name + '» из этого браузера? Файл на компьютере не изменится.')) break;
           delFile(f.key).then(function () { V.cur = null; V.pdf = null; lsSet(LS.doc, null); return refresh(); });
           break;
