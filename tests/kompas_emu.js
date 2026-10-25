@@ -63,4 +63,14 @@ for (const f of fs.existsSync(calDir) ? fs.readdirSync(calDir).filter(f => f.end
   process.stdout.write(r.stdout || '');
   if (r.status) { calBad++; process.stdout.write(r.stderr || ''); }
 }
+// ожидаемые габариты проб для сверки в отладочном exe (js/kompas_cal_expect.js) — по текущей модели и макросу калибровки
+{
+  const tmpx = path.join(tmp, 'cal_expect.js');
+  cp.spawnSync('python3', [path.join(__dirname, 'kompas_emu', 'calcmp.py'), '--export', tmpx], { encoding: 'utf8', cwd: ROOT });
+  const cur = path.join(ROOT, 'js', 'kompas_cal_expect.js');
+  if (!fs.existsSync(tmpx) || !fs.existsSync(cur) || fs.readFileSync(tmpx, 'utf8') !== fs.readFileSync(cur, 'utf8')) {
+    calBad++;
+    console.log('js/kompas_cal_expect.js устарел (модель эмулятора или макрос калибровки изменились): python3 tests/kompas_emu/calcmp.py --export');
+  } else console.log('js/kompas_cal_expect.js: актуален');
+}
 process.exit(bad || calBad ? 1 : 0);

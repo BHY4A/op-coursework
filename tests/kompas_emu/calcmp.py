@@ -2,6 +2,7 @@
 """Сверка эмулятора с настоящим КОМПАС по калибровке.
    python3 calcmp.py РЕАЛЬНЫЙ_cal.json [ЭМУЛЯТОР_cal.json] [--all] [--rev=КОММИТ] [--g=ГРУППА] [--save=ФАЙЛ]
    python3 calcmp.py --check cal/ЖУРНАЛ.meta.json — проверка, что модель не стала хуже (для tests/kompas_emu.js)
+   python3 calcmp.py --export [ФАЙЛ] — габариты проб по эмулятору в js/kompas_cal_expect.js: отладочный exe сверяет с ними КОМПАС сам
    Калибровочный макрос (60_calibrate.py) ставит одни и те же пробы в одном и том же порядке, поэтому записи сравниваются по номеру.
    Без второго файла макрос прогоняется в эмуляторе заново. Печатает по группам, сколько проб совпало по габариту (±0,3 мм),
    и худшие расхождения: что задано, что получил КОМПАС, что выдал эмулятор.
@@ -49,7 +50,22 @@ def check(meta_path):
     sys.exit(1 if bad else 0)
 
 
+def export(path):
+    """Ожидаемые габариты проб калибровки (по текущей модели эмулятора) — для сверки в самом отладочном прогоне (cal.py, _cal_compare)."""
+    emu = json.load(open(emu_cal(), encoding='utf-8'))['rec']
+    rows = [[r['g'], [round(v, 3) for v in r['gab']] if r.get('gab') else None] for r in emu]
+    with open(path, 'w', encoding='utf-8') as fh:
+        fh.write('/* kompas_cal_expect.js — габариты проб калибровки КОМПАС (60_calibrate.py) по эмулятору tests/kompas_emu.\n'
+                 '   Отладочный exe сверяет с ними настоящий КОМПАС и пишет итог в журнал. Обновить: python3 tests/kompas_emu/calcmp.py --export */\n'
+                 'window.KCAL_EXPECT = ' + json.dumps(rows, separators=(',', ':')) + ';\n')
+    print('проб: %d → %s' % (len(rows), path))
+
+
 def main():
+    if '--export' in sys.argv:
+        i = sys.argv.index('--export')
+        root = os.path.dirname(os.path.dirname(HERE))
+        return export(sys.argv[i + 1] if len(sys.argv) > i + 1 else os.path.join(root, 'js', 'kompas_cal_expect.js'))
     if '--check' in sys.argv:
         return check(sys.argv[sys.argv.index('--check') + 1])
     args = [a for a in sys.argv[1:] if not a.startswith('--')]
