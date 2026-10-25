@@ -57,8 +57,10 @@ DIM_TB = 6.167 - t_hi(3.5)
 DIM_EXT = 5.0
 # надпись, что не помещается между выносными линиями, КОМПАС ставит снаружи у первой точки: 5 мм от неё, линия — ещё на 2 мм за надпись
 DIM_OUT, DIM_OUT_TAIL = 5.0, 2.0
-# журнал 5: в размерах 7,5…13,7 мм надпись шириной 3–9 мм КОМПАС выносит наружу, в 16 мм надпись 12,3 — по центру: порог по длине (гипотеза — 15)
-DIM_MIN_IN = 15.0
+# журнал 5: в размерах 7,5…13,7 мм надпись шириной 3–9 мм КОМПАС выносит наружу, в 16 мм надпись 12,3 — по центру; журнал 6: у горизонтальных
+# размеров 13…16 мм надписи «3» и «24» — по центру, а у вертикальных 12,8 и 13,9 мм («26», «35») — снаружи: порог по длине только у
+# вертикальных (гипотеза — 15)
+DIM_MIN_IN_V = 15.0
 
 
 # ---------------------------------------------------------------- база объектов
@@ -391,6 +393,8 @@ class LineDimension(DObj):
     def geom(self):
         P = self.p
         o = int(P['Orientation'])
+        if o == 0:
+            return self.geom_par()
         if o not in (1, 2):
             o = 1 if abs(P['Y2'] - P['Y1']) < abs(P['X2'] - P['X1']) else 2
         H = o == 1
@@ -427,7 +431,7 @@ class LineDimension(DObj):
                 side = -1
             elif t3 > hi + 0.01:
                 side = 1
-            elif hi - lo >= max(w + 0.3, DIM_MIN_IN):
+            elif hi - lo >= max(w + 0.3, 0.0 if H else DIM_MIN_IN_V):
                 side = 0
             else:
                 side = -1 if d > 0 else 1
@@ -442,7 +446,8 @@ class LineDimension(DObj):
             P[k3] = self.t3w = round(t0, 3)
         sb1 = 1.0 if bd >= b1 else -1.0
         sb2 = 1.0 if bd >= b2 else -1.0
-        segs = [(a1, b1, a1, bd + 2 * sb1), (a2, b2, a2, bd + 2 * sb2), (dl0, bd, dl1, bd)]
+        # журнал 6: точка привязки на самой размерной линии — выносной линии (и выхода 2 мм) нет
+        segs = [sg for sg, b in (((a1, b1, a1, bd + 2 * sb1), b1), ((a2, b2, a2, bd + 2 * sb2), b2)) if abs(bd - b) > 0.01] + [(dl0, bd, dl1, bd)]
         pr = []
         for s in segs:
             pr.append(L(s[0], s[1], s[2], s[3]) if H else L(s[1], s[0], s[3], s[2]))
@@ -452,6 +457,45 @@ class LineDimension(DObj):
         else:
             pr += arrow(bd, lo, 90 if out else 270) + arrow(bd, hi, 270 if out else 90)
             pr.append(T(bd - DIM_TB, t0, self.label(), h, 90, w))
+        return pr
+
+    def geom_par(self):
+        """Размер параллельно объекту (Orientation = 0, журнал 6: 20 из 20 наклонных размеров «объектами» без расхождения):
+        размерная линия — через (X3, Y3) параллельно (X1, Y1)–(X2, Y2), выносные линии — с выходом 2 мм, надпись — по центру
+        «над» линией по направлению чтения; не помещается — снаружи у первой точки, как у горизонтального."""
+        P = self.p
+        x1, y1, x2, y2 = P['X1'], P['Y1'], P['X2'], P['Y2']
+        ln = math.hypot(x2 - x1, y2 - y1)
+        if ln < 1e-6:
+            self.emu.err('размер: (X1, Y1) совпадает с (X2, Y2)')
+            return False
+        ux, uy = (x2 - x1) / ln, (y2 - y1) / ln
+        nx, ny = -uy, ux
+        dist = (P['X3'] - x1) * nx + (P['Y3'] - y1) * ny
+        if dist < 0:
+            nx, ny, dist = -nx, -ny, -dist
+        w, h = self.text_wh()
+        out = P['ArrowPos'] == 1
+        ext = DIM_EXT if out else 0.0
+        ax, ay, bx, by = x1 + nx * dist, y1 + ny * dist, x2 + nx * dist, y2 + ny * dist
+        pr = [L(x1, y1, x1 + nx * (dist + 2), y1 + ny * (dist + 2)), L(x2, y2, x2 + nx * (dist + 2), y2 + ny * (dist + 2))]
+        if ln >= w + 0.3:
+            s0, s1 = -ext, ln + ext
+            tc = ln / 2.0
+        else:
+            s0, s1 = -DIM_OUT - w - DIM_OUT_TAIL, ln + ext
+            tc = -DIM_OUT - w / 2.0
+        pr.append(L(ax + ux * s0, ay + uy * s0, ax + ux * s1, ay + uy * s1))
+        ang = math.degrees(math.atan2(uy, ux))
+        pr += arrow(ax, ay, ang if out else ang + 180) + arrow(bx, by, ang + 180 if out else ang)
+        ar = ang
+        while ar > 90.01:
+            ar -= 180
+        while ar <= -89.99:
+            ar += 180
+        ca, sa = math.cos(math.radians(ar)), math.sin(math.radians(ar))
+        cx, cy = ax + ux * tc, ay + uy * tc
+        pr.append(T(cx - ca * w / 2.0 - sa * DIM_TB, cy - sa * w / 2.0 + ca * DIM_TB, self.label(), h, ar, w))
         return pr
 
     def label(self):
@@ -488,8 +532,8 @@ class BreakLineDimension(LineDimension):
         off = (x3 - px) * nx + (y3 - py) * ny
         w, h = self.text_wh()
         need = w + 7.0
-        # журнал 4: (X3, Y3) в 15 мм при надписи 12,3 — линия до неё и надпись на ней (по центру); в журнале 3 — 8 мм, надпись за стрелкой
-        far_min = w + 1.0
+        # журнал 4: (X3, Y3) в 15 мм при надписи 12,3 — линия до неё и надпись на ней (по центру), журнал 6 — так же уже в 12,8 мм; в журнале 3 — 8 мм, надпись за стрелкой
+        far_min = w + 0.3
         if abs(off) < 0.01:
             sx, sy, far = nx, ny, None
             P['X3'], P['Y3'] = round(px + 5 * nx, 3), round(py + 5 * ny, 3)
@@ -952,14 +996,22 @@ class Base(DObj):
         return _txt_attr(self, 'Text')
 
     def geom(self):
+        """Журнал 6 (база на горизонтальной и наклонной выноске): треугольник — основанием поперёк выноски, рамка 10 × 10 —
+        за точкой (BranchX, BranchY) по направлению выноски: по оси, если выноска ближе 22,5° к оси, иначе — углом к точке."""
         P = self.p
         x0, y0, bx, by = P['X0'], P['Y0'], P['BranchX'], P['BranchY']
-        up = 1 if by >= y0 else -1
-        pr = [L(x0 - 2.89, y0, x0 + 2.89, y0, 1), L(x0 - 2.89, y0, x0, y0 + 5 * up, 1), L(x0 + 2.89, y0, x0, y0 + 5 * up, 1), L(x0, y0, bx, by)]
-        fy = by if up > 0 else by - 10
-        pr += [L(bx - 5, fy, bx + 5, fy), L(bx + 5, fy, bx + 5, fy + 10), L(bx + 5, fy + 10, bx - 5, fy + 10), L(bx - 5, fy + 10, bx - 5, fy)]
+        ln = math.hypot(bx - x0, by - y0)
+        dx, dy = ((bx - x0) / ln, (by - y0) / ln) if ln > 1e-6 else (0.0, 1.0)
+        px, py = -dy * 2.89, dx * 2.89
+        pr = [L(x0 - px, y0 - py, x0 + px, y0 + py, 1), L(x0 - px, y0 - py, x0 + dx * 5, y0 + dy * 5, 1),
+              L(x0 + px, y0 + py, x0 + dx * 5, y0 + dy * 5, 1), L(x0, y0, bx, by)]
+        k = math.sin(math.radians(22.5))
+        sx = (1 if dx > 0 else -1) if abs(dx) > k else 0
+        sy = (1 if dy > 0 else -1) if abs(dy) > k else 0
+        cx, cy = bx + 5 * sx, by + 5 * sy
+        pr += [L(cx - 5, cy - 5, cx + 5, cy - 5), L(cx + 5, cy - 5, cx + 5, cy + 5), L(cx + 5, cy + 5, cx - 5, cy + 5), L(cx - 5, cy + 5, cx - 5, cy - 5)]
         s = ''.join(_txt_attr(self, 'Text').strs())
-        pr.append(T(bx - tw(s, 3.5) / 2, fy + 2.5, s, 3.5))
+        pr.append(T(cx - tw(s, 3.5) / 2, cy - 2.5, s, 3.5))
         return pr
 
 
