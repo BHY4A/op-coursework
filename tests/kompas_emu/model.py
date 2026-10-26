@@ -421,16 +421,28 @@ class LineDimension(DObj):
             self.t3s = P[k3]
         t3 = self.t3s
         extra = []
+        gtx, gext = None, []
         if getattr(self, 'shelf', False):
-            # журнал 6 (полка: ShelfX / ShelfY после Update, TextType читается 2): выноска из (X3, Y3) в точку полки,
-            # полка от неё влево (у вертикального — вниз) на ширину + 4 мм, надпись над полкой, правый край — в 2 мм от точки
+            # журнал 7 (полка: ShelfX / ShelfY после Update, TextType читается 2): выноска из (X3, Y3) в точку полки,
+            # полка от неё влево (у вертикального — вниз) на ширину + 4 мм, надпись над полкой, правый край — в 2 мм от точки.
+            # ShelfDirection (IDimensionParams; −1 влево, 1 вправо, 2 вверх, 3 вниз) не калиброван — так же, по направлению полки
             P['TextType'] = 2
-            ka, kb = (P['ShelfX'], P['ShelfY']) if H else (P['ShelfY'], P['ShelfX'])
-            t1 = ka - 2.0
-            t0 = t1 - w
+            sx, sy = P['ShelfX'], P['ShelfY']
+            sd = int(P['ShelfDirection'])
+            if sd not in (-1, 1, 2, 3):
+                sd = -1 if H else 3
+            elif self.emu:
+                self.emu.note('размер «%s»: направление полки (ShelfDirection %d) не калибровано' % (self.label(), sd))
+            ux, uy = {-1: (-1, 0), 1: (1, 0), 2: (0, 1), 3: (0, -1)}[sd]
+            x3, y3 = (t3, bd) if H else (bd, t3)
+            gext = [(x3, y3, sx, sy), (sx, sy, sx + ux * (w + 4.0), sy + uy * (w + 4.0))]
+            if uy == 0:
+                gtx = (min(sx + 2.0 * ux, sx + ux * (w + 2.0)), sy + DIM_TB, 0)
+            else:
+                gtx = (sx - DIM_TB, min(sy + 2.0 * uy, sy + uy * (w + 2.0)), 90)
+            t0, t1 = lo, hi
             dl0, dl1 = lo - ext, hi + ext
-            extra = [(t3, bd, ka, kb), (ka, kb, t0 - 2.0, kb)]
-            tb = kb
+            tb = bd
             P[k3] = t3
             self.t3w = None
         elif int(P['TextType']) != 0:
@@ -489,12 +501,17 @@ class LineDimension(DObj):
         pr = []
         for s in segs:
             pr.append(L(s[0], s[1], s[2], s[3]) if H else L(s[1], s[0], s[3], s[2]))
+        pr += [L(*sg) for sg in gext]
         if H:
             pr += arrow(lo, bd, 0 if out else 180) + arrow(hi, bd, 180 if out else 0)
-            pr.append(T(t0, tb + DIM_TB, self.label(), h, 0, w))
+            if gtx is None:
+                pr.append(T(t0, tb + DIM_TB, self.label(), h, 0, w))
         else:
             pr += arrow(bd, lo, 90 if out else 270) + arrow(bd, hi, 270 if out else 90)
-            pr.append(T(tb - DIM_TB, t0, self.label(), h, 90, w))
+            if gtx is None:
+                pr.append(T(tb - DIM_TB, t0, self.label(), h, 90, w))
+        if gtx is not None:
+            pr.append(T(gtx[0], gtx[1], self.label(), h, gtx[2], w))
         return pr
 
     def geom_par(self):
