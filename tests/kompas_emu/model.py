@@ -632,26 +632,29 @@ class AngleDimension(LineDimension):
 
     def geom(self):
         P = self.p
-        xc, yc, r, a1, a2 = P['Xc'], P['Yc'], P['Radius'], P['Angle1'], P['Angle2']
-        # калибровка КОМПАС 25: выносных линий от вершины нет (габарит — дуга и надпись); надпись — вдоль дуги снаружи у середины
-        # (гипотеза: по 16 пробам надпись сдвинута к одной из сторон до 2–4 мм, правило не снято)
-        pr = [('A', xc, yc, abs(r), a1, a2, 2)]
         w, h = self.text_wh()
-        am = (a1 + a2) / 2.0
-        ar = am - 90.0
-        while ar > 90.01:
-            ar -= 180
-        while ar <= -89.99:
-            ar += 180
-        ca, sa = math.cos(math.radians(ar)), math.sin(math.radians(ar))
-        cx, cy = xc + (r + 0.9 + t_lo(h)) * math.cos(math.radians(am)), yc + (r + 0.9 + t_lo(h)) * math.sin(math.radians(am))
-        # «верх» надписи — наружу от дуги
-        up = (-sa, ca)
-        if up[0] * math.cos(math.radians(am)) + up[1] * math.sin(math.radians(am)) < 0:
-            cx, cy = xc + (r + 0.9 + t_hi(h)) * math.cos(math.radians(am)), yc + (r + 0.9 + t_hi(h)) * math.sin(math.radians(am))
-        P['X3'], P['Y3'] = round(cx - ca * w / 2, 3), round(cy - sa * w / 2, 3)
-        pr.append(T(cx - ca * w / 2, cy - sa * w / 2, self.label(), h, ar, w))
+        pr, (P['X3'], P['Y3']) = ang_geom(P['Xc'], P['Yc'], P['Radius'], P['Angle1'], P['Angle2'], self.label(), h, w)
         return pr
+
+
+def ang_geom(xc, yc, r, a1, a2, label, h, w):
+    """Угловой размер: дуга и надпись (калибровка КОМПАС 25: выносных линий от вершины нет; надпись — вдоль дуги снаружи
+    у середины; гипотеза — по 16 пробам надпись сдвинута к одной из сторон до 2–4 мм, правило не снято). → (примитивы, X3 / Y3)."""
+    pr = [('A', xc, yc, abs(r), a1, a2, 2)]
+    am = (a1 + a2) / 2.0
+    ar = am - 90.0
+    while ar > 90.01:
+        ar -= 180
+    while ar <= -89.99:
+        ar += 180
+    ca, sa = math.cos(math.radians(ar)), math.sin(math.radians(ar))
+    cx, cy = xc + (r + 0.9 + t_lo(h)) * math.cos(math.radians(am)), yc + (r + 0.9 + t_lo(h)) * math.sin(math.radians(am))
+    # «верх» надписи — наружу от дуги
+    up = (-sa, ca)
+    if up[0] * math.cos(math.radians(am)) + up[1] * math.sin(math.radians(am)) < 0:
+        cx, cy = xc + (r + 0.9 + t_hi(h)) * math.cos(math.radians(am)), yc + (r + 0.9 + t_hi(h)) * math.sin(math.radians(am))
+    pr.append(T(cx - ca * w / 2, cy - sa * w / 2, label, h, ar, w))
+    return pr, (round(cx - ca * w / 2, 3), round(cy - sa * w / 2, 3))
 
 
 class Leader(DObj, Branchs):
@@ -1466,6 +1469,30 @@ class Doc5(Impl):
     def m_ksText(self, x, y, ang, h, ksu, bits, s):
         return self._add([T(x, y, s, h, ang)])
 
+    def m_ksAngDimension(self, par):
+        """Угловой размер API5 (ksADimParam): центр, углы сторон, радиус дуги, направление; номинал — автоматический (bitFlag 1)
+        или из массива строк (не моделируется). Геометрия — как у IAngleDimension."""
+        sp = par.sub['SPar'].p
+        a1, a2 = float(sp.get('ang1', 0.0)), float(sp.get('ang2', 0.0))
+        if int(sp.get('dir', 1)) != 1:
+            a1, a2 = a2, a1
+        while a2 <= a1:
+            a2 += 360.0
+        v = a2 - a1
+        d, mi = int(v), int(round((v - int(v)) * 60))
+        if mi == 60:
+            d, mi = d + 1, 0
+        lab = '%d°' % d + ("%02d'" % mi if mi else '')
+        h = 3.5
+        pr, _ = ang_geom(float(sp.get('xc', 0.0)), float(sp.get('yc', 0.0)), float(sp.get('rad', 0.0)), a1, a2, lab, h, tw(lab, h))
+        return self._add(pr)
+
+    def m_ksDeleteObj(self, ref):
+        if self.sheet and int(ref) in self.sheet.prims:
+            del self.sheet.prims[int(ref)]
+            return 1
+        return 0
+
     def m_ksGetTextLengthFromReference(self, ref):
         ps = self.sheet.prims.get(int(ref)) if self.sheet else None
         if not ps or ps[0][0] != 'T':
@@ -1563,6 +1590,8 @@ def make_struct(code):
         return Struct('ksRectParam', {}, dict(pBot=Struct('ksMathPointParam', dict(x=0.0, y=0.0)), pTop=Struct('ksMathPointParam', dict(x=0.0, y=0.0))))
     if code == 8:
         return Struct('ksViewParam')
+    if code == 50:
+        return Struct('ksADimParam', {}, dict(DPar=Struct('ksDimDrawingParam'), SPar=Struct('ksADimSourceParam'), TPar=Struct('ksDimTextParam')))
     return None
 
 
