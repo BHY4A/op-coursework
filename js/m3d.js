@@ -969,7 +969,7 @@
     h = h || 0.5;
     const N = [U[1] * V[2] - U[2] * V[1], U[2] * V[0] - U[0] * V[2], U[0] * V[1] - U[1] * V[0]];
     const pos = ops.filter(o => !o.cut);
-    const shapes = [];
+    const shapes = [], circles = [];
     pos.forEach(o => {
       const n = NORM[o.base], c = CAN[o.base], e = i => { const v = [0, 0, 0]; v[i] = 1; return v; };
       const En = e(n), E = [e(c[0]), e(c[1])];
@@ -978,7 +978,7 @@
         const dep = sg > 0 ? o.b : -o.a;
         o.loops.forEach(l => {
           const toST = (q0, q1) => [dot(E[0], U) * q0 + dot(E[1], U) * q1, dot(E[0], V) * q0 + dot(E[1], V) * q1];
-          if (l.c) { const [cs, ct] = toST(l.c[0], l.c[1]), r = l.c[2]; shapes.push({ b: [cs - r, ct - r, cs + r, ct + r], f: (s, t) => (s - cs) ** 2 + (t - ct) ** 2 <= r * r ? dep : null }); }
+          if (l.c) { const [cs, ct] = toST(l.c[0], l.c[1]), r = l.c[2]; circles.push([cs, ct, r, false]); shapes.push({ b: [cs - r, ct - r, cs + r, ct + r], f: (s, t) => (s - cs) ** 2 + (t - ct) ** 2 <= r * r ? dep : null }); }
           else { const P = l.p.map(q => toST(q[0], q[1])); const xs = P.map(q => q[0]), ys = P.map(q => q[1]);
             shapes.push({ b: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)], f: (u, v) => { let kk = false; for (let i = 0, j = P.length - 1; i < P.length; j = i++) { const a = P[i], bq = P[j]; if ((a[1] > v) !== (bq[1] > v) && u < (bq[0] - a[0]) * (v - a[1]) / (bq[1] - a[1]) + a[0]) kk = !kk; } return kk ? dep : null; } }); }
         });
@@ -1004,43 +1004,12 @@
     const nx = Math.ceil((s1 - s0) / h), ny = Math.ceil((t1 - t0) / h), D = new Float32Array(nx * ny).fill(-1e9);
     shapes.forEach(q => { const i1 = Math.max(0, Math.floor((q.b[0] - s0) / h) - 1), i2 = Math.min(nx - 1, Math.ceil((q.b[2] - s0) / h) + 1), j1 = Math.max(0, Math.floor((q.b[1] - t0) / h) - 1), j2 = Math.min(ny - 1, Math.ceil((q.b[3] - t0) / h) + 1);
       for (let j = j1; j <= j2; j++) for (let i = i1; i <= i2; i++) { const v = q.f(s0 + (i + 0.5) * h, t0 + (j + 0.5) * h); if (v !== null && v > D[j * nx + i]) D[j * nx + i] = v; } });
-    const thr = 0.8, at = (i, j) => (i < 0 || j < 0 || i >= nx || j >= ny) ? -1e9 : D[j * nx + i];
-    const jump = (a, b) => (a > -1e8) !== (b > -1e8) || (a > -1e8 && Math.abs(a - b) > thr);
-    // рёбра клеток со скачком глубины → цепочки
-    const adj = new Map(), key = (i, j) => i * 100003 + j, link = (p, q) => { [[p, q], [q, p]].forEach(([a, b]) => { const kk = key(a[0], a[1]); const arr = adj.get(kk); if (arr) arr.push(b); else adj.set(kk, [b]); }); };
-    // скачок, а не крутой участок гладкой поверхности (цилиндр у касательной): разность больше соседних в 2,5 раза
-    // q — 6 клеток подряд поперёк ребра (ребро между q[2] и q[3]); излом поверхности (пересечение цилиндра с плоскостью) —
-    // скачок наклона, заметно больший изменения наклона по соседству
-    const ok = v => v > -1e8;
-    const sharp = q => {
-      const [p1, p0, a, b, p3, p4] = q;
-      if (ok(a) !== ok(b)) return true;
-      if (!ok(a)) return false;
-      const d = Math.abs(a - b), s1 = ok(p0) ? Math.abs(a - p0) : 0, s2 = ok(p3) ? Math.abs(p3 - b) : 0;
-      if (d > thr && d > 2.5 * Math.max(s1, s2)) return true;
-      if (!(ok(p0) && ok(p3) && ok(p1) && ok(p4))) return false;
-      const sl0 = p0 - p1, sl1 = a - p0, sl2 = b - a, sl3 = p3 - b, sl4 = p4 - p3;
-      const c1 = Math.abs(sl2 - sl1), c2 = Math.abs(sl3 - sl2), ch = Math.max(c1, c2);
-      return ch > 0.3 && ch > 3 * Math.max(Math.abs(sl1 - sl0), Math.abs(sl4 - sl3)) && Math.abs(a - b) <= thr * 4;
-    };
-    for (let j = 0; j <= ny; j++) for (let i = 0; i < nx; i++) if (sharp([at(i, j + 2), at(i, j + 1), at(i, j), at(i, j - 1), at(i, j - 2), at(i, j - 3)])) link([i, j], [i + 1, j]);
-    for (let i = 0; i <= nx; i++) for (let j = 0; j < ny; j++) if (sharp([at(i - 3, j), at(i - 2, j), at(i - 1, j), at(i, j), at(i + 1, j), at(i + 2, j)])) link([i, j], [i, j + 1]);
-    const used = new Set(), ek = (a, b) => { const k1 = key(a[0], a[1]), k2 = key(b[0], b[1]); return k1 < k2 ? k1 + ':' + k2 : k2 + ':' + k1; };
-    const lines = [];
-    const walk = (st) => { const pts = [st]; let cur = st, prev = null;
-      for (;;) { const nb = (adj.get(key(cur[0], cur[1])) || []).filter(q => !used.has(ek(cur, q))); if (!nb.length) break;
-        // на развилке — продолжать прямо
-        let nx_ = nb[0]; if (prev && nb.length > 1) { const d0 = [cur[0] - prev[0], cur[1] - prev[1]]; nx_ = nb.find(q => q[0] - cur[0] === d0[0] && q[1] - cur[1] === d0[1]) || nb[0]; }
-        used.add(ek(cur, nx_)); pts.push(nx_); prev = cur; cur = nx_; if (cur[0] === st[0] && cur[1] === st[1]) break; }
-      return pts; };
-    // сначала концы цепочек (нечётные вершины), затем замкнутые
-    for (const [kk, arr] of adj) if (arr.length % 2 === 1) { const st = [Math.floor(kk / 100003), kk % 100003]; while ((adj.get(kk) || []).some(q => !used.has(ek(st, q)))) { const p = walk(st); if (p.length > 1) lines.push(p); } }
-    for (const [kk] of adj) { const st = [Math.floor(kk / 100003), kk % 100003]; while ((adj.get(kk) || []).some(q => !used.has(ek(st, q)))) { const p = walk(st); if (p.length > 1) lines.push(p); } }
-    const dpOpen = (P, tol) => { if (P.length < 3) return P; const a = P[0], b = P[P.length - 1]; let im = 0, dm = 0; const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
-      for (let i = 1; i < P.length - 1; i++) { const d = L < 1e-9 ? Math.hypot(P[i][0] - a[0], P[i][1] - a[1]) : Math.abs((b[0] - a[0]) * (a[1] - P[i][1]) - (a[0] - P[i][0]) * (b[1] - a[1])) / L; if (d > dm) { dm = d; im = i; } }
-      if (dm <= tol) return [a, b]; return dpOpen(P.slice(0, im + 1), tol).slice(0, -1).concat(dpOpen(P.slice(im), tol)); };
-    const out = lines.map(p => dpOpen(p.map(([i, j]) => [s0 + i * h, t0 + j * h]), h * 0.75)).filter(p => p.length >= 2 && !(p.length === 2 && Math.hypot(p[1][0] - p[0][0], p[1][1] - p[0][1]) < 0.6));
-    return { lines: out, box: { x1: s0, y1: t0, x2: s1, y2: t1 }, depth: (s, t) => at(Math.floor((s - s0) / h), Math.floor((t - t0) / h)) };
+    return Object.assign(edgesOf(D, nx, ny, s0, t0, h, circles), {
+      depth(s, t) {
+        const i = Math.floor((s - s0) / h), j = Math.floor((t - t0) / h);
+        return i < 0 || j < 0 || i >= nx || j >= ny ? -1e9 : D[j * nx + i];
+      }
+    });
   }
 
   /* точный вид детали (ортогональная проекция вдоль −N, наблюдатель со стороны +N) с учётом вырезов:

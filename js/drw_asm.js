@@ -494,7 +494,7 @@
     if (M && M.sil) {
       // корпус — вид 3D-модели: контур (объединение проекций основания и крышки), фланцы разъёма и опорная плита
       const L = M.sil.loops.map(lp => lp.map(([x, y]) => [x * k, y * k]));
-      if (M.dv) M.dv.lines.forEach(pl => sh.poly(pl.map(([x, y]) => [x * k, y * k]), 1, false));
+      if (M.dv) drawHousingEdges(sh, M.dv, k);
       else L.forEach(lp => sh.poly(lp, 1));
       const fr = M.sil.rects.filter(r => /фланцы разъёма/.test(r[4]));
       if (fr.length) sh.line(Math.min(...fr.map(r => r[0])) * k, M.us * k, Math.max(...fr.map(r => r[2])) * k, M.us * k, 1);
@@ -520,12 +520,19 @@
     }
     // смотровой люк, ручка-отдушина, маслоуказатель и пробка — по 3D-модели (accessories)
     // бобышки и крышки подшипников, винты
+    const N = [side.h[1] * side.up[2] - side.h[2] * side.up[1], side.h[2] * side.up[0] - side.h[0] * side.up[2], side.h[0] * side.up[1] - side.h[1] * side.up[0]];
     par.forEach(p => {
       sh.circle(p.h, p.u, p.bossR + 3 * k, 1);
-      sh.circle(p.h, p.u, p.bossR, 1);
-      const seal = p.s.segs.find(g => g.role === 'seal');
-      const out = p.s.segs.find(g => g.role === 'out');
-      if (out) { sh.circle(p.h, p.u, out.r * k, 1); sh.circle(p.h, p.u, (seal ? seal.r : out.r) * k + 1.5 * k, 2); }
+      if (!M || !M.dv) sh.circle(p.h, p.u, p.bossR, 1);
+      const fromEnd = dot(p.s.ax, N) > 0 ? p.s.segs.at(-1) : p.s.segs[0];
+      if (fromEnd.role === 'out') {
+        sh.circle(p.h, p.u, fromEnd.r * k, 1);
+        const sprocket = A.sprockets.find(q => Math.abs(hOf(q.pos) - p.h) < 0.5);
+        if (sprocket) {
+          sh.circle(p.h, p.u, sprocket.g.De * k / 2, 1);
+          sh.circle(p.h, p.u, sprocket.g.dd * k / 2, 3);
+        }
+      }
       const rb = (p.D + p.bossR) / 2 + 1 * k, ns = p.D > 50 * k ? 6 : 4;
       for (let i = 0; i < ns; i++) { const a = (45 + i * 360 / ns) * D2R; hexagon(sh, p.h + rb * Math.cos(a), p.u + rb * Math.sin(a), 0.85 * (H.dks || 8) * k); }
       sh.circle(p.h, p.u, rb, 3);
@@ -578,6 +585,14 @@
   /* навесные элементы корпуса по 3D-модели (M3D.housing3d().fasteners): маслоуказатель (фонарный или жезловый),
      крышка люка с ручкой-отдушиной, сливная пробка. Вид: лист x = (p·U)·k, y = (p·V)·k, наблюдатель — со стороны U×V.
      cut — положение секущей плоскости вдоль U×V (на разрезе всё, что ближе к наблюдателю, удалено); null — вид без разреза. */
+  function drawHousingEdges(sh, view, k) {
+    view.lines.forEach(pl => sh.poly(pl.map(([x, y]) => [x * k, y * k]), 1, false));
+    for (const [x, y, r, a, b] of view.arcs || []) {
+      if (b - a >= 359.5) sh.circle(x * k, y * k, r * k, 1);
+      else sh.arc(x * k, y * k, r * k, a, b, 1);
+    }
+  }
+
   /* вид снаружи по описанию корпуса (U — вправо, V — вверх; наблюдатель со стороны U×V): видимые рёбра корпуса,
      выступающие концы валов, крышки подшипников в профиль, звёздочка, навесные элементы, крепёж */
   function modelView(A, R, MV, F, U, V, k) {
@@ -586,7 +601,7 @@
     const X = p => dot(p, U) * k, Y = p => dot(p, V) * k;
     const dvKey = U.join() + '|' + V.join(); MV._dv = MV._dv || {};
     const dv = MV._dv[dvKey] || (MV._dv[dvKey] = root.M3D.depthView(MV.ops, U, V));
-    dv.lines.forEach(pl => sh.poly(pl.map(([x, y]) => [x * k, y * k]), 1, false));
+    drawHousingEdges(sh, dv, k);
     const vis = (p, r) => { const d = dv.depth(dot(p, U), dot(p, V)); return d < -1e8 || dot(p, N) + (r || 0) >= d - 0.5; };
     const prof = (p0, ax, t0, t1, r, st) => { const w = [dot(ax, U), dot(ax, V)], n2 = [-w[1], w[0]], a = p0.map((v, i) => v + ax[i] * t0), b = p0.map((v, i) => v + ax[i] * t1);
       sh.poly([[X(a) + n2[0] * r * k, Y(a) + n2[1] * r * k], [X(b) + n2[0] * r * k, Y(b) + n2[1] * r * k], [X(b) - n2[0] * r * k, Y(b) - n2[1] * r * k], [X(a) - n2[0] * r * k, Y(a) - n2[1] * r * k]], st || 1); };
@@ -1017,7 +1032,8 @@
         const U0 = V.main.u, V0 = V.main.v, N0 = cr(U0, V0), P2 = q => [dot(q, U0) * k, dot(q, V0) * k];
         A.shafts.filter(s => Math.abs(dot(s.ax, N0)) < 0.1).forEach(s => {
           const out = s.segs.find(g => g.role === 'out'); if (!out) return;
-          const tip = s.pos.map((v, i) => v + s.ax[i] * out.x1), tA = dot(tip, s.ax);
+          const end = out === s.segs[0] ? out.x0 : out.x1;
+          const tip = s.pos.map((v, i) => v + s.ax[i] * end), tA = dot(tip, s.ax);
           const other = A.shafts.filter(o => o !== s && Math.abs(dot(o.ax, s.ax)) < 0.1);
           let ref = null;
           if (other.length) { const o = other.reduce((a, b) => Math.abs(dot(b.pos, s.ax) - tA) < Math.abs(dot(a.pos, s.ax) - tA) ? b : a); ref = s.pos.map((v, i) => v + s.ax[i] * (dot(o.pos, s.ax) - dot(s.pos, s.ax))); }
@@ -1075,18 +1091,18 @@
       if (E) lab(E.sh, kt2);
       return { S, G2, E, onlyE: listE.length > 0 };
     };
-    // все виды — в масштабе главного (ГОСТ 2.302: масштаб, указанный в основной надписи, общий для изображений);
-    // виды раскладываются блоком в проекционной связи, масштаб уменьшается, только если блок не помещается на лист
-    // формат — из настройки; третий вид сохраняется, пока масштаб не мельче 1:5, иначе лист строится без него
-    for (const fmt of C.fmts()) for (const needE of (V.extra ? [true, false] : [false])) for (const [k, kt] of SC) {
-      if (needE && k < 0.2) break;
-      const B = build(k, k);
+    // Сначала пробуем 1:1 на выбранном формате. Уменьшаем второстепенные
+    // виды отдельно, если пользователь разрешил разные масштабы.
+    const plans = SC.flatMap(([k, kt]) => (C.opts.scaleUniform ? [[k, kt, k]]
+      : SC.filter(([kk]) => kk <= k && (kk === k || kk >= k / 2.5)).map(([kk]) => [k, kt, kk])));
+    for (const fmt of C.fmts()) for (const [k, kt, k2] of plans) for (const needE of (V.extra ? [true, false] : [false])) {
+      const B = build(k, k2);
       if (needE && !B.E) continue;
       const { S, G2, E } = B;
-      for (const withE of (E ? [true, false] : [false])) {
+      for (const withE of (E ? [true, false] : [false])) for (const landscape of [true, false]) {
         if (needE && !withE) continue;
         if (!withE && B.onlyE) break;                 // без третьего вида пропали бы позиции
-        const sh = new Sheet(fmt, true);
+        const sh = new Sheet(fmt, landscape);
         const f = sh.frame;
         sh.occupy(sh.stamp, 2); sh.occupy(sh.reserved(), 2);
         // технические требования и характеристика над основной надписью
@@ -1106,7 +1122,16 @@
           if (G2) views.push({ p: G2.sh.p, rel: geo ? 'below' : 'right', of: 0 });
           if (withE) views.push({ p: E.sh.p, rel: R.task === 1 ? 'right' : 'below', of: 0 });
         }
-        if (!DR.placeViews(sh, views, { near })) continue;
+        if (k === k2) {
+          if (!DR.placeViews(sh, views, { near, gapGeo: 10, gap: 5 })) continue;
+        } else {
+          // При разных масштабах размещаем подписанные виды отдельно, чтобы использовать
+          // свободное поле рядом с разрезом и над основной надписью.
+          const main = DR.placeGroup(sh, S.sh.p, { near: [f.x1 + 220, f.y2 - 200] });
+          if (!main) continue;
+          const rest = [G2, withE ? E : null].filter(Boolean);
+          if (!rest.every(v => DR.placeGroup(sh, v.sh.p))) continue;
+        }
         return { sh, scale: kt, k, fmt };
       }
     }

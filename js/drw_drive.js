@@ -55,7 +55,7 @@
 
   /* проекция 3D-модели редуктора на вид: ex, ey — мировые векторы осей листа, ed — направление взгляда */
   function projectReducer(M, view, cell) {
-    const R = new Raster(cell);
+    const R = new Raster(cell), circles = [];
     const X = w => dot(w, view.ex) + view.ox, Y = w => dot(w, view.ey) + view.oy, SC = Math.hypot(...view.ex);
     const parts = {}; M.parts.forEach(p => { parts[p.file] = p; });
     const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
@@ -66,7 +66,7 @@
       const along = Math.abs(view.ed[n]) > 0.9;
       o.loops.forEach(l => {
         if (along) {
-          if (l.c) { const w = toW(l.c[0], l.c[1], 0); R.circle(X(w), Y(w), l.c[2] * SC); }
+          if (l.c) { const w = toW(l.c[0], l.c[1], 0); circles.push([X(w), Y(w), l.c[2] * SC]); }
           else R.poly(l.p.map(q => { const w = toW(q[0], q[1], 0); return [X(w), Y(w)]; }));
         } else {
           // боковая проекция призмы — прямоугольник: протяжённость контура вдоль видимой оси плоскости × толщина
@@ -84,7 +84,7 @@
       if (!['cover', 'shaft', 'sprocket'].includes(p.kind)) return;
       const ax = it.axes.slice(0, 3), b = p.bbox || root.KOMPAS.partBox(p); if (!b) return;
       const c0 = it.pos;
-      if (Math.abs(dot(ax, view.ed)) > 0.9) { const w = c0.map((v, i) => v + ax[i] * (b[0] + b[3]) / 2); R.circle(X(w), Y(w), b[4] * SC); }
+      if (Math.abs(dot(ax, view.ed)) > 0.9) { const w = c0.map((v, i) => v + ax[i] * (b[0] + b[3]) / 2); circles.push([X(w), Y(w), b[4] * SC]); }
       else if (p.kind === 'shaft') {
         p.geom.segs.reduce((x0, s) => { const w1 = c0.map((v, i) => v + ax[i] * x0), w2 = c0.map((v, i) => v + ax[i] * (x0 + s.l)); const r = s.d / 2; const dv = cross(ax, view.ed); const off = dv.map(q => q * r); R.poly([[X(w1) + dot(off, view.ex), Y(w1) + dot(off, view.ey)], [X(w2) + dot(off, view.ex), Y(w2) + dot(off, view.ey)], [X(w2) - dot(off, view.ex), Y(w2) - dot(off, view.ey)], [X(w1) - dot(off, view.ex), Y(w1) - dot(off, view.ey)]]); return x0 + s.l; }, 0);
       } else {
@@ -107,9 +107,48 @@
       const w = it.pos; det.push(['C', X(w), Y(w), p.geom.Df / 2 * Math.hypot(...view.ex)], ['C', X(w), Y(w), (p.geom.D / 2 - 6) * Math.hypot(...view.ex)]);
     });
     const loops = R.loops();
-    loops.det = det;
+    // Растр нужен для определения видимости. На лист передаются дуги и окружности.
+    const disks = circles.filter((c, i) => !circles.some((d, j) => i !== j &&
+      Math.hypot(c[0] - d[0], c[1] - d[1]) + c[2] <= d[2] + 1e-6 && (d[2] > c[2] || j < i)));
+    const mask = new Raster(cell);
+    disks.forEach(c => mask.circle(...c));
+    const outline = [];
+    loops.forEach(lp => lp.forEach((a, i) => {
+      const b = lp[(i + 1) % lp.length];
+      outline.push(...mask.clip(...a, ...b));
+    }));
+    loops.edges = outline;
+    loops.arcs = disks.flatMap(([x, y, r], i) => circleArcs(x, y, r,
+      (px, py) => R.inside(px, py) || disks.some(([cx, cy, cr], j) => j !== i && Math.hypot(px - cx, py - cy) < cr)));
+    disks.forEach(c => R.circle(...c));
+    loops.det = det.filter(q => q[0] !== 'C' || !disks.some(c => Math.hypot(c[0] - q[1], c[1] - q[2]) < 0.01 && Math.abs(c[2] - q[3]) < 0.01));
     loops.raster = R;
     return loops;
+  }
+
+  function circleArcs(x, y, r, hidden) {
+    const step = 360 / Math.max(72, Math.ceil(2 * Math.PI * r / 0.6));
+    const runs = [];
+    let start = null;
+    for (let a = 0; a < 360 - step / 2; a += step) {
+      const m = (a + step / 2) * Math.PI / 180;
+      if (!hidden(x + r * Math.cos(m), y + r * Math.sin(m))) {
+        if (start === null) start = a;
+      } else if (start !== null) {
+        runs.push([x, y, r, start, a]);
+        start = null;
+      }
+    }
+    if (start !== null) runs.push([x, y, r, start, 360]);
+    if (runs.length > 1 && runs[0][3] === 0 && runs[runs.length - 1][4] === 360) {
+      runs[runs.length - 1][4] += runs.shift()[4];
+    }
+    return runs;
+  }
+
+  function drawArc(sh, [x, y, r, a, b], st) {
+    if (b - a >= 359.999) sh.circle(x, y, r, st);
+    else sh.arc(x, y, r, a, b, st);
   }
 
   /* ---------- компоновка привода в координатах рамы: fx — вдоль оси двигателя, fy — поперёк, fz — вверх от верха рамы */
@@ -160,9 +199,10 @@
       const c1a = [c1.fx, c1.fy, c1.fz], c2a = alongFx ? [c1.fx, c1.fy + aD, c1.fz] : [c1.fx - aD, c1.fy, c1.fz];
       cyl(axI, c1a, c1a[axI] - b / 2, c1a[axI] + b / 2, r1, 1, 'chain', [r1 - tch * 0.6]);
       cyl(axI, c2a, c2a[axI] - b / 2, c2a[axI] + b / 2, r2, 2, null, [r2 - tch * 0.6]);
-      o.push({ t: 'chain', ax: axI, c1: c1a, c2: c2a, r1, r2 });
+      o.push({ t: 'chain', ax: axI, c1: c1a, c2: c2a, r1, r2, pitch1: R.chn.dd1 / 2, pitch2: R.chn.dd2 / 2 });
+      if (R.task === 3) clampBoxes(c2a, r2, b, 0).forEach((q, i) => box(q[0], q[1], 1, i === 1 ? 'clamp' : null));
       if (R.drum && alongFx) {
-        const dr = R.drum, sg = c1.fx > F.fx0 + (F.fx1 - F.fx0) / 2 ? -1 : 1, xm = c2a[0] + sg * ((dr.ak4 || 100) + dr.l4 / 2);
+        const dr = R.drum, sg = -1, xm = c2a[0] + sg * ((dr.ak4 || 100) + dr.l4 / 2);
         cyl(0, [0, c2a[1], c2a[2]], xm - dr.Bb / 2, xm + dr.Bb / 2, dr.Db / 2, 1, 'drum');
         cyl(0, [0, c2a[1], c2a[2]], c2a[0], xm + sg * (dr.l4 / 2 + 40), dr.dv / 2);
         [xm - dr.l4 / 2, xm + dr.l4 / 2].forEach(x => box([x - 30, c2a[1] - dr.dp / 2 - 40, c2a[2] - dr.dp / 2 - 40], [x + 30, c2a[1] + dr.dp / 2 + 40, c2a[2] + dr.dp / 2 + 40]));
@@ -200,18 +240,23 @@
     const list = scn.filter(q => q.t !== 'chain').slice().sort((a, b) => nearOf(b) - nearOf(a));
     const U = new Raster(0.8), items = [];
     const seg = (x1, y1, x2, y2, st) => U.clip(x1, y1, x2, y2).forEach(q => sh.line(q[0], q[1], q[2], q[3], st));
-    const circ = (cx, cy, r, st) => {
-      const hid = [0, 1, 2, 3, 4, 5, 6, 7].some(i => U.inside(cx + r * Math.cos(i * Math.PI / 4), cy + r * Math.sin(i * Math.PI / 4))) || U.inside(cx, cy);
-      if (!hid) { sh.circle(cx, cy, r, st); return; }
-      const n = 72; for (let i = 0; i < n; i++) { const a1 = 2 * Math.PI * i / n, a2 = 2 * Math.PI * (i + 1) / n; seg(cx + r * Math.cos(a1), cy + r * Math.sin(a1), cx + r * Math.cos(a2), cy + r * Math.sin(a2), st); }
-    };
+    const hidden = (x, y) => U.inside(x, y);
+    const circ = (x, y, r, st) => circleArcs(x, y, r, hidden).forEach(a => drawArc(sh, a, st));
     list.forEach(q => {
       let ctr;
       if (q.t === 'red') {
-        red.forEach(lp => { for (let i = 0; i < lp.length; i++) { const a = lp[i], b = lp[(i + 1) % lp.length]; seg(a[0], a[1], b[0], b[1], 1); } });
+        red.edges.forEach(e => seg(...e, 1));
+        red.arcs.forEach(([x, y, r, a, b]) => {
+          const visible = circleArcs(x, y, r, (px, py) => {
+            let angle = Math.atan2(py - y, px - x) * 180 / Math.PI;
+            angle = ((angle - a) % 360 + 360) % 360;
+            return angle > b - a || hidden(px, py);
+          });
+          visible.forEach(arc => drawArc(sh, arc, 1));
+        });
         (red.det || []).forEach(d => d[0] === 'L' ? seg(d[1], d[2], d[3], d[4], 1) : circ(d[1], d[2], d[3], 1));
         if (red.length) { const xs = [], ys = []; red.forEach(l => l.forEach(p => { xs.push(p[0]); ys.push(p[1]); })); ctr = [(Math.min(...xs) + Math.max(...xs)) / 2, Math.min(...ys) + (Math.max(...ys) - Math.min(...ys)) * 0.75]; }
-        red.forEach(lp => U.poly(lp));
+        red.raster.rows.forEach((spans, j) => spans.forEach(([a, b]) => U.rect(a * red.raster.c, j * red.raster.c, b * red.raster.c, (j + 1) * red.raster.c)));
       } else if (q.t === 'c' && q.ax === VD.d) {
         const [cx, cy] = P(q.c);
         ctr = [cx, cy + q.r * k * 0.5];
@@ -229,8 +274,7 @@
     scn.filter(q => q.t === 'chain').forEach(q => {
       const p1 = P(q.c1), p2 = P(q.c2);
       if (q.ax === VD.d) {
-        const d = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]) || 1, nx = -(p2[1] - p1[1]) / d, ny = (p2[0] - p1[0]) / d;
-        [1, -1].forEach(sg => seg(p1[0] + nx * q.r1 * k * sg, p1[1] + ny * q.r1 * k * sg, p2[0] + nx * q.r2 * k * sg, p2[1] + ny * q.r2 * k * sg, 2));
+        chainBranches(p1, p2, q.pitch1 * k, q.pitch2 * k).forEach(e => sh.line(...e, 3));
       } else if (Math.hypot(p2[0] - p1[0], p2[1] - p1[1]) > 1) seg(p1[0], p1[1], p2[0], p2[1], 3);
     });
     return { sh, items };
@@ -267,9 +311,9 @@
       });
     }
     if (R.task === 1) {
-      const o = L.out, top = o.pos.map((v, i) => v + o.ax[i] * o.segs[o.segs.length - 1].x1);
-      const q = W2F(top), x = L.sig * q.fy * k, y = q.fz * k;
-      res.front.sh.leader(x, y - 2, x + 20, y + 14, 'к звёздочке', 'конвейера');
+      const o = L.out, tip = o.pos;
+      const q = W2F(tip), x = L.sig * q.fy * k, y = q.fz * k;
+      res.front.sh.leader(x, y + 2, x + 20, y - 14, 'к звёздочке', 'конвейера');
     }
     return { res, items, axZ: F.Hin + F.tr, zM0: F.raise + F.tm, rot: true };
   }
@@ -292,7 +336,8 @@
       const rect = (x1, a1, x2, a2, st) => sh.poly([P2(x1, a1), P2(x2, a1), P2(x2, a2), P2(x1, a2)], st === undefined ? 1 : st);
       // редуктор — силуэт по 3D-модели
       const sil = projectReducer(M, view, 1.2);
-      sil.forEach(lp => sh.poly(lp, 1));
+      sil.edges.forEach(e => sh.line(...e, 1));
+      sil.arcs.forEach(a => drawArc(sh, a, 1));
       (sil.det || []).forEach(q => q[0] === 'L' ? sh.line(q[1], q[2], q[3], q[4], 1) : sh.circle(q[1], q[2], q[3], 1));
       const rb = sh.bbox(0);
       items[vw].push({ kind: 'red', pt: [(rb.x1 + rb.x2) / 2, vw === 'front' ? rb.y2 - (rb.y2 - rb.y1) * 0.25 : (rb.y1 + rb.y2) / 2] });
@@ -343,7 +388,7 @@
     const out = L.out, sp = M.parts.find(p => p.kind === 'sprocket'), spIt = sp && M.asm.items.find(i => i.file === sp.file);
     const W2F = w => ({ fx: w[0], fy: dot(w, fyAx), fz: dot(w, up) + zOff });
     if (sp && spIt && R.chn) {
-      const c1 = W2F(spIt.pos.map((v, i) => v + spIt.axes[i] * 0)), r1 = R.chn.De1 / 2, r2 = R.chn.De2 / 2, a = R.chn.a, b = sp.geom.b;
+      const c1 = W2F(spIt.pos), r1 = R.chn.De1 / 2, r2 = R.chn.De2 / 2, a = R.chn.a, b = sp.geom.b;
       const axv = spIt.axes.slice(0, 3);
       const alongFx = Math.abs(axv[0]) > 0.9;
       // ведомая звёздочка: задание 6 — на валу барабана (поперёк рамы), задание 3 — к кантователю (вдоль рамы, от двигателя)
@@ -356,9 +401,11 @@
         const seesFace = vw === 'front' ? !alongFx : false;
         const behind = vw === 'front' && alongFx;   // ведомая звёздочка за редуктором — на виде спереди не показывается
         if (seesFace) {
-          [[c1, r1, 1], [c2, r2, 2]].forEach(([c, r, st]) => { const p = pt(c); sh.circle(p[0], p[1], r * k, st); sh.circle(p[0], p[1], (r - R.chn.t * 0.6) * k, 2); });
-          const p1 = pt(c1), p2 = pt(c2), d = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]) || 1, nx = -(p2[1] - p1[1]) / d, ny = (p2[0] - p1[0]) / d;
-          [1, -1].forEach(s => sh.line(p1[0] + nx * r1 * k * s, p1[1] + ny * r1 * k * s, p2[0] + nx * r2 * k * s, p2[1] + ny * r2 * k * s, 2));
+          const pitch1 = R.chn.dd1 * k / 2, pitch2 = R.chn.dd2 * k / 2;
+          const p1 = pt(c1), p2 = pt(c2);
+          sh.circle(...p1, r1 * k, 1).circle(...p2, r2 * k, 1);
+          sh.circle(...p1, pitch1, 3).circle(...p2, pitch2, 3);
+          chainBranches(p1, p2, pitch1, pitch2).forEach(e => sh.line(...e, 3));
         } else {
           // вид сбоку звёздочек — прямоугольники толщиной b
           [[c1, r1, 1], [c2, r2, 2]].filter((q, i) => !(behind && i === 1)).forEach(([c, r, st]) => {
@@ -376,6 +423,7 @@
         items[vw].push({ kind: 'chain', pt: [(pt(c1)[0] + pt(c2)[0]) / 2, (pt(c1)[1] + pt(c2)[1]) / 2 + (seesFace ? (r1 + r2) / 2 * k : 0)] });
       };
       draw('front'); draw('top');
+      if (R.task === 3) drawClamp(k, c2, r2, b, 0, TY, res, items);
       // вал конвейера с барабаном (задание 6)
       if (R.drum && alongFx) {
         const dr = R.drum, Lw = dr.l4 + 2 * 60, D = dr.Db, B = dr.Bb;
@@ -383,7 +431,7 @@
           const sh = res[vw].sh, st = 1;
           const ctr = { fx: c2.fx, fy: c2.fy, fz: c2.fz };
           const pt = q => vw === 'front' ? [q.fx * k, q.fz * k] : [q.fx * k, TY(q.fy) * k];
-          const p = pt(ctr), sg = c1.fx > F.fx0 + (F.fx1 - F.fx0) / 2 ? -1 : 1;   // барабан — в сторону от звёздочки
+          const p = pt(ctr), sg = -1;   // барабан — в сторону от звёздочки
           const xm = p[0] + sg * (dr.ak4 || 100) * k + sg * dr.l4 / 2 * k;
           const yA = vw === 'front' ? p[1] : p[1];
           sh.poly([[xm - B / 2 * k, yA - D / 2 * k], [xm + B / 2 * k, yA - D / 2 * k], [xm + B / 2 * k, yA + D / 2 * k], [xm - B / 2 * k, yA + D / 2 * k]], st);
@@ -404,20 +452,54 @@
     }
     // выходной вал задания 1 — к ведущей звёздочке подвесного конвейера
     if (R.task === 1) {
-      const o = L.out, top = o.pos.map((v, i) => v + o.ax[i] * o.segs[o.segs.length - 1].x1);
-      const q = W2F(top), sh = res.front.sh;
-      sh.leader(q.fx * k, q.fz * k - 2, q.fx * k + 20, q.fz * k + 14, 'к звёздочке', 'конвейера');
+      const o = L.out, tip = o.pos;
+      const q = W2F(tip), sh = res.front.sh;
+      sh.leader(q.fx * k, q.fz * k + 2, q.fx * k + 20, q.fz * k - 14, 'к звёздочке', 'конвейера');
     }
     return { res, items, axZ, zM0 };
   }
 
   /* общая сборка листа общего вида: виды → размеры → позиции → техтребования и характеристика → раскладка на А1.
      build.views(k) → { res: { front: { sh }, top: { sh } }, items }, build.dims(V, k) — размеры на видах */
+  // Общие внешние касательные к делительным окружностям звёздочек.
+  function chainBranches([x1, y1], [x2, y2], r1, r2) {
+    const dx = x2 - x1, dy = y2 - y1, d = Math.hypot(dx, dy);
+    if (d <= Math.abs(r1 - r2)) return [];
+    const ux = dx / d, uy = dy / d, t = (r1 - r2) / d, h = Math.sqrt(1 - t * t);
+    return [-h, h].map(s => {
+      const nx = t * ux - s * uy, ny = t * uy + s * ux;
+      return [x1 + nx * r1, y1 + ny * r1, x2 + nx * r2, y2 + ny * r2];
+    });
+  }
+
+  // Условный габарит зажима и его опоры: исходное задание не задаёт их размеров.
+  function clampBoxes([x, y, z], r, b, base) {
+    const w = Math.max(28, r * 0.32), h = Math.max(12, r * 0.12), f = y - b / 2;
+    return [
+      [[x - w / 2, f - 2 * h, base], [x + w / 2, f - h, z - h]],
+      [[x - r * 0.7, f - 3 * h, z - h], [x + r * 0.7, f - 2 * h, z + h]],
+      [[x - h / 2, f - 2 * h, z - h / 2], [x + h / 2, y, z + h / 2]]
+    ];
+  }
+
+  function drawClamp(k, c, r, b, base, topY, res, items) {
+    const boxes = clampBoxes([c.fx, c.fy, c.fz], r, b, base);
+    for (const vw of ['front', 'top']) {
+      const pt = q => [q[0] * k, (vw === 'front' ? q[2] : topY(q[1])) * k];
+      boxes.forEach(([lo, hi], i) => {
+        if (vw === 'front' && i === 2) return;
+        const a = pt(lo), d = pt(hi);
+        res[vw].sh.rect(a[0], Math.min(a[1], d[1]), d[0], Math.max(a[1], d[1]), 1);
+        if (i === 1) items[vw].push({ kind: 'clamp', pt: [d[0], (a[1] + d[1]) / 2] });
+      });
+    }
+  }
+
   function compose(R, P, T, drvSpec, build, meta) {
     const findPos = re => { let p = ''; drvSpec.sections.forEach(sc => sc.items.forEach(it => { if (!p && it.pos && re.test(it.name)) p = it.pos; })); return p; };
-    const POS = { red: findPos(/^Редуктор/), frame: findPos(/^Рама/), drum: findPos(/барабан/), motor: findPos(/Электродвигатель/), coupling: findPos(/Муфта/), chain: findPos(/^Цепь/) };
+    const POS = { red: findPos(/^Редуктор/), frame: findPos(/^Рама/), drum: findPos(/барабан/), clamp: findPos(/^Ведущий зажим/), motor: findPos(/Электродвигатель/), coupling: findPos(/Муфта/), chain: findPos(/^Цепь/) };
     const K = R.K || {};
-    const last = R.task === 6 ? { T: K.TIII, n: K.nIII } : R.task === 3 ? { T: K.TII, n: K.nII } : { T: K.T2T, n: K.n2T };
+    const last = R.task === 6 ? { T: K.TIV, n: R.nOut || K.nIV } : R.task === 3 ? { T: K.TIII, n: R.nOut || K.nIII } : { T: K.T2T, n: K.n2T };
     const tech = [`1. Мощность электродвигателя ${nf((R.motor || {}).P, 1)} кВт, частота вращения ${nf((R.motor || {}).n)} мин⁻¹.`, `2. Электродвигатель ${(R.motor || {}).type || ''}.`,
       `3. Вращающий момент на выходном валу ${nf(last.T || 0, 1)} Н·м, частота вращения ${nf(last.n || 0, 1)} мин⁻¹.`, `4. Общее передаточное число привода ${nf((R.motor && last.n) ? R.motor.n / last.n : 0, 2)}.`];
     const req = ['1. *Размеры для справок.', `2. Смещение осей валов электродвигателя и редуктора не более ${R.cp && R.cp.c ? nf(R.cp.c.dr, 1) : '0,3'} мм, перекос — не более ${R.cp && R.cp.c ? R.cp.c.da : '1°'}.`,
@@ -519,5 +601,5 @@
     } }, { id: 'obshiy_vid', file: 'privod_VO.cdw', nameSub: 'Чертёж общего вида' });
   }
 
-  root.DRWDRIVE = { driveSheet, compose, projectReducer, Raster };
+  root.DRWDRIVE = { driveSheet, compose, projectReducer, Raster, drawClamp, chainBranches };
 })(typeof window !== 'undefined' ? window : globalThis);

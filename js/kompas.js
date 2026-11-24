@@ -55,7 +55,8 @@
       dWheel(p4, [['Шаг цепи', 't', fnum(chn.t, 0)], ['Число зубьев', 'z', String(chn.z1)], ['Диаметр ролика', 'd1', fnum(chn.chain.d1, 0)], ['Делительный диаметр', 'dд', fnum(chn.dd1, 4)], ['Цепь', '—', chn.code + ' ГОСТ 13568-75']]);
     } else if (R.task === 6) {
       const gB = R.gB, gT = R.gT, w2 = R.w2, w4 = R.w4, L = R.L, chn = R.chn, dims = R.dims;
-      const sI = segsOut(sh.I), sII = segsOut(sh.II), sIII = segsOut(sh.III);
+      const sI = segsOut(sh.I), sII = segsOut(sh.II), sIII = segsOut(sh.III).reverse();
+      const xIII = -R.b3.B - sIII[0].l - sIII[1].l;
       const xs3 = midOf(sIII, s => /звёздочк/.test(s.name));
       const Wx = L.W + 2 * (H.del || 8), By = gB.aw + gT.aw + gT.da2 / 2 + gB.da1 / 2 + 2 * ((H.gap || 10) + (H.del || 8));
       const zb = -(gT.da2 / 2 + (H.gapBot || 30)), Hh = gT.da2 / 2 + (H.gap || 10) + (H.del || 8) - zb;
@@ -67,8 +68,8 @@
       const pz4 = add('koleso_z4', 'Колесо зубчатое тихоходной ступени', 'wheel', wheelGeom({ da: gT.da2, df: gT.df2, d: gT.d2, b: gT.b2, z: gT.z2, m: gT.m, dbore: dims.dpos3, dst: w4.dst, lst: w4.lst, e: w4.e, d0: w4.d0, key: keyDim(kz4) }), 'Сталь 40 ГОСТ 1050-2013');
       const psp = add('zvezdochka', 'Звёздочка ведущая', 'sprocket', { z: chn.z1, t: chn.t, dd: r1(chn.dd1), De: r1(chn.De1), d1: chn.chain.d1, b: r1(0.93 * chn.chain.Bvn - 0.15), dbore: dims.dv3, dst: Math.round(1.6 * dims.dv3), lst: dims.lv3, key: keyDim(kS) });
       asm.push({ file: pk.file, pos: [L.W / 2, y0 + By / 2, zb + Hh / 2], axes: AX_X });
-      asm.push({ file: pI.file, pos: [-R.b1.B, 0, 0], axes: AX_X }, { file: pII.file, pos: [-R.b2.B, gB.aw, 0], axes: AX_X }, { file: pIII.file, pos: [-R.b3.B, gB.aw + gT.aw, 0], axes: AX_X });
-      asm.push({ file: pz2.file, pos: [L.a2 - R.b2.B / 2, gB.aw, 0], axes: AX_X }, { file: pz4.file, pos: [L.a3 - R.b3.B / 2, gB.aw + gT.aw, 0], axes: AX_X }, { file: psp.file, pos: [xs3 - R.b3.B, gB.aw + gT.aw, 0], axes: AX_X });
+      asm.push({ file: pI.file, pos: [-R.b1.B, 0, 0], axes: AX_X }, { file: pII.file, pos: [-R.b2.B, gB.aw, 0], axes: AX_X }, { file: pIII.file, pos: [xIII, gB.aw + gT.aw, 0], axes: AX_X });
+      asm.push({ file: pz2.file, pos: [L.a2 - R.b2.B / 2, gB.aw, 0], axes: AX_X }, { file: pz4.file, pos: [L.W - L.a3 + R.b3.B / 2, gB.aw + gT.aw, 0], axes: AX_X }, { file: psp.file, pos: [xIII + xs3, gB.aw + gT.aw, 0], axes: AX_X });
       [pI, pII, pIII].forEach((p, i) => dShaft(p, [sI, sII, sIII][i]));
       dWheel(pz4, gearTable(gT.m, gT.z2, gT.d2)); dWheel(pz2, gearTable(gB.m, gB.z2, gB.d2));
       if (R.drum) {
@@ -80,7 +81,7 @@
       }
     } else {
       const gC = R.gC, gT = R.gT, wC = R.wC, wT = R.wT, L = R.L, dims = R.dims;
-      const sI = segsOut(sh.I), sII = segsOut(sh.II), sIII = segsOut(sh.III);
+      const sI = segsOut(sh.I), sII = segsOut(sh.II), sIII = segsOut(sh.III).reverse();
       const kC = keyOf(R, 'wheelC'), kT = keyOf(R, 'wheelT');
       // коническая пара: вершины делительных конусов совпадают. Шестерня — первая ступень вала I (x = 0…l, внешний торец при x = l):
       // ось колеса проходит через вершину конуса шестерни; колесо ставится центром ступицы (по профилю рабочего чертежа) на ступень вала II
@@ -103,7 +104,7 @@
       [pI, pII, pIII].forEach((p, i) => dShaft(p, [sI, sII, sIII][i]));
       dWheel(pT, gearTable(gT.m, gT.z2, gT.d2));
       // редуктор с вертикальным тихоходным валом (задание 1, рис. 2.12): поворот компоновки на 90° вокруг оси входного вала X —
-      // промежуточный и тихоходный валы становятся вертикальными (ось Y вверх), выходной конец тихоходного вала — вверх
+      // промежуточный и тихоходный валы становятся вертикальными (ось Y вверх), выходной конец тихоходного вала — вниз
       const rot = v => [v[0], v[2], -v[1]];
       asm.forEach(it => { it.pos = rot(it.pos); it.axes = rot(it.axes.slice(0, 3)).concat(rot(it.axes.slice(3))); });
       dWheel(pC, [['Внешний окружной модуль', 'mte', fnum(gC.mte, 4)], ['Число зубьев', 'z', String(gC.z2)], ['Тип зуба', '—', 'прямой'], ['Исходный контур', '—', 'ГОСТ 13754-81'], ['Угол делительного конуса', 'δ', F.degTxt(gC.d2deg)], ['Внешнее конусное расстояние', 'Re', fnum(gC.Re, 4)], ['Средний делительный диаметр', 'd', fnum(gC.dm2, 4)], ['Степень точности', '—', '8-B ГОСТ 1758-81']]);
@@ -176,7 +177,7 @@
       file: 'spec_privod.cdw', code: `${code} 00.00.00`, name: task.title,
       sections: [
         S('Документация', 5, [{ fmt: (opt.formats || {}).obshiy_vid || 'А1', code: `${code} 00.00.00 ВО`, name: 'Чертёж общего вида', noPos: true }, { fmt: 'А4', code: `${code} 00.00.00 ПЗ`, name: 'Пояснительная записка', noPos: true }]),
-        S('Сборочные единицы', 15, [{ fmt: (opt.formats || {}).reduktor_sb || 'А1', code: `${code} 01.00.00`, name: 'Редуктор', qty: 1 }, { fmt: (opt.formats || {}).rama_sb || 'А2', code: `${code} 02.00.00`, name: 'Рама', qty: 1 }].concat(R.task === 6 ? [{ fmt: (opt.formats || {}).val_baraban_sb || 'А1', code: `${code} 03.00.00`, name: 'Вал приводной с барабаном', qty: 1 }] : [])),
+        S('Сборочные единицы', 15, [{ fmt: (opt.formats || {}).reduktor_sb || 'А1', code: `${code} 01.00.00`, name: 'Редуктор', qty: 1 }, { fmt: (opt.formats || {}).rama_sb || 'А2', code: `${code} 02.00.00`, name: 'Рама', qty: 1 }].concat(R.task === 6 ? [{ fmt: (opt.formats || {}).val_baraban_sb || 'А1', code: `${code} 03.00.00`, name: 'Вал приводной с барабаном', qty: 1 }] : R.task === 3 ? [{ name: 'Ведущий зажим кантователя', qty: 1 }] : [])),
         S('Стандартные изделия', 25, [{ name: `Электродвигатель ${R.motor.type}`, qty: 1 }, { name: R.cp ? R.cp.code.replace('Муфта упругая втулочно-пальцевая', 'Муфта') : 'Муфта упругая втулочно-пальцевая', qty: 1 }].concat(R.chn ? [{ name: `Цепь ${R.chn.code} ГОСТ 13568-75`, qty: 1 }] : [], [{ name: `Болт фундаментный М${H.d1 || 16}`, qty: 8 }]).sort((a, b) => a.name.localeCompare(b.name, 'ru', { numeric: true })))
       ]
     };
@@ -250,7 +251,7 @@
     const sf = ['A4', 'A3', 'A2', 'A1', 'A0'].includes((T || {}).sheetFmt) ? T.sheetFmt : 'A1';   // формат листов чертежей
     const DEFV = root.DRWCORE ? root.DRWCORE.opts.VIEWS_DEF : { vo: {}, sb: {} }, tv = (T || {}).views || {};
     const vw = { vo: Object.assign({}, DEFV.vo, tv.vo || {}), sb: Object.assign({}, DEFV.sb, tv.sb || {}) };   // какие виды строить
-    const key = JSON.stringify({ c: codeOf(P, T || {}), s: (T || {}).student, t: (T || {}).teacher, nd, wf, su, vw, sf });   // основная надпись в геометрию листов не входит — её поля кэш не сбрасывают
+    const key = JSON.stringify({ c: codeOf(P, T || {}), s: (T || {}).student, t: (T || {}).teacher, nd, wf, su, vw, sf, detailFmt: (T || {}).sheetFmt || null });   // основная надпись в геометрию листов не входит — её поля кэш не сбрасывают
     const c = SHEETS.get(R); if (c && c.key === key) return c.v;
     // флаг действует только пока строятся листы (между шагами генератора — снят, чтобы не задеть рисунки записки)
     const on = () => { if (root.DRWCORE) Object.assign(root.DRWCORE.opts, { fmt: sf, noDims: nd, wormFa: wf, scaleUniform: su, views: vw }); }, off = () => { if (root.DRWCORE) Object.assign(root.DRWCORE.opts, { fmt: 'A1', noDims: false, wormFa: '3675', scaleUniform: false, views: JSON.parse(JSON.stringify(DEFV)) }); };

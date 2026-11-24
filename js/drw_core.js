@@ -477,13 +477,12 @@
     }
     return best;
   };
-  /* закрашенная стрелка (веер тонких отрезков): острие (x, y), направление ang (куда указывает острие) */
+  /* контур стрелки: острие (x, y), направление ang (куда указывает острие) */
   S.arrow = function (x, y, ang, len, wid) {
     len = len || 2.5; wid = wid || 0.85;
     const c = Math.cos(ang * D2R), s = Math.sin(ang * D2R);
     const bx = x - len * c, by = y - len * s, nx = -s * wid / 2, ny = c * wid / 2;
-    const k = 6;
-    for (let i = 0; i <= k; i++) { const t = -1 + 2 * i / k; this.line(x, y, bx + nx * t, by + ny * t, 2); }
+    this.poly([[x, y], [bx + nx, by + ny], [bx - nx, by - ny]], 2);
     return this;
   };
   /* закрашенный треугольник базы: середина основания (x, y), вершина в направлении ang, сторона a */

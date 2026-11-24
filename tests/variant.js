@@ -16,8 +16,38 @@ try {
   const R = TC['task' + P.task](P);
   out.task = P.task;
   const K = ctx.KOMPAS, T = Object.assign({ student: 'Тест', group: '741-15' }, OPT.T || {});
+  const model = ctx.DRWASM.asmData(R, P, T);
+  if (P.task === 6) {
+    for (const result of [R, R.pre].filter(Boolean)) {
+      const a = ctx.DRWASM.asmData(result, P, T);
+      const [input, intermediate, output] = a.shafts;
+      const inputEnd = input.pos[0] + input.segs.at(-1).x1;
+      const sprocket = a.sprockets[0];
+      const wheel = a.wheels.find(w => /z4/.test(w.pd.id));
+      const pinion = intermediate.segs.find(s => s.gear);
+      const pinionX = intermediate.pos[0] + (pinion.x0 + pinion.x1) / 2;
+      if (!(inputEnd > result.L.W && sprocket.pos[0] < 0 && output.pos[0] < sprocket.pos[0])) fail('валы I и III должны выходить с противоположных сторон');
+      if (!wheel || Math.abs(wheel.pos[0] - pinionX) > 0.2) fail('венцы z3 и z4 смещены по оси');
+      const sketch = ctx.DRWSKETCH.layout(result);
+      if (!sketch.ends.some(e => e.out && e.shaft === 2 && e.dir < 0)) fail('выход вала III на эскизе направлен к двигателю');
+    }
+  }
+  if (P.task === 1) {
+    const output = model.shafts[2];
+    if (output.ax[1] !== 1 || !/звёздочк/.test(output.segs[0].name)) fail('выход тихоходного вала должен быть направлен вниз');
+  }
   const S = K.sheets(R, P, T);
   const ids = S.list.map(d => d.id);
+  const wheels = S.list.filter(d => /^(koleso_|zvezdochka)/.test(d.id));
+  for (const d of wheels) {
+    if (!d.scale.startsWith('1:')) fail(d.id + ': масштаб колеса больше 1:1');
+    if (!T.sheetFmt && !['A3', 'A2', 'A1', 'A0'].includes(d.fmt)) fail(d.id + ': формат меньше А3');
+  }
+  if (no === 6 && !process.argv[3]) {
+    const assembly = S.list.find(d => d.id === 'reduktor_sb');
+    if (assembly?.fmt !== 'A1' || assembly.scale !== '1:1') fail('задание 1, вариант 6: главный разрез должен помещаться на А1 в 1:1');
+    if (wheels.length !== 2 || wheels.some(d => d.fmt !== 'A3' || d.scale !== '1:1')) fail('задание 1, вариант 6: колёса должны помещаться на А3 в 1:1');
+  }
   // обязательные листы
   const REQ = { 1: ['reduktor_sb', 'obshiy_vid', 'rama_sb', 'korpus', 'eskiz_vo'], 3: ['reduktor_sb', 'obshiy_vid', 'rama_sb', 'korpus', 'eskiz_vo'], 6: ['reduktor_sb', 'obshiy_vid', 'val_baraban_sb', 'korpus', 'eskiz_vo'] }[P.task];
   REQ.forEach(id => { if (!ids.includes(id)) fail(`нет листа ${id}`); });
@@ -38,6 +68,13 @@ try {
     d.sh.finalize();
     const lint = ctx.DRWLINT.lint(d.sh).map(q => q.msg);
     out.sheets[d.id] = { dims, lint: lint.length, lintMsgs: lint.slice(0, 40) };
+  }
+  if (P.task === 3) {
+    const items = K.specs(R, P, T)[1].sections.flatMap(s => s.items);
+    const positions = [/^Цепь/, /^Ведущий зажим/].map(re => items.find(i => re.test(i.name))?.pos);
+    for (const d of S.list.filter(d => /^(obshiy_vid|eskiz_vo)/.test(d.id))) {
+      if (positions.some(pos => !pos || !d.sh.p.some(p => p.t === 'T' && p.pos && String(p.s) === String(pos)))) fail(d.id + ': нет позиций цепи и ведущего зажима');
+    }
   }
   // спецификации
   const sp = K.specSheets(R, P, T);

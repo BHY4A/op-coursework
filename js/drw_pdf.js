@@ -33,9 +33,17 @@
       else if (q.t === 'A') {
         setStyle(q.s);
         const [x, y, r, a1] = q.a; let da = q.a[4] - a1; while (da <= 0) da += 360;
-        const n = Math.max(4, Math.ceil(da / 4));
-        let px = x + r * Math.cos(a1 * D2R), py = y + r * Math.sin(a1 * D2R);
-        for (let i = 1; i <= n; i++) { const a = (a1 + da * i / n) * D2R, nx = x + r * Math.cos(a), ny = y + r * Math.sin(a); doc.line(px, Y(py), nx, Y(ny)); px = nx; py = ny; }
+        const n = Math.ceil(da / 90), step = da * D2R / n;
+        const tangent = 4 / 3 * Math.tan(step / 4);
+        const at = a => [x + r * Math.cos(a), Y(y + r * Math.sin(a))];
+        const curves = [];
+        for (let i = 0; i < n; i++) {
+          const a = a1 * D2R + i * step, b = a + step;
+          const [px, py] = at(a), [nx, ny] = at(b);
+          curves.push([-r * tangent * Math.sin(a), -r * tangent * Math.cos(a),
+            nx - px + r * tangent * Math.sin(b), ny - py + r * tangent * Math.cos(b), nx - px, ny - py]);
+        }
+        doc.lines(curves, ...at(a1 * D2R));
       }
     }
     doc.setLineDashPattern([], 0);

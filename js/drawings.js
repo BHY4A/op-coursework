@@ -792,7 +792,7 @@
     const notes = info.notes || [];
     const tipD = kind === 'sprocket' ? g.De : kind === 'wormwheel' ? g.daM : kind === 'bevel' ? g.dae : g.da;
     const plan = [];
-    for (const fmt of C.fmts()) for (const [kk] of C.scales(4)) plan.push([fmt, kk]);   // формат — из настройки, масштаб — наибольший, при котором помещается
+    for (const fmt of C.fmts()) for (const [kk] of C.scales(1)) plan.push([fmt, kk]);
     for (const [fmt, k] of plan) {
       const tmp = new Sheet('A1', true); tmp.frame = { x1: -5000, y1: -5000, x2: 5000, y2: 5000 };
       wheelMain(tmp, g, kind, k, info);
@@ -911,7 +911,15 @@
     for (const dd of M.drawings) {
       const pd = M.parts.find(p => p.id === dd.part); if (!pd) continue;
       const info = partInfo(R, M, pd);
-      const res = C.fitSheet(() => pd.kind === 'shaft' ? shaftSheet(pd, info) : wheelSheet(pd, info));
+      const fmt = C.opts.fmt;
+      let res;
+      try {
+        if (pd.kind === 'shaft') res = C.fitSheet(() => shaftSheet(pd, info));
+        else {
+          C.opts.fmt = (T || {}).sheetFmt || 'A3';
+          res = wheelSheet(pd, info);
+        }
+      } finally { C.opts.fmt = fmt; }
       if (!res) continue;
       out.push({ id: pd.id, file: pd.id + '.cdw', code: pd.code, name: pd.name, material: info.material, mass: massText(info.mass), scale: res.scale, fmt: res.fmt, landscape: res.sh.landscape, sh: res.sh });
     }

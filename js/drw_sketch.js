@@ -50,7 +50,7 @@
       out.outShaft = 1;
     } else if (R.task === 6) {
       const gB = R.gB, gT = R.gT;
-      const I = shaft(sh.I, R.b1, [-R.b1.B, 0, 0], 0), II = shaft(sh.II, R.b2, [-R.b2.B, gB.aw, 0], 0), III = shaft(sh.III, R.b3, [-R.b3.B, gB.aw + gT.aw, 0], 0);
+      const I = shaft(sh.I, R.b1, [-R.b1.B, 0, 0], 0), II = shaft(sh.II, R.b2, [-R.b2.B, gB.aw, 0], 0), III = shaft(sh.III.slice().reverse(), R.b3, [-R.b3.B - R.H.del - R.dims.s3.h - 10 - R.dims.lv3, gB.aw + gT.aw, 0], 0);
       const p1 = I.S.find(s => s.gear), h2 = II.S.find(s => /ступиц/.test(s.name)), p3 = II.S.find(s => s.gear), h4 = III.S.find(s => /ступиц/.test(s.name));
       const wheel = (S, h, g) => body(S, (h.x0 + h.x1) / 2 - g.b2 / 2, (h.x0 + h.x1) / 2 + g.b2 / 2, g.da2 / 2);
       out.shafts = [I, II, III];
@@ -58,17 +58,18 @@
       out.zp = 0;
       out.outShaft = 2;
     } else {
-      // задание 1: коническая ступень (вал I горизонтален), промежуточный и тихоходный валы вертикальны, выход тихоходного вала — вверх
+      // задание 1: коническая ступень (вал I горизонтален), промежуточный и тихоходный валы вертикальны, выход тихоходного вала — вниз
       const gC = R.gC, gT = R.gT;
       const I = shaft(sh.I, R.b1, [0, 0, 0], 0);
       const d1r = gC.d1deg * Math.PI / 180, d2r = gC.d2deg * Math.PI / 180;
       const xII = I.S[0].l - gC.Re * Math.cos(d1r);          // ось колеса проходит через вершину конуса шестерни
-      const II0 = shaft(sh.II, R.b2, [0, 0, 0], 2), III0 = shaft(sh.III, R.b3, [0, 0, 0], 2);
+      const IIIsteps = sh.III.slice().reverse();
+      const II0 = shaft(sh.II, R.b2, [0, 0, 0], 2), III0 = shaft(IIIsteps, R.b3, [0, 0, 0], 2);
       const xpII = midOf(II0, s => /коническ/.test(s.name)), xgII = midOf(II0, s => s.gear), xwIII = midOf(III0, s => /ступиц/.test(s.name));
       let xcHub = gC.Rm * Math.cos(d2r);
       try { const W = root.DRAWINGS.wheelProfile({ de: gC.de2, dae: gC.dae2, b: gC.b, Re: gC.Re, delta: gC.d2deg, mte: gC.mte, dbore: (R.dims || {}).d2p || 40, dst: (R.wC || {}).dst || 60, lst: (R.wC || {}).lst || 40, key: null }, 'bevel'); xcHub = (W.x0 + W.x1) / 2; } catch (e) { /* по Rm */ }
       const zC = -xcHub;
-      const II = shaft(sh.II, R.b2, [xII, 0, zC - xpII], 2), III = shaft(sh.III, R.b3, [xII - gT.aw, 0, zC - xpII + xgII - xwIII], 2);
+      const II = shaft(sh.II, R.b2, [xII, 0, zC - xpII], 2), III = shaft(IIIsteps, R.b3, [xII - gT.aw, 0, zC - xpII + xgII - xwIII], 2);
       const p1 = I.S[0], p2 = II.S.find(s => s.gear), h3 = III.S.find(s => /ступиц/.test(s.name));
       const zL = -gC.Re * Math.cos(d2r), zS = -(gC.Re - gC.b) * Math.cos(d2r);
       const bevel = { ax: 2, c: [xII, 0, (zL + zS) / 2], h: Math.abs(zS - zL) / 2 + 4, r: gC.dae2 / 2 };
@@ -365,18 +366,18 @@
       if (vw === 'front') items[vw].push({ kind: 'frame', pt: P([D.fx0 + (D.fx1 - D.fx0) * 0.3, 0, D.zTop - D.hc / 2]) });   // не по центру — там надпись габарита
       res[vw] = { sh };
     }
-    if (spr) chainDraw(R, Lt, spr, res, items, k, { front: sc.rects('front', k, 'red'), top: sc.rects('top', k, 'red') });
+    if (spr) chainDraw(R, D, spr, res, items, k, { front: sc.rects('front', k, 'red'), top: sc.rects('top', k, 'red') });
     // надпись «к звёздочке конвейера» ставится после размеров (sketchSheet → dims), чтобы обойти их линии
     const post = () => { if (R.task !== 1) return;
-      const s = Lt.shafts[Lt.outShaft], top = at(s, s.L), sh = res.front.sh, oe = Lt.ends.find(e => e.out && e.shaft === Lt.outShaft), r = oe ? oe.r : 20;
-      const p = [(top[0] - r) * k, (top[2] - 12) * k];   // от боковой образующей ниже торца — не через размер ⌀d над торцом
+      const s = Lt.shafts[Lt.outShaft], tip = at(s, 0), sh = res.front.sh, oe = Lt.ends.find(e => e.out && e.shaft === Lt.outShaft), r = oe ? oe.r : 20;
+      const p = [(tip[0] - r) * k, (tip[2] + 12) * k];   // от боковой образующей выше торца — не через размер ⌀d над торцом
       sh.attempt([[-20, 10], [-24, 4], [-20, 18], [-30, 12], [20, 14]].map(([dx, dy]) => () => sh.leader(p[0], p[1], p[0] + dx, p[1] + dy, 'к звёздочке', 'конвейера', dx < 0 ? { side: 'l' } : undefined)));
     };
     return { res, items, post };
   }
 
   /* цепная передача и вал барабана — по R.chn, R.drum (как на чертеже общего вида) */
-  function chainDraw(R, Lt, spr, res, items, k, hide) {
+  function chainDraw(R, D, spr, res, items, k, hide) {
     const chn = R.chn, r1 = chn.De1 / 2, r2 = chn.De2 / 2, a = chn.a, b = spr.b;
     const alongX = spr.ax === 0;
     const aD = Math.min(a, Math.max(r1 + r2 + 70, 300)), broken = aD < a - 1;
@@ -386,9 +387,8 @@
       const sh = res[vw].sh, pt = q => vw === 'front' ? [q.x * k, q.z * k] : [q.x * k, SY * q.y * k];
       const seesFace = vw === 'front' && !alongX;
       if (seesFace) {
-        const p2 = pt(c2); sh.circle(p2[0], p2[1], r2 * k, 2); sh.circle(p2[0], p2[1], (r2 - chn.t * 0.6) * k, 2);
-        const p1 = pt(c1), d = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]) || 1, nx = -(p2[1] - p1[1]) / d, ny = (p2[0] - p1[0]) / d;
-        [1, -1].forEach(s => lineOutside(sh, p1[0] + nx * r1 * k * s, p1[1] + ny * r1 * k * s, p2[0] + nx * r2 * k * s, p2[1] + ny * r2 * k * s, hide[vw], 2));
+        const p2 = pt(c2); sh.circle(p2[0], p2[1], r2 * k, 2); sh.circle(p2[0], p2[1], chn.dd2 * k / 2, 3);
+        root.DRWDRIVE.chainBranches(pt(c1), p2, chn.dd1 * k / 2, chn.dd2 * k / 2).forEach(e => lineOutside(sh, ...e, hide[vw], 3));
       } else if (!(vw === 'front' && alongX)) {
         const p = pt(c2);
         if (alongX) sh.rect(p[0] - b / 2 * k, p[1] - r2 * k, p[0] + b / 2 * k, p[1] + r2 * k, 2);
@@ -400,6 +400,7 @@
       if (vw === 'top' || seesFace) sh.attempt([1, -1].map(sg => () => { const off = (Math.max(r1, r2) + 14) * k * sg; return Math.abs(q2[0] - q1[0]) > Math.abs(q2[1] - q1[1]) ? sh.dimH(q1[0], q1[1], q2[0], q2[1], q1[1] + off, nf(a)) : sh.dimV(q1[0], q1[1], q2[0], q2[1], q1[0] + off, nf(a)); }));
       if (!(vw === 'front' && alongX)) items[vw].push({ kind: 'chain', pt: [(q1[0] + q2[0]) / 2, (q1[1] + q2[1]) / 2] });
     });
+    if (R.task === 3) root.DRWDRIVE.drawClamp(k, { fx: c2.x, fy: c2.y, fz: c2.z }, r2, b, D.zTop, y => SY * y, res, items);
     if (R.drum && alongX) {
       const dr = R.drum, D = dr.Db, B = dr.Bb, sh = res.top.sh;
       const p = [c2.x * k, SY * c2.y * k], sg = -1;
@@ -445,7 +446,7 @@
           for (let i = 0; i + 1 < sv.length; i++) {
             const a = sv[i], c = sv[i + 1]; if (a.ax !== c.ax) continue;
             if (a.ax === 2) { const pa = [a.o[0] * k, SY * a.o[1] * k], pc = [c.o[0] * k, SY * c.o[1] * k]; tp.attempt([34, -34, 46, -46, 58, -58].map(off => () => tp.dimH(pa[0], pa[1], pc[0], pc[1], pa[1] + off, nf(Math.abs(a.o[0] - c.o[0]), 1)))); }
-            else if (a.ax === 0) { const x = Math.min(a.o[0], c.o[0]) * k, xo = Math.min(Lt.flange.lo[0], ...Lt.feet.map(f => f.lo[0]), ...Lt.walls.map(w => w.lo[0])) * k - 8; tp.attempt([xo, xo - 8, x - 12].map(xd => () => tp.dimV(x, SY * a.o[1] * k, x, SY * c.o[1] * k, xd, nf(Math.abs(a.o[1] - c.o[1]), 1)))); }   // слева от корпуса
+            else if (a.ax === 0) { const x = Math.min(at(a, a.br[0].a)[0], at(c, c.br[0].a)[0]) * k, xo = Math.min(Lt.flange.lo[0], ...Lt.feet.map(f => f.lo[0]), ...Lt.walls.map(w => w.lo[0])) * k - 8; tp.attempt([xo, xo - 8, x - 12].map(xd => () => tp.dimV(x, SY * a.o[1] * k, x, SY * c.o[1] * k, xd, nf(Math.abs(a.o[1] - c.o[1]), 1)))); }   // слева от корпуса
           }
         }
         // червячная передача: межосевое расстояние на виде спереди (ось червяка — ось колеса)
