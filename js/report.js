@@ -197,7 +197,7 @@
   function figLead(it) {
     switch (it.kind) {
       case 'beam': return 'Расчётная схема вала и эпюры изгибающих и крутящего моментов';
-      case 'layout': return 'Эскизная компоновка (ступенчатые валы с принятыми размерами)';
+      case 'layout': return 'Эскизная компоновка редуктора';
       case 'scheme': return 'Кинематическая схема привода';
       case 'load': return 'График нагрузки';
     }

@@ -1626,6 +1626,34 @@
     return out;
   }
 
-  root.DRWASM = { awText, bearingPlaces, housingElev, PLAN, ELEV, splitHeight, housingSheets, housingGeom, asmData, sectionView, sideView, sectionDims, positions, posFinder, asmSheet, RectSet, drawBearing, VIEWS };
+  // Рисунок для пояснительной записки. Положение колёс, валов и опор
+  // берётся из той же компоновки, что и сборочный чертёж.
+  const reportLayouts = new WeakMap();
+  function reportLayout(R, P, T) {
+    if (reportLayouts.has(R)) return reportLayouts.get(R);
+    const model = asmData(R, P, T), views = VIEWS[R.task];
+    const sections = [views.main, views.second].filter(Boolean).map(view => {
+      const section = sectionView(model, R, view, 0.65);
+      sectionDims(section, R, R.task, section.k);
+      if (R.task === 3 && view === views.main) {
+        const worm = model.shafts[0], wheel = model.shafts[1], k = section.k;
+        const x = dot(wheel.pos, view.u) * k;
+        const y1 = dot(worm.pos, view.v) * k, y2 = dot(wheel.pos, view.v) * k;
+        section.sh.dimV(x, y1, x, y2, section.sh.bbox(0).x2 + 12, awText(R, R.g.aw));
+      }
+      return section.sh;
+    });
+    const sheet = new Sheet('A0', true);
+    const viewsOnSheet = sections.map((sh, i) => i ? { p: sh.p, rel: 'right', of: 0 } : { p: sh.p });
+    if (!DR.placeViews(sheet, viewsOnSheet)) throw new Error('Не удалось разместить разрезы компоновки редуктора');
+    sheet.finalize();
+    const { x1, y1, x2, y2 } = sheet.bbox(0);
+    const box = { x1: x1 - 5, y1: y1 - 5, x2: x2 + 5, y2: y2 + 5 };
+    const svg = C.toSVG(sheet, { box, px: 1500 }).replace('<svg ', '<svg role="img" ');
+    reportLayouts.set(R, svg);
+    return svg;
+  }
+
+  root.DRWASM = { reportLayout, awText, bearingPlaces, housingElev, PLAN, ELEV, splitHeight, housingSheets, housingGeom, asmData, sectionView, sideView, sectionDims, positions, posFinder, asmSheet, RectSet, drawBearing, VIEWS };
 
 })(typeof window !== 'undefined' ? window : globalThis);

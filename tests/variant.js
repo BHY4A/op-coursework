@@ -11,12 +11,21 @@ const out = { no, sheets: {}, specs: 0, fails: [], ms: 0 };
 const fail = m => out.fails.push(m);
 const t0 = Date.now();
 try {
-  const TC = ctx.TASKS_CALC, P = TC.defaults(no);
+  const TC = ctx.TASKS_CALC, P = TC.defaults(no, no > 26 ? { task: 6, v: no - 20 } : undefined);
   Object.assign(P.O, OPT.O || {});
   const R = TC['task' + P.task](P);
   out.task = P.task;
   const K = ctx.KOMPAS, T = Object.assign({ student: 'Тест', group: '741-15' }, OPT.T || {});
   const model = ctx.DRWASM.asmData(R, P, T);
+  const layout = ctx.DRWASM.reportLayout(R, P, T);
+  if (!layout.includes('<path') || /NaN|Infinity/.test(layout)) fail('не построена компоновка для записки');
+  const frame = ctx.DRWFRAME.frameLayout(R, P, T);
+  if (Math.abs(frame.raise + frame.tm + frame.Hm - frame.tr - frame.Hin) > 0.01) fail('оси двигателя и редуктора не совпадают по высоте');
+  if (P.task === 3) {
+    const [worm, wheel] = model.shafts;
+    const dot = worm.ax.reduce((sum, x, i) => sum + x * wheel.ax[i], 0);
+    if (Math.abs(dot) > 1e-6 || Math.abs(wheel.pos[2] - worm.pos[2] - R.g.aw) > 0.01) fail('оси червяка и колеса должны скрещиваться под 90° на расстоянии aw');
+  }
   if (P.task === 6) {
     for (const result of [R, R.pre].filter(Boolean)) {
       const a = ctx.DRWASM.asmData(result, P, T);

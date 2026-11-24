@@ -41,7 +41,9 @@
     const Y1 = Math.min(...redHoles.map(h => h.fy)), Y2 = Math.max(...redHoles.map(h => h.fy));
     const yL = Math.min(Y1, ...allY), yR = Math.max(Y2, ...allY);
     const xs = redHoles.map(h => h.fx).concat(motHoles.map(h => h.fx));
-    const X1 = Math.min(...xs) - 70, X2 = Math.max(...xs) + 70;
+    // Кантователь по схеме задания № 3 стоит на общей раме с мотором и редуктором.
+    const clampX = R.task === 3 && R.chn && A.sprockets.length ? A.sprockets[0].pos[0] - R.chn.a : null;
+    const X1 = Math.min(Math.min(...xs) - 70, clampX === null ? Infinity : clampX - bc / 2), X2 = Math.max(...xs) + 70;
     let fx0 = Math.floor(X1 / 5) * 5, fx1 = Math.ceil(X2 / 5) * 5;
     const Lf = fx1 - fx0, Wf = (yR - yL) + bc;
     // поперечины: торцевые и под лапы двигателя

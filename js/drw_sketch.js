@@ -285,7 +285,8 @@
     const [hc, bc] = CH[no];
     const holes = Lt.holes.concat(motHoles);
     const yL = Math.min(...holes.map(p => p[1])), yR = Math.max(...holes.map(p => p[1]));
-    const fx0 = Math.min(...holes.map(p => p[0])) - 40, fx1 = Math.max(...holes.map(p => p[0]), mSh + (m.l30 || 400) - (m.l1 || 80) - 20) + 40;
+    const clampX = R.task === 3 && R.chn ? Lt.shafts[Lt.outShaft].o[0] - R.chn.a : null;
+    const fx0 = Math.min(Math.min(...holes.map(p => p[0])) - 40, clampX === null ? Infinity : clampX - bc / 2), fx1 = Math.max(...holes.map(p => p[0]), mSh + (m.l30 || 400) - (m.l1 || 80) - 20) + 40;
     const floor = [];
     const n = Math.max(2, Math.ceil((fx1 - fx0) / 650) + 1);
     for (let i = 0; i < n; i++) { const x = fx0 + 30 + (fx1 - fx0 - 60) * i / (n - 1); floor.push([x, yL], [x, yR]); }   // на осях продольных швеллеров
@@ -380,9 +381,8 @@
   function chainDraw(R, D, spr, res, items, k, hide) {
     const chn = R.chn, r1 = chn.De1 / 2, r2 = chn.De2 / 2, a = chn.a, b = spr.b;
     const alongX = spr.ax === 0;
-    const aD = Math.min(a, Math.max(r1 + r2 + 70, 300)), broken = aD < a - 1;
     const c1 = { x: spr.c[0], y: spr.c[1], z: spr.c[2] };
-    const c2 = alongX ? { x: c1.x, y: c1.y + aD, z: c1.z } : { x: c1.x - aD, y: c1.y, z: c1.z };
+    const c2 = alongX ? { x: c1.x, y: c1.y + a, z: c1.z } : { x: c1.x - a, y: c1.y, z: c1.z };
     ['front', 'top'].forEach(vw => {
       const sh = res[vw].sh, pt = q => vw === 'front' ? [q.x * k, q.z * k] : [q.x * k, SY * q.y * k];
       const seesFace = vw === 'front' && !alongX;
@@ -396,7 +396,6 @@
         const p1 = pt(c1); sh.line(p1[0], p1[1], p[0], p[1], 3);
       }
       const q1 = pt(c1), q2 = pt(c2);
-      if (broken && !(vw === 'front' && alongX)) { const mx = (q1[0] + q2[0]) / 2, my = (q1[1] + q2[1]) / 2, dx = q2[0] - q1[0], dy = q2[1] - q1[1], d = Math.hypot(dx, dy) || 1, ux = dx / d, uy = dy / d, nx = -uy, ny = ux, L0 = 10; [-2.5, 2.5].forEach(o => sh.poly([[mx + ux * o - nx * L0, my + uy * o - ny * L0], [mx + ux * o + nx * L0 * 0.1, my + uy * o + ny * L0 * 0.1], [mx + ux * o - nx * L0 * 0.1 + ux * 2, my + uy * o - ny * L0 * 0.1 + uy * 2], [mx + ux * o + nx * L0, my + uy * o + ny * L0]], 2, false)); }
       if (vw === 'top' || seesFace) sh.attempt([1, -1].map(sg => () => { const off = (Math.max(r1, r2) + 14) * k * sg; return Math.abs(q2[0] - q1[0]) > Math.abs(q2[1] - q1[1]) ? sh.dimH(q1[0], q1[1], q2[0], q2[1], q1[1] + off, nf(a)) : sh.dimV(q1[0], q1[1], q2[0], q2[1], q1[0] + off, nf(a)); }));
       if (!(vw === 'front' && alongX)) items[vw].push({ kind: 'chain', pt: [(q1[0] + q2[0]) / 2, (q1[1] + q2[1]) / 2] });
     });
@@ -471,7 +470,7 @@
           // торец корпуса (крышки) у основания ступени: выносная линия легла бы на него — тогда размерная линия упирается прямо в торец (ГОСТ 2.307 п. 2.4)
           const wallDim = (Q, sg, o) => () => { const ox = Math.sign(Q[0][0] - T0[0]) * o, oy = Math.sign(Q[0][1] - T0[1]) * o, a = [Q[0][0] + ox, Q[0][1] + oy];
             if (Math.abs(Q[0][0] - Q[1][0]) > Math.abs(Q[0][1] - Q[1][1])) sh.dimH(a[0], a[1], Q[1][0], Q[1][1], a[1], lTxt, { fixed: true }); else sh.dimV(a[0], a[1], Q[1][0], Q[1][1], a[0], lTxt, { fixed: true }); };
-          sh.attempt([...[10, 16, 24, 32].flatMap(o => [lenDim(C, sideC * o / 10), lenDim(C2, -sideC * o / 10)]), ...[8, 12, 16].flatMap(o => [wallDim(C, 1, o), wallDim(C2, -1, o)])]);
+          sh.attempt([...[10, 16, 24, 32, 40, 48].flatMap(o => [lenDim(C, sideC * o / 10), lenDim(C2, -sideC * o / 10)]), ...[8, 12, 16].flatMap(o => [wallDim(C, 1, o), wallDim(C2, -1, o)])]);
           // высота оси выходного вала над полом (если вал горизонтальный и выше входного)
           if (oe.ax !== 2 && Math.abs(oe.c[2]) > 1) {
             const yb = (D.zTop - D.hc) * k, x = D.fx0 * k;   // рядом с высотой оси входного вала, слева

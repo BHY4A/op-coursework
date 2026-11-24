@@ -195,8 +195,7 @@
     if (sp && spIt && R.chn) {
       const c1 = W2F(spIt.pos), r1 = R.chn.De1 / 2, r2 = R.chn.De2 / 2, b = sp.geom.b, a = R.chn.a, tch = R.chn.t;
       const alongFx = Math.abs(spIt.axes[0]) > 0.9, axI = alongFx ? 0 : 1;
-      const aD = Math.min(a, Math.max(r1 + r2 + 70, 300));
-      const c1a = [c1.fx, c1.fy, c1.fz], c2a = alongFx ? [c1.fx, c1.fy + aD, c1.fz] : [c1.fx - aD, c1.fy, c1.fz];
+      const c1a = [c1.fx, c1.fy, c1.fz], c2a = alongFx ? [c1.fx, c1.fy + a, c1.fz] : [c1.fx - a, c1.fy, c1.fz];
       cyl(axI, c1a, c1a[axI] - b / 2, c1a[axI] + b / 2, r1, 1, 'chain', [r1 - tch * 0.6]);
       cyl(axI, c2a, c2a[axI] - b / 2, c2a[axI] + b / 2, r2, 2, null, [r2 - tch * 0.6]);
       o.push({ t: 'chain', ax: axI, c1: c1a, c2: c2a, r1, r2, pitch1: R.chn.dd1 / 2, pitch2: R.chn.dd2 / 2 });
@@ -280,11 +279,6 @@
     return { sh, items };
   }
 
-  /* знак разрыва на изображении цепной передачи (межосевое расстояние показано укороченным, размер — действительный) */
-  function breakMark(sh, q1, q2) {
-    const mx = (q1[0] + q2[0]) / 2, my = (q1[1] + q2[1]) / 2, dx = q2[0] - q1[0], dy = q2[1] - q1[1], d = Math.hypot(dx, dy) || 1, ux = dx / d, uy = dy / d, nx = -uy, ny = ux, L0 = 10; [-2.5, 2.5].forEach(o => sh.poly([[mx + ux * o - nx * L0, my + uy * o - ny * L0], [mx + ux * o + nx * L0 * 0.1, my + uy * o + ny * L0 * 0.1 - 0], [mx + ux * o - nx * L0 * 0.1 + ux * 2, my + uy * o - ny * L0 * 0.1 + uy * 2], [mx + ux * o + nx * L0, my + uy * o + ny * L0]], 2, false));
-  }
-
   /* виды повёрнутого привода: главный — со стороны бывшего вида слева, остальные — по ГОСТ 2.305 относительно него */
   const ROT = { front: 'left', top: 'topR', left: 'back', right: 'front', back: 'right', bottom: 'bottomR' };
   function viewsRot(R, L, k) {
@@ -295,16 +289,15 @@
     const VO = (C.opts.views && C.opts.views.vo) || {};
     const res = {}, items = {};
     ['front', 'top'].concat(['left', 'right', 'bottom', 'back'].filter(v => VO[v])).forEach(vw => { const g = genericView(L, M, scn, ROT[vw], k); res[vw] = { sh: g.sh }; items[vw] = g.items; });
-    // цепная передача: разрыв и действительное межосевое расстояние — один раз, на виде, где звёздочки видны плашмя, иначе сверху
+    // цепная передача: межосевое расстояние — один раз, на виде, где звёздочки видны плашмя, иначе сверху
     const ch = scn.find(q => q.t === 'chain');
     if (ch) {
-      const a = R.chn.a, broken = Math.hypot(ch.c2[0] - ch.c1[0], ch.c2[1] - ch.c1[1], ch.c2[2] - ch.c1[2]) < a - 1;
+      const a = R.chn.a;
       const faceVw = viewDef(ROT.front, L.sig).d === ch.ax ? 'front' : 'top';
       ['front', 'top'].forEach(vw => {
         const VD = viewDef(ROT[vw], L.sig), sh = res[vw].sh, P = f => [VD.u[1] * f[VD.u[0]] * k, VD.v[1] * f[VD.v[0]] * k];
         const q1 = P(ch.c1), q2 = P(ch.c2);
         if (Math.hypot(q2[0] - q1[0], q2[1] - q1[1]) < 5) return;   // цепь — вдоль взгляда
-        if (broken) breakMark(sh, q1, q2);
         if (vw !== faceVw) return;
         const off = (Math.max(ch.r1, ch.r2) + 14) * k;
         sh.attempt([1, -1].map(sg => () => Math.abs(q2[0] - q1[0]) > Math.abs(q2[1] - q1[1]) ? sh.dimH(q1[0], q1[1], q2[0], q2[1], q1[1] + off * sg, nf(a)) : sh.dimV(q1[0], q1[1], q2[0], q2[1], q1[0] + off * sg, nf(a))));
@@ -355,14 +348,26 @@
         F.floor.forEach(h => { sh.circle(h.fx * k, TY(h.fy) * k, F.dF / 2 * k, 1); sh.line((h.fx - F.dF) * k, TY(h.fy) * k, (h.fx + F.dF) * k, TY(h.fy) * k, 3).line(h.fx * k, (TY(h.fy) - F.dF) * k, h.fx * k, (TY(h.fy) + F.dF) * k, 3); });
       }
       // двигатель
-      const Lb = (m.l30 || 400) - (m.l1 || 80), d30 = m.d30 || 2 * (m.h || 100) * 0.95, h = m.h || 100, l31 = m.l31 || 60, l10 = m.l10 || 120, b10 = m.b10 || 160, b11 = m.b11 || b10 + 40, d1 = m.d1 || 28;
+      const Lb = (m.l30 || 400) - (m.l1 || 80), d30 = m.d30 || 2 * (m.h || 100) * 0.95, h = m.h || 100, b10 = m.b10 || 160, b11 = m.b11 || b10 + 40, d1 = m.d1 || 28;
       const x0 = F.mSh, xm1 = x0 + Lb;
+      const footRows = [...new Set(F.motHoles.map(hole => hole.fx))];
       if (vw === 'front') {
         const ax = zM0 + h;
         rect(F.mEnd, ax - d1 / 2, x0, ax + d1 / 2);                               // вал
         rect(x0, ax - d30 / 2, xm1 - Lb * 0.18, ax + d30 / 2);                   // корпус
         rect(xm1 - Lb * 0.18, ax - d30 * 0.44, xm1, ax + d30 * 0.44);             // кожух вентилятора
-        rect(x0 + l31 - 22, zM0, x0 + l31 + l10 + 22, zM0 + Math.max(10, h * 0.14)); // лапы
+        // Лапы поставлены на подкладки у двух рядов крепёжных отверстий.
+        const footTop = zM0 + Math.max(10, h * 0.14), bodyBottom = ax - d30 / 2;
+        for (const x of footRows) {
+          rect(x - 22, zM0, x + 22, footTop);
+          if (bodyBottom > footTop) {
+            sh.line(...P2(x - 13, footTop), ...P2(x - 9, bodyBottom));
+            sh.line(...P2(x + 13, footTop), ...P2(x + 9, bodyBottom));
+          }
+        }
+        for (const ratio of [-0.28, -0.14, 0.14, 0.28]) {
+          sh.line(...P2(x0 + Lb * 0.09, ax + d30 * ratio), ...P2(xm1 - Lb * 0.22, ax + d30 * ratio), 2);
+        }
         rect(x0 + Lb * 0.25, ax + d30 / 2, x0 + Lb * 0.55, zM0 + (m.h31 || h + d30 / 2 + 40));  // коробка выводов
         sh.line((F.mEnd - 10) * k, ax * k, (xm1 + 10) * k, ax * k, 3);
         items.front.push({ kind: 'motor', pt: P2(x0 + Lb * 0.6, ax) });
@@ -371,7 +376,12 @@
         rect(F.mEnd, y - d1 / 2, x0, y + d1 / 2);
         rect(x0, y - d30 / 2, xm1 - Lb * 0.18, y + d30 / 2);
         rect(xm1 - Lb * 0.18, y - d30 * 0.44, xm1, y + d30 * 0.44);
-        rect(x0 + l31 - 22, y - b11 / 2, x0 + l31 + l10 + 22, y + b11 / 2);
+        for (const x of footRows) {
+          for (const side of [-1, 1]) {
+            const a = y + side * d30 * 0.4, b = y + side * b11 / 2;
+            rect(x - 22, Math.min(a, b), x + 22, Math.max(a, b));
+          }
+        }
         F.motHoles.forEach(q => sh.circle(q.fx * k, TY(q.fy) * k, F.dMot / 2 * k, 1));
         rect(x0 + Lb * 0.25, y - d30 * 0.3, x0 + Lb * 0.55, y + d30 * 0.3);
         sh.line((F.mEnd - 10) * k, y * k, (xm1 + 10) * k, y * k, 3);
@@ -392,9 +402,8 @@
       const axv = spIt.axes.slice(0, 3);
       const alongFx = Math.abs(axv[0]) > 0.9;
       // ведомая звёздочка: задание 6 — на валу барабана (поперёк рамы), задание 3 — к кантователю (вдоль рамы, от двигателя)
-      // межосевое расстояние цепи велико — изображение с разрывом, размер — действительный
-      const aD = Math.min(a, Math.max(r1 + r2 + 70, 300)), broken = aD < a - 1;
-      const c2 = alongFx ? { fx: c1.fx, fy: c1.fy + aD, fz: c1.fz } : { fx: c1.fx - aD, fy: c1.fy, fz: c1.fz };
+      // Звёздочки размещены на расчётном межосевом расстоянии.
+      const c2 = alongFx ? { fx: c1.fx, fy: c1.fy + a, fz: c1.fz } : { fx: c1.fx - a, fy: c1.fy, fz: c1.fz };
       const draw = (vw) => {
         const sh = res[vw].sh;
         const pt = q => vw === 'front' ? [q.fx * k, q.fz * k] : [q.fx * k, TY(q.fy) * k];
@@ -418,8 +427,7 @@
           if (!behind) sh.line(p1[0], p1[1], p2[0], p2[1], 3);
         }
         const q1 = pt(c1), q2 = pt(c2);
-        if (broken && !behind) breakMark(sh, q1, q2);
-        if (seesFace || (vw === 'top' && alongFx)) sh.attempt([1, -1].map(sg => () => { const off = (Math.max(r1, r2) + 14) * k * sg; return Math.abs(q2[0] - q1[0]) > Math.abs(q2[1] - q1[1]) ? sh.dimH(q1[0], q1[1], q2[0], q2[1], q1[1] + off, nf(a) + (broken ? '' : '')) : sh.dimV(q1[0], q1[1], q2[0], q2[1], q1[0] + off, nf(a)); }));
+        if (seesFace || (vw === 'top' && alongFx)) sh.attempt([1, -1].map(sg => () => { const off = (Math.max(r1, r2) + 14) * k * sg; return Math.abs(q2[0] - q1[0]) > Math.abs(q2[1] - q1[1]) ? sh.dimH(q1[0], q1[1], q2[0], q2[1], q1[1] + off, nf(a)) : sh.dimV(q1[0], q1[1], q2[0], q2[1], q1[0] + off, nf(a)); }));
         items[vw].push({ kind: 'chain', pt: [(pt(c1)[0] + pt(c2)[0]) / 2, (pt(c1)[1] + pt(c2)[1]) / 2 + (seesFace ? (r1 + r2) / 2 * k : 0)] });
       };
       draw('front'); draw('top');
@@ -476,9 +484,10 @@
   function clampBoxes([x, y, z], r, b, base) {
     const w = Math.max(28, r * 0.32), h = Math.max(12, r * 0.12), f = y - b / 2;
     return [
-      [[x - w / 2, f - 2 * h, base], [x + w / 2, f - h, z - h]],
+      [[x - w / 2, f - 2 * h, base + h], [x + w / 2, f - h, z - h]],
       [[x - r * 0.7, f - 3 * h, z - h], [x + r * 0.7, f - 2 * h, z + h]],
-      [[x - h / 2, f - 2 * h, z - h / 2], [x + h / 2, y, z + h / 2]]
+      [[x - h / 2, f - 2 * h, z - h / 2], [x + h / 2, y, z + h / 2]],
+      [[x - w, f - 3 * h, base], [x + w, f + h, base + h]]
     ];
   }
 

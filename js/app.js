@@ -600,7 +600,7 @@
     try {
       if (it.kind === 'scheme') return FG.scheme(R.task);
       if (it.kind === 'load') return FG.load(S.P.load);
-      if (it.kind === 'layout') return FG.shafts(R.shafts);
+      if (it.kind === 'layout') return window.DRWASM.reportLayout(R, S.P, S.T);
       if (it.kind === 'beam') { const b = R.beams && R.beams[it.id]; return b ? FG.beam(b.B, b) : ''; }
     } catch (e) { console.error(e); }
     return '';
@@ -1150,11 +1150,10 @@
     });
   }
   function figSource(it) {
-    const c = (S.T.code || codeDefault());
     switch (it.kind) {
       case 'scheme': return ['Замените схемой, выполненной в КОМПАС', 'Что вставить: кинематическая схема привода по ГОСТ 2.770 с позициями элементов.', 'Откуда: начертите в КОМПАС-График (фрагмент) по схеме из задания; или вставьте эту схему как есть.'];
       case 'load': return null;
-      case 'layout': return ['Замените эскизной компоновкой из КОМПАС', 'Что вставить: компоновка редуктора (вид сверху, разрез по осям валов).', `Откуда: сборка ${c} 01.00.00 (макрос 20_assembly.py) — вид сверху с разрезом; или эскизы валов ${c} 01.00.0N.`];
+      case 'layout': return null;
       case 'beam': return null;
     }
     return null;

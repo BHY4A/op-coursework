@@ -1069,9 +1069,11 @@
   function toSVG(sh, o) {
     if (sh.finalize) sh.finalize();
     o = o || {};
-    const k = o.px ? o.px / sh.W : 3;
-    const Wp = sh.W * k, Hp = sh.H * k;
-    const X = x => (x * k).toFixed(2), Y = y => ((sh.H - y) * k).toFixed(2);
+    const box = o.box || { x1: 0, y1: 0, x2: sh.W, y2: sh.H };
+    const w = box.x2 - box.x1, h = box.y2 - box.y1;
+    const k = o.px ? o.px / w : 3;
+    const Wp = w * k, Hp = h * k;
+    const X = x => ((x - box.x1) * k).toFixed(2), Y = y => ((box.y2 - y) * k).toFixed(2);
     const col = o.dark ? '#e8edf0' : '#111', bg = o.dark ? '#1d2328' : '#fff';
     const sw = { 1: 0.5, 2: 0.18, 3: 0.18, 4: 0.25 };
     const dash = { 3: `${(8 * k).toFixed(1)} ${(1.5 * k).toFixed(1)} ${(1 * k).toFixed(1)} ${(1.5 * k).toFixed(1)}`, 4: `${(3 * k).toFixed(1)} ${(1.5 * k).toFixed(1)}` };

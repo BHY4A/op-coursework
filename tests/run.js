@@ -1,4 +1,4 @@
-/* tests/run.js — автотесты утилиты: все 26 вариантов, параллельно.
+/* tests/run.js — автотесты утилиты: все 30 вариантов, параллельно.
    npm test             — проверка против эталона tests/baseline.json
    npm run test:update  — принять текущее состояние как эталон (после намеренных изменений)
    node tests/run.js 4 14 — только указанные варианты (эталон не обновляется) */
@@ -7,7 +7,7 @@ const { execFile } = require('child_process'), path = require('path'), fs = requ
 
 const args = process.argv.slice(2), update = args.includes('--update');
 const only = args.filter(a => /^\d+$/.test(a)).map(Number);
-const list = only.length ? only : Array.from({ length: 26 }, (_, i) => i + 1);
+const list = only.length ? only : Array.from({ length: 30 }, (_, i) => i + 1);
 const BASE = path.join(__dirname, 'baseline.json');
 const base = fs.existsSync(BASE) ? JSON.parse(fs.readFileSync(BASE, 'utf8')) : {};
 const jobs = Math.max(1, Math.min(list.length, (os.availableParallelism ? os.availableParallelism() : os.cpus().length)));
